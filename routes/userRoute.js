@@ -65,6 +65,36 @@ router.get(
   })
 );
 
+//@PUT add new user
+router.get(
+  "/admin/add/:token",
+  asyncHandler(async (req, res) => {
+    const token = req.params.token;
+
+    if (token !== process.env.TOKEN) {
+      return res.sendStatus(403);
+    }
+    const newUser = {
+      fullname: "Nick Test",
+      username: "admin",
+      gender: "male",
+      email: "nicktest701@gmail.com",
+      password: "Akwasi21guy",
+      role: "administrator",
+      phonenumber: "0543772591",
+    };
+
+    const hashedPassword = await bcrypt.hash(newUser.password, 10);
+    newUser.password = hashedPassword;
+    const user = await User.create(newUser);
+    if (!user) {
+      return res.status(404).json("Error Saving user info!");
+    }
+
+    res.json("done");
+  })
+);
+
 //@GET all users
 router.get(
   "/:id",
@@ -364,36 +394,6 @@ router.put(
       return res.status(200).json({ token });
     }
     res.status(201).json("Profile Updated");
-  })
-);
-
-//@PUT add new user
-router.get(
-  "/admin/add/:token",
-  asyncHandler(async (req, res) => {
-    const token = req.params.token;
-
-    if (token !== process.env.TOKEN) {
-      return res.sendStatus(403);
-    }
-    const newUser = {
-      fullname: "Nick Test",
-      username: "admin",
-      gender: "male",
-      email: "nicktest701@gmail.com",
-      password: "Akwasi21guy",
-      role: "administrator",
-      phonenumber: "0543772591",
-    };
-
-    const hashedPassword = await bcrypt.hash(newUser.password, 10);
-    newUser.password = hashedPassword;
-    const user = await User.create(newUser);
-    if (!user) {
-      return res.status(404).json("Error Saving user info!");
-    }
-
-    res.json("done");
   })
 );
 

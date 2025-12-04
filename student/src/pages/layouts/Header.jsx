@@ -20,7 +20,7 @@ import { bgBlur } from "@/theme/css";
 import NoteFormModal from "@/components/notes/NoteForm";
 import { useCreateNote } from "@/hooks/useNotes";
 import { useNotifications } from "@/hooks/useNotifications";
-import HomeLinks from "@/components/HomeLinks";
+
 
 function Header() {
   const { palette } = useTheme();

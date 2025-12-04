@@ -1,5 +1,5 @@
 // src/context/AlertContext.js
-
+import React from "react";
 import Transition from "@/components/animations/Transition";
 import { CheckCircleRounded, ErrorRounded } from "@mui/icons-material";
 import { Alert, Snackbar } from "@mui/material";

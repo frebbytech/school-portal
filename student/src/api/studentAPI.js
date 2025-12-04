@@ -102,16 +102,4 @@ export const getParentByStudentId = async (id) => {
   }
 };
 
-export const putStudent = async (updatedStudent) => {
-  try {
-    const res = await api({
-      method: "PUT",
-      url: `/students`,
-      data: updatedStudent,
-    });
 
-    return res.data;
-  } catch (error) {
-    throw error.response.data;
-  }
-};

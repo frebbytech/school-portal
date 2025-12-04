@@ -1,8 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
 
-import Footer from "./Footer";
-
 function Layout({ children }) {
   return (
     <>

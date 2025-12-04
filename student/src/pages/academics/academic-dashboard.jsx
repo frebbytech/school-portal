@@ -13,7 +13,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tabs,
   Tab,
   useMediaQuery,
   useTheme,

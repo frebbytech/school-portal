@@ -1,13 +1,5 @@
 import axios from "axios";
 
-// import {
-//   deleteToken,
-//   deleteUser,
-//   getToken,
-//   getRefreshToken,
-//   saveAccessToken,
-// } from "../config/sessionHandler";
-
 const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 const api = axios.create({

@@ -44,21 +44,6 @@ export const getAllCurrentFeesSummary = async (sessionInfo) => {
   }
 };
 
-//Get all fees by level
-export const getAllCurrentFeesByLevel = async (sessionInfo) => {
-  try {
-    const res = await api({
-      method: "POST",
-      url: `/current-fees/level`,
-      data: sessionInfo,
-    });
-
-    return res.data;
-  } catch (error) {
-    return error.response.data;
-  }
-};
-
 export const getCurrentFee = async (session, level) => {
   try {
     const res = await api({
@@ -95,47 +80,6 @@ export const getStudentFeeHistory = async (studentId) => {
     const res = await api({
       method: "GET",
       url: `/current-fees/history?studentId=${studentId}`,
-    });
-
-    return res.data;
-  } catch (error) {
-    return error.response.data;
-  }
-};
-
-export const postCurrentFee = async (newCurrentFee) => {
-  try {
-    const res = await api({
-      method: "POST",
-      url: `/current-fees`,
-      data: newCurrentFee,
-    });
-
-    return res.data;
-  } catch (error) {
-    return error.response.data;
-  }
-};
-
-export const putCurrentFee = async (updatedCurrentFee) => {
-  try {
-    const res = await api({
-      method: "PUT",
-      url: `/current-fees`,
-      data: updatedCurrentFee,
-    });
-
-    return res.data;
-  } catch (error) {
-    return error.response.data;
-  }
-};
-
-export const deleteCurrentFee = async (id) => {
-  try {
-    const res = await api({
-      method: "DELETE",
-      url: `/fees/${id}`,
     });
 
     return res.data;

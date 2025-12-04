@@ -184,32 +184,7 @@ export const deleteUser = async (id) => {
   }
 };
 
-export const getSchoolInfo = async () => {
-  try {
-    const res = await axios({
-      method: "GET",
-      url: `${import.meta.env.VITE_BASE_URL}/users/school`,
-    });
 
-    return res.data;
-  } catch (error) {
-    console.log(error.response.data);
-  }
-};
-
-export const putSchoolInfo = async (schoolInfo) => {
-  try {
-    const res = await api({
-      method: "PUT",
-      url: `/users/school`,
-      data: schoolInfo,
-    });
-
-    return res.data;
-  } catch (error) {
-    console.log(error.response.data);
-  }
-};
 
 export const downloadTemplate = async (templateName) => {
   try {

@@ -25,6 +25,7 @@ import moment from "moment";
 import { RefreshRounded } from "@mui/icons-material";
 import { AnimatePresence, motion } from "framer-motion";
 import EventSkeleton from "@/components/skeleton/EventSkeleton";
+import EmptyDataContainer from "@/components/EmptyDataContainer";
 
 const pageSize = 10;
 const Events = () => {
@@ -120,7 +121,7 @@ const Events = () => {
           {/* MUI Select for Filtering */}
           <Box
             sx={{
-              py: 3,
+              pt: 2,
               display: "flex",
               flexDirection: { xs: "column-reverse", sm: "row" },
               justifyContent: "space-between",
@@ -215,18 +216,7 @@ const Events = () => {
                   </Box>
                 ))
               ) : (
-                <Box
-                  sx={{
-                    width: "100%",
-                    height: "100%",
-
-                    display: "flex",
-                    justifyContent: "center",
-                    mx: "auto",
-                  }}
-                >
-                  <Typography>No events found.</Typography>
-                </Box>
+                <EmptyDataContainer message="No event available." />
               )}
             </Stack>
           </AnimatePresence>

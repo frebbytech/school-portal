@@ -8,8 +8,8 @@ import {
   Divider,
   Grid,
   LinearProgress,
-  useTheme,
-  useMediaQuery,
+  // useTheme,
+  // useMediaQuery,
 } from "@mui/material";
 import { TrendingUp, CreditCard, DockTwoTone } from "@mui/icons-material";
 import DashboardSwiper from "@/components/swiper/DashboardSwiper";
@@ -25,71 +25,71 @@ import { getExamsDashboardAnalytics } from "@/api/ExaminationAPI";
 import { getFeeDashboardInfo } from "@/api/currentFeeAPI";
 import { currencyFormatter } from "@/config/currencyFormatter";
 import moment from "moment";
-import { Line } from "react-chartjs-2";
+
 
 import birthday_ico from "@/assets/images/header/bd1.svg";
 import event_ico from "@/assets/images/header/subject.svg";
 import announcement_ico from "@/assets/images/header/sms_ico.svg";
 
 // Chart options
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: "top",
-      labels: {
-        usePointStyle: true,
-        padding: 20,
-      },
-    },
-    tooltip: {
-      backgroundColor: "rgba(255, 255, 255, 0.95)",
-      titleColor: "#333",
-      bodyColor: "#333",
-      borderColor: "#ddd",
-      borderWidth: 1,
-      padding: 12,
-      displayColors: false,
-      callbacks: {
-        label: function (context) {
-          return `${context.dataset.label}: ${context.parsed.y}%`;
-        },
-      },
-    },
-  },
-  scales: {
-    x: {
-      grid: {
-        display: false,
-      },
-    },
-    y: {
-      min: 60,
-      max: 100,
-      grid: {
-        color: "rgba(0, 0, 0, 0.05)",
-      },
-      ticks: {
-        callback: function (value) {
-          return value + "%";
-        },
-      },
-    },
-  },
-  interaction: {
-    mode: "index",
-    intersect: false,
-  },
-  hover: {
-    mode: "nearest",
-    intersect: true,
-  },
-};
+// const chartOptions = {
+//   responsive: true,
+//   maintainAspectRatio: false,
+//   plugins: {
+//     legend: {
+//       position: "top",
+//       labels: {
+//         usePointStyle: true,
+//         padding: 20,
+//       },
+//     },
+//     tooltip: {
+//       backgroundColor: "rgba(255, 255, 255, 0.95)",
+//       titleColor: "#333",
+//       bodyColor: "#333",
+//       borderColor: "#ddd",
+//       borderWidth: 1,
+//       padding: 12,
+//       displayColors: false,
+//       callbacks: {
+//         label: function (context) {
+//           return `${context.dataset.label}: ${context.parsed.y}%`;
+//         },
+//       },
+//     },
+//   },
+//   scales: {
+//     x: {
+//       grid: {
+//         display: false,
+//       },
+//     },
+//     y: {
+//       min: 60,
+//       max: 100,
+//       grid: {
+//         color: "rgba(0, 0, 0, 0.05)",
+//       },
+//       ticks: {
+//         callback: function (value) {
+//           return value + "%";
+//         },
+//       },
+//     },
+//   },
+//   interaction: {
+//     mode: "index",
+//     intersect: false,
+//   },
+//   hover: {
+//     mode: "nearest",
+//     intersect: true,
+//   },
+// };
 
 const Dashboard = () => {
-  const { breakpoints } = useTheme();
-  const matches = useMediaQuery(breakpoints.down("md"));
+  // const { breakpoints } = useTheme();
+  // const matches = useMediaQuery(breakpoints.down("md"));
 
   const { user } = useAuth();
 

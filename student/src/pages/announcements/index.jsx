@@ -15,8 +15,6 @@ import {
   Pagination,
   Checkbox,
   Stack,
-  ToggleButtonGroup,
-  ToggleButton,
   Container,
   IconButton,
 } from "@mui/material";
@@ -199,7 +197,7 @@ const Announcements = () => {
           </Select>
         </FormControl>
       </Box>
-      <Stack
+      {/* <Stack
         width="100%"
         alignItems="center"
         justifyContent="flex-end"
@@ -244,7 +242,7 @@ const Announcements = () => {
             Black
           </ToggleButton>
         </ToggleButtonGroup>
-      </Stack>
+      </Stack> */}
 
       {/* Announcements List */}
       {selectedAnnouncements.length > 0 && (
