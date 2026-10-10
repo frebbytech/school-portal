@@ -77,16 +77,11 @@ function CustomTitle({
               flex={1}
               // color="primary.main"
               variant={titleVariant || "h4"}
-              textAlign={{ xs: "center", md: "left" }}
             >
               {title}
             </Typography>
           </Stack>
-          <Typography
-            textAlign={{ xs: "center", md: "left" }}
-            color="text.secondary"
-            variant="body2"
-          >
+          <Typography color="text.secondary" variant="body2">
             {subtitle}
           </Typography>
         </Stack>

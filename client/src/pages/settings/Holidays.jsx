@@ -290,7 +290,11 @@ const Holidays = () => {
         <h2>Holidays</h2>
         <p>List of selected holidays</p>
         {toggleOption === "table" && (
-          <TableContainer component={Paper}>
+          <TableContainer
+            component={Paper}
+            // sx={{ width: { xs: 100, md: "100%" } }}
+            sx={{ width: { xs: 300, sm: "100%" }, overflowX: "auto" }}
+          >
             <Table
               // sx={{ minWidth: 650 }}
               stickyHeader

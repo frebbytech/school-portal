@@ -160,12 +160,11 @@ const Announcements = () => {
       {/* MUI Select for Filtering */}
       <Box
         sx={{
-          pt: 2,
-          display: "flex",
-          flexDirection: { xs: "column", sm: "row" },
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 2,
+             pt: 2,
+              display: "flex",
+              flexDirection: { xs: "column-reverse", sm: "row" },
+              justifyContent: "space-between",
+              gap: 2,
         }}
       >
         <TextField

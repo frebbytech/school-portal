@@ -46,7 +46,7 @@ const FeeHome = () => {
   };
 
   return (
-    <Container maxWidth="xl">
+    <>
       <CustomTitle
         title="Fees Payment"
         subtitle="Track and manage school fee payments and financial records efficiently to maintain fiscal responsibility."
@@ -138,7 +138,7 @@ const FeeHome = () => {
           selection: false,
         }}
       />
-    </Container>
+    </>
   );
 };
 

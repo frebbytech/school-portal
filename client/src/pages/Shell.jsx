@@ -14,8 +14,6 @@ const Shell = () => {
         sx={{
           display: "flex",
           alignItems: "flex-start",
-          // border: "1px solid red",
-          // minHeight: "100svh",
           bgcolor: "#ffffff",
         }}
       >

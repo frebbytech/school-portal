@@ -7,7 +7,7 @@ const Fees = () => {
   return (
     <>
       <FeeNav />
-      <Container maxWidth="lg">
+      <Container >
         <Outlet />
       </Container>
     </>

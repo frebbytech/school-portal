@@ -28,3 +28,18 @@ playground.js
 
 *.pdf
 .cache
+
+images/*
+images/badges/*
+images/school/*
+images/students/*
+images/teachers/*
+images/users/*
+
+images/.gitkeep
+images/badges/.gitkeep
+images/school/.gitkeep
+images/students/.gitkeep
+images/teachers/.gitkeep
+images/users/.gitkeep
+
