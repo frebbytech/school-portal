@@ -10,7 +10,9 @@
     "student": "npm run dev --prefix student",
     "dev": "concurrently \"npm run server\" \"npm run client\" ",
     "stud-dev": "concurrently \"npm run server\" \"npm run student\" ",
-    "lint": "eslint --max-warnings=0"
+    "lint": "eslint --max-warnings=0",
+    "test": "jest --runInBand",
+    "test:watch": "jest --runInBand --watch"
   },
   "engines": {
     "node": "20.17.0 || >=22.9.0",
@@ -59,6 +61,9 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "nodemon": "^3.1.9"
+    "jest": "^29.7.0",
+    "mongodb-memory-server": "^10.1.2",
+    "nodemon": "^3.1.9",
+    "supertest": "^7.0.0"
   }
 }
