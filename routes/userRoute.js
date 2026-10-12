@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const { randomUUID } = require("crypto");
 const { verifyJWT, verifyRefreshJWT } = require("../middlewares/verifyJWT");
+const { requireRole, isSameSchool } = require("../middlewares/authorize");
 const User = require("../models/userModel");
 const Teacher = require("../models/teacherModel");
 const School = require("../models/schoolModel");
@@ -62,36 +63,6 @@ router.get(
     const school = await School.findOne();
 
     res.status(200).json(school);
-  })
-);
-
-//@PUT add new user
-router.get(
-  "/admin/add/:token",
-  asyncHandler(async (req, res) => {
-    const token = req.params.token;
-
-    if (token !== process.env.TOKEN) {
-      return res.sendStatus(403);
-    }
-    const newUser = {
-      fullname: "Nick Test",
-      username: "admin",
-      gender: "male",
-      email: "nicktest701@gmail.com",
-      password: "Akwasi21guy",
-      role: "administrator",
-      phonenumber: "0543772591",
-    };
-
-    const hashedPassword = await bcrypt.hash(newUser.password, 10);
-    newUser.password = hashedPassword;
-    const user = await User.create(newUser);
-    if (!user) {
-      return res.status(404).json("Error Saving user info!");
-    }
-
-    res.json("done");
   })
 );
 
@@ -543,9 +514,11 @@ router.put(
   })
 );
 
-//@DELETE student
+//@DELETE user (administrators only, own school only)
 router.delete(
   "/:id",
+  verifyJWT,
+  requireRole("administrator"),
   asyncHandler(async (req, res) => {
     const id = req.params.id;
 
@@ -553,13 +526,16 @@ router.delete(
       return res.status(401).json("Invalid User information");
     }
 
-    const user = await User.findByIdAndDelete(id, {
-      new: true,
-    });
+    const target = await User.findById(id).select("school");
 
-    if (_.isEmpty(user)) {
+    // Same response for "missing" and "other school" so ids of other schools
+    // cannot be probed.
+    if (_.isEmpty(target) || !isSameSchool(req, target.school)) {
       return res.status(403).json("No User with such id");
     }
+
+    await User.findByIdAndDelete(id);
+
     res.status(200).json("User has been removed successfully !!!");
   })
 );

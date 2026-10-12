@@ -10,6 +10,7 @@ const Student = require("../models/studentModel");
 const Term = require("../models/termModel");
 const expressAsyncHandler = require("express-async-handler");
 const crypto = require("crypto");
+const rateLimit = require("express-rate-limit");
 
 // Helper functions
 const generateAccessToken = (user) => {
@@ -25,9 +26,42 @@ const generateRefreshToken = (user) => {
   });
 };
 
-// Generate token helpers
-const generateResetToken = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
+// Password reset helpers
+const RESET_CODE_TTL_MS = 15 * 60 * 1000;
+const MAX_RESET_ATTEMPTS = 5;
+
+// 6-digit code from a cryptographically secure generator
+const generateResetToken = () => crypto.randomInt(100000, 1000000).toString();
+
+// Only a hash of the code is stored
+const hashResetCode = (code) =>
+  crypto.createHash("sha256").update(String(code)).digest("hex");
+
+const codesMatch = (storedHash, code) => {
+  if (!storedHash || code === undefined || code === null) return false;
+  const a = Buffer.from(storedHash, "hex");
+  const b = Buffer.from(hashResetCode(code), "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
+
+const clearResetState = (student) => {
+  student.resetToken = null;
+  student.resetTokenExpiry = null;
+  student.resetVerified = false;
+  student.resetAttempts = 0;
+};
+
+// Limits password-reset abuse per IP (configurable for tests)
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RESET_RATE_LIMIT_MAX) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) =>
+    res
+      .status(429)
+      .json({ message: "Too many attempts. Please try again later." }),
+});
 
 //@GET student by student id
 router.get(
@@ -292,17 +326,18 @@ router.post("/logout", (req, res) => {
 });
 
 // ✅ Request reset
-router.post("/reset-password-request", async (req, res) => {
+router.post("/reset-password-request", resetLimiter, async (req, res) => {
   const { studentId } = req.body;
 
   const student = await StudentAuth.findOne({ indexnumber: studentId });
   if (!student) return res.status(404).json({ message: "Student not found" });
 
   const resetToken = generateResetToken();
-  const expiry = new Date(Date.now() + 15 * 60 * 1000);
 
-  student.resetToken = resetToken;
-  student.resetTokenExpiry = expiry;
+  student.resetToken = hashResetCode(resetToken);
+  student.resetTokenExpiry = new Date(Date.now() + RESET_CODE_TTL_MS);
+  student.resetVerified = false;
+  student.resetAttempts = 0;
   await student.save();
 
   const sent = await sendVerificationEmail(student.email, resetToken);
@@ -312,30 +347,59 @@ router.post("/reset-password-request", async (req, res) => {
 });
 
 // ✅ Confirm code
-router.post("/confirm-reset-code", async (req, res) => {
+router.post("/confirm-reset-code", resetLimiter, async (req, res) => {
   const { studentId, code } = req.body;
+  const invalid = () =>
+    res.status(400).json({ message: "Invalid or expired token" });
 
-  const student = await StudentAuth.findOne({
-    indexnumber: studentId,
-    resetToken: code,
-  });
-  if (!student || new Date() > student.resetTokenExpiry)
-    return res.status(400).json({ message: "Invalid or expired token" });
+  const student = await StudentAuth.findOne({ indexnumber: studentId });
+  if (
+    !student ||
+    !student.resetToken ||
+    !student.resetTokenExpiry ||
+    new Date() > student.resetTokenExpiry
+  ) {
+    return invalid();
+  }
+
+  if (!codesMatch(student.resetToken, code)) {
+    student.resetAttempts = (student.resetAttempts || 0) + 1;
+    // Too many wrong guesses: invalidate the code, a new one must be requested
+    if (student.resetAttempts >= MAX_RESET_ATTEMPTS) clearResetState(student);
+    await student.save();
+    return invalid();
+  }
+
+  student.resetVerified = true;
+  await student.save();
 
   res.json({ message: "Code confirmed" });
 });
 
-// ✅ Reset password
-router.post("/reset-password", async (req, res) => {
+// ✅ Reset password (only after the emailed code has been confirmed)
+router.post("/reset-password", resetLimiter, async (req, res) => {
   const { studentId, newPassword } = req.body;
 
   const student = await StudentAuth.findOne({ indexnumber: studentId });
   if (!student) return res.status(404).json({ message: "Student not found" });
 
-  const hashedPassword = bcrypt.hashSync(newPassword, 10);
-  student.password = hashedPassword;
-  student.resetToken = null;
-  student.resetTokenExpiry = null;
+  if (
+    !student.resetVerified ||
+    !student.resetToken ||
+    !student.resetTokenExpiry ||
+    new Date() > student.resetTokenExpiry
+  ) {
+    return res.status(400).json({ message: "Invalid or expired token" });
+  }
+
+  if (typeof newPassword !== "string" || newPassword.length < 6) {
+    return res
+      .status(400)
+      .json({ message: "Password must be at least 6 characters" });
+  }
+
+  student.password = await bcrypt.hash(newPassword, 10);
+  clearResetState(student);
 
   await student.save();
   res.json({ message: "Password reset successful" });
