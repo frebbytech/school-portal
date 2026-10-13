@@ -206,7 +206,7 @@ Branch `refactor/stage-4a-users-authz` (from the Stage 3 branch). **Nothing here
 | C-5 | `PUT /users`, `PATCH /users` | self -> profile fields only; administrator of same school -> plus role/permissions/active; others 403/404; `school` never changeable; PATCH now hashes `password` | the admin UI editing another user must be an administrator |
 | C-5 | `PUT /users/profile` | self or same-school administrator | |
 | C-5 | `PUT /users/reset` | caller's own id only (it needs the old password) | |
-| C-5 | `PUT /users/reset-password`, `PATCH /users/admin/reset-password`, `PUT /users/account` | administrator of the same school | **teachers with the "Users" permission lose access**; confirm this is intended |
+| C-5 | `PUT /users/reset-password`, `PATCH /users/admin/reset-password`, `PUT /users/account` | administrator of the same school | teachers (even with the "Users" permission) lose access — **owner confirmed 2026-10-13: only administrators manage users** |
 | C-5 | `PUT /users/school` | administrator; always the caller's own school; descriptive fields only (not `code`, `unique`, `permissions`); **no upsert** (cannot create schools) | |
 | H-1 | `POST /users/verify`, `POST /student-auth/refresh`, `/login` | disabled staff and deactivated students cannot renew or sign in (student login: 403 with a message) | access tokens already issued stay valid until expiry (<= 1 h staff, 15 min student) |
 | H-2 | `POST /student-auth/logout` | clears `refresh_token` (the name was wrong) with the attributes it was set with | |
