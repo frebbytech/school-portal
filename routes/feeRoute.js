@@ -8,6 +8,18 @@ const {
   Types: { ObjectId },
 } = require("mongoose");
 const { currencyConverter } = require("../config/currencyConverter");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  pickFields,
+} = require("../middlewares/authorize");
+const { levelInSchool } = require("../middlewares/tenant");
+const { isValidObjectId } = require("mongoose");
+
+// Fee structures are staff-only; changing them is administrator-only. The student
+// portal does not use this router.
+router.use(requireStaff);
+const adminOnly = requireRoleEnforced("administrator");
 
 //@GET All school fees
 router.get(
@@ -80,6 +92,7 @@ router.post(
     const { sessionId, termId, level } = req.body;
 
     const fees = await Fee.findOne({
+      school: req.user.school,
       session: new ObjectId(sessionId),
       term: new ObjectId(termId),
       level: new ObjectId(level),
@@ -105,7 +118,9 @@ router.post(
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const fee = await Fee.findById(req.params.id).populate("level");
+    const fee = isValidObjectId(req.params.id)
+      ? await Fee.findOne({ _id: req.params.id, school: req.user.school }).populate("level")
+      : null;
     if (_.isEmpty(fee)) return res.status(200).json([]);
 
     const modifiedFee = {
@@ -121,10 +136,17 @@ router.get(
 //Add new School Fees
 router.post(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { session, term, level } = req.body;
 
+    // The level must belong to the caller's school.
+    if (!(await levelInSchool(req, level))) {
+      return res.status(404).send("Error creating new Fee.Try again later");
+    }
+
     const exists = await Fee.findOne({
+      school: req.user.school,
       session,
       term,
       level
@@ -135,8 +157,8 @@ router.post(
     }
 
     const fee = await Fee.create({
+      ...pickFields(req.body, ["session", "term", "level", "amount", "active"]),
       school: req.user.school,
-      ...req.body,
       createdBy: req.user.id
     });
 
@@ -144,8 +166,8 @@ router.post(
       return res.status(404).send("Error creating new Fee.Try again later");
     }
 
-    const currentLevel = await Level.findByIdAndUpdate(
-      level,
+    const currentLevel = await Level.findOneAndUpdate(
+      { _id: level, school: req.user.school },
       {
         $set: {
           fee: fee?._id,
@@ -184,10 +206,14 @@ router.post(
 //@PUT Update Existing School Fees
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const modifiedFee = await Fee.findByIdAndUpdate(req.body._id, {
-      amount: req.body.amount,
-    });
+    const modifiedFee = isValidObjectId(req.body._id)
+      ? await Fee.findOneAndUpdate(
+          { _id: req.body._id, school: req.user.school },
+          { amount: req.body.amount }
+        )
+      : null;
 
     if (_.isEmpty(modifiedFee)) {
       return res.status(404).send("Error updating Fees info.Try again later");
@@ -199,9 +225,12 @@ router.put(
 
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const id = req.params.id;
-    await Fee.findByIdAndDelete(id);
+    if (isValidObjectId(id)) {
+      await Fee.findOneAndDelete({ _id: id, school: req.user.school });
+    }
 
     res.status(201).json("Fee has been removed successfully");
   })

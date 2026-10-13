@@ -6,6 +6,27 @@ const School = require("../models/schoolModel");
 const asyncHandler = require("express-async-handler");
 const { verifyJWT } = require("../middlewares/verifyJWT");
 const { uploadFile } = require("../config/uploadFile");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  pickFields,
+  getPrincipal,
+} = require("../middlewares/authorize");
+
+// Descriptive fields an administrator may edit on their own school. `code`,
+// `unique` and the purchased module `permissions` are never client-editable.
+const SCHOOL_EDITABLE_FIELDS = [
+  "badge",
+  "name",
+  "motto",
+  "address",
+  "location",
+  "district",
+  "region",
+  "email",
+  "website",
+  "phonenumber",
+];
 
 const upload = createImageUpload("badges");
 
@@ -13,8 +34,10 @@ const upload = createImageUpload("badges");
 router.get(
   "/",
   verifyJWT,
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const schools = await School.find().sort({ name: 1 });
+    // A school only ever sees itself (finding C-6); the response stays an array.
+    const schools = await School.find({ _id: getPrincipal(req).schoolId }).sort({ name: 1 });
     res.json(schools);
   })
 );
@@ -35,8 +58,10 @@ router.get(
 router.post(
   "/",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
-    const data = req.body;
+    // `permissions` (purchased modules) cannot be chosen by the caller.
+    const data = pickFields(req.body, [...SCHOOL_EDITABLE_FIELDS, "code", "unique"]);
     const school = new School(data);
 
     try {
@@ -52,15 +77,18 @@ router.post(
 router.put(
   "/",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
-    const { _id, ...rest } = req.body;
+    // An administrator can only edit their own school, whatever `_id` says.
+    const { schoolId } = getPrincipal(req);
+    if (req.body?._id && String(req.body._id) !== schoolId) {
+      return res
+        .status(403)
+        .json('Couldn"t save school information.Please try again later.!!');
+    }
     const school = await School.findByIdAndUpdate(
-      _id,
-      {
-        $set: {
-          ...rest,
-        },
-      },
+      schoolId,
+      { $set: pickFields(req.body, SCHOOL_EDITABLE_FIELDS) },
       { new: true }
     );
 
@@ -78,10 +106,9 @@ router.put(
 router.put(
   "/badge",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   upload.single("badge"),
   asyncHandler(async (req, res) => {
-    const data = req.body;
-
     if (_.isEmpty(req.file)) {
       return res.status(400).json("Please upload a badge");
     }
@@ -89,19 +116,11 @@ router.put(
     const filename = req.file?.filename;
     const badge = await uploadFile(filename, "badges/");
 
-    const updatedBadge = await School.findOneAndUpdate(
-      {
-        code: data?.code,
-      },
-      {
-        $set: {
-          badge,
-        },
-      },
-      {
-        new: true,
-        upsert: true,
-      }
+    // Always the caller's own school; no upsert, so this cannot create schools.
+    const updatedBadge = await School.findByIdAndUpdate(
+      getPrincipal(req).schoolId,
+      { $set: { badge } },
+      { new: true }
     );
 
     if (_.isEmpty(updatedBadge)) {
@@ -132,11 +151,9 @@ router.delete(
   "/:id",
   verifyJWT,
   asyncHandler(async (req, res) => {
-    const school = await School.findByIdAndDelete(req.params.id);
-    if (!school) {
-      return res.status(404).json({ message: "School not found" });
-    }
-    res.json({ message: "School deleted" });
+    // Deleting a school would orphan every student, fee and result it owns, and
+    // no client calls this route. Schools are not removable through the API.
+    return res.status(403).json({ message: "Schools cannot be deleted through the API" });
   })
 );
 

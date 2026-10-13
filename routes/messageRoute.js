@@ -8,6 +8,16 @@ const Message = require("../models/messageModel");
 const sendMail = require("../config/mail/mailer");
 const { sendSMS } = require("../config/sms/messenger");
 const { messageLimiter } = require("../middlewares/rateLimiters");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  getPrincipal,
+} = require("../middlewares/authorize");
+const { isValidObjectId } = require("mongoose");
+
+// Messaging is a staff feature (students never call these routes); sending to a
+// whole group is administrator-only.
+router.use(requireStaff);
 
 //POST message
 
@@ -87,9 +97,17 @@ router.post(
   "/resend",
   messageLimiter,
   asyncHandler(async (req, res) => {
-    const { id, type, body } = req.body;
+    const { id } = req.body;
 
-    const recipient = req?.body?.recipient;
+    // Resend what was stored for this school, not whatever the caller posts, so
+    // this route cannot be used to send arbitrary content (finding C-6e).
+    const stored = isValidObjectId(id)
+      ? await Message.findOne({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
+    if (!stored) {
+      return res.status(404).json("Couldnt send message.Try again later!!!");
+    }
+    const { type, body, recipient } = stored;
 
     try {
       if (type === "sms") {
@@ -103,7 +121,7 @@ router.post(
         await sendMail(body, recipient?.email);
       }
 
-      await Message.findByIdAndUpdate(id, {
+      await Message.findByIdAndUpdate(stored._id, {
         $set: {
           active: true,
         },
@@ -120,6 +138,7 @@ router.post(
 
 router.post(
   "/bulk",
+  requireRoleEnforced("administrator"),
   messageLimiter,
   asyncHandler(async (req, res) => {
     const newMessage = req.body;
@@ -127,21 +146,24 @@ router.post(
     let phoneNumbers = [];
     let groups = [];
 
+    // Recipients always come from the caller's own school (finding C-6d).
+    const school = req.user.school;
+
     switch (newMessage.group) {
       case "students":
-        groups = await Student.find({}).select("email phonenumber");
+        groups = await Student.find({ school }).select("email phonenumber");
         break;
 
       case "teachers":
-        groups = await Teacher.find({}).select("email phonenumber");
+        groups = await Teacher.find({ school }).select("email phonenumber");
         break;
 
       case "parents":
-        groups = await Parent.find({}).select("email phonenumber");
+        groups = await Parent.find({ school }).select("email phonenumber");
         break;
 
       default:
-        groups = await Student.find({}).select("email phonenumber");
+        groups = await Student.find({ school }).select("email phonenumber");
     }
 
     ///Check message type
@@ -217,12 +239,13 @@ router.post(
 
 router.delete(
   "/:id",
+  requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
     const id = req.params.id;
 
-    const message = await Message.findByIdAndDelete(id, {
-      new: true,
-    });
+    const message = isValidObjectId(id)
+      ? await Message.findOneAndDelete({ _id: id, school: req.user.school })
+      : null;
 
     if (_.isEmpty(message)) {
       return res.status(404).json("Error removing message.Try again later...");

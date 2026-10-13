@@ -20,12 +20,66 @@ const {
   getFeePaymentTrend,
   getTopFeePayments,
 } = require("../config/helpers/fees");
+const Term = require("../models/termModel");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  enforce,
+  getPrincipal,
+  isSelf,
+  pickFields,
+} = require("../middlewares/authorize");
+const {
+  studentInSchool,
+  termInSchool,
+  levelInSchool,
+} = require("../middlewares/tenant");
+const { isValidObjectId } = require("mongoose");
+
+// CurrentFee has no `school` field (audit D-1), so ownership is derived from the
+// related term (or, failing that, the student).
+const FORBIDDEN = "You do not have permission to perform this action.";
+const adminOnly = requireRoleEnforced("administrator");
+
+const ownedCurrentFee = async (req, id) => {
+  if (!isValidObjectId(id)) return null;
+  const doc = await CurrentFee.findById(id);
+  if (!doc) return null;
+  const owned = doc.term
+    ? await termInSchool(req, doc.term)
+    : await studentInSchool(req, doc.student);
+  return owned ? doc : null;
+};
+
+/**
+ * The two endpoints the student portal calls (audit 13.2): staff of the student's
+ * school, or the student themself. Nobody else.
+ */
+const staffOrOwnStudent = (getStudentId) =>
+  enforce(async (req, res, next) => {
+    try {
+      const principal = getPrincipal(req);
+      const studentId = getStudentId(req);
+      if (principal.kind === "student") {
+        if (!isSelf(req, studentId)) return res.status(403).json(FORBIDDEN);
+        return next();
+      }
+      if (principal.kind === "staff" && (await studentInSchool(req, studentId))) {
+        return next();
+      }
+      return res.status(403).json(FORBIDDEN);
+    } catch (error) {
+      next(error);
+    }
+  });
 
 //@GET All school current fees
 router.get(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const currentFees = await CurrentFee.find();
+    const termIds = await Term.find({ school: req.user.school }).distinct("_id");
+    const currentFees = await CurrentFee.find({ term: { $in: termIds } });
     res.status(200).json(currentFees);
   })
 );
@@ -33,8 +87,11 @@ router.get(
 //@GET All school current fees
 router.get(
   "/day",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { session, term, date } = req.query;
+
+    if (!(await termInSchool(req, term))) return res.status(200).json([]);
 
     const currentFees = await CurrentFee.find({
       session: new ObjectId(session),
@@ -83,6 +140,7 @@ router.get(
 //GET Student fee History
 router.get(
   "/history",
+  staffOrOwnStudent((req) => req.query.studentId),
   asyncHandler(async (req, res) => {
     const { studentId } = req.query;
 
@@ -126,6 +184,7 @@ router.get(
 //GET Student fee History
 router.get(
   "/current/:id",
+  staffOrOwnStudent((req) => req.params.id),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -198,16 +257,21 @@ router.get(
 
 router.get(
   "/:id",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const currentFee = await CurrentFee.findById(req.params.id);
+    // Another school's record looks like a missing one (legacy: 200 with null).
+    const currentFee = await ownedCurrentFee(req, req.params.id);
     res.status(200).json(currentFee);
   })
 );
 //@GET All school current fees summary
 router.post(
   "/summary",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { session, term, from, to } = req.body;
+
+    if (!(await termInSchool(req, term))) return res.status(403).json(FORBIDDEN);
 
     const currentFees = await CurrentFee.find({
       session,
@@ -296,8 +360,13 @@ router.post(
 //@GET School current Fees for a particular level id
 router.post(
   "/level",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { level, term } = req.body;
+
+    if (!(await termInSchool(req, term)) || !(await levelInSchool(req, level))) {
+      return res.status(200).json(0);
+    }
     //console.log(level, term);
     const currentFee = await CurrentFee.find({
       term: new ObjectId(term),
@@ -320,8 +389,17 @@ router.post(
 //GET Student fee info
 router.post(
   "/student",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { session, term, level, student } = req.body;
+
+    if (
+      !(await studentInSchool(req, student)) ||
+      !(await termInSchool(req, term)) ||
+      !(await levelInSchool(req, level))
+    ) {
+      return res.status(403).json(FORBIDDEN);
+    }
 
     let previous = {
       fees: 0,
@@ -418,8 +496,15 @@ router.post(
 //Add new School current Fees
 router.post(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { _id, payment } = req.body;
+
+    if (!(await ownedCurrentFee(req, _id))) {
+      return res
+        .status(404)
+        .send("Error creating new CurrentFee.Try again later");
+    }
 
     const newPayment = {
       ...payment,
@@ -455,11 +540,17 @@ router.post(
 //@PUT Update Existing School current Fees
 router.put(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const modifiedCurrentFee = await CurrentFee.findByIdAndUpdate(
-      req.body.id,
-      req.body
-    );
+    // The record must belong to the caller's school, and it cannot be moved to a
+    // different student/term/level/session.
+    const owned = await ownedCurrentFee(req, req.body.id);
+    const modifiedCurrentFee = owned
+      ? await CurrentFee.findByIdAndUpdate(
+          owned._id,
+          { $set: pickFields(req.body, ["payment", "fee", "active"]) }
+        )
+      : null;
 
     if (!modifiedCurrentFee) {
       return res
@@ -473,9 +564,10 @@ router.put(
 
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    await CurrentFee.findByIdAndDelete(id);
+    const owned = await ownedCurrentFee(req, req.params.id);
+    if (owned) await CurrentFee.findByIdAndDelete(owned._id);
 
     res.sendStatus(201);
   })

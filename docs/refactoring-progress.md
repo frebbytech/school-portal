@@ -12,7 +12,7 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 | 1 | Test harness and characterization tests | **Done, owner ran tests: passed** (2026-10-13). Characterization tests of *current* behaviour are not written yet |
 | 2 | Close the critical unauthenticated holes | **Done, owner ran tests: passed.** C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
 | 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Done — owner ran full suite: 53 tests pass** (2026-10-13), branch `refactor/stage-3-foundation` (see §5c) |
-| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (shared guards, users router, H-1, H-2) written on branch `refactor/stage-4a-users-authz`, uncommitted, NOT run (see §5d). Remaining routers not started |
+| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees, student allow-list for fee endpoints): written on branch `refactor/stage-4b-schools-messages-fees`, NOT run (see §5e). Remaining: students, examinations, attendance, terms/levels, the rest |
 | 5 | Validation, mass-assignment allow-lists, response adapter | Not started |
 | 6 | Users, schools, academic sessions/terms, levels | Not started |
 | 7 | Students, parents, teachers | Not started |
@@ -212,6 +212,27 @@ Branch `refactor/stage-4a-users-authz` (from the Stage 3 branch). **Nothing here
 | H-2 | `POST /student-auth/logout` | clears `refresh_token` (the name was wrong) with the attributes it was set with | |
 
 **Not covered by tests:** student deactivation on login/refresh (needs a full Student fixture). **Still open:** `GET /users/school` returns the first school to anyone (no auth, wrong for multi-school); other routers (schools, messages, fees, students, examinations, attendance, terms/levels, rest) are Stage 4b onward, and the student allow-list will be applied there.
+
+## 5e. Stage 4b — schools, messages, fees (prepared 2026-10-13)
+
+Branch `refactor/stage-4b-schools-messages-fees` (from 4a). **Not executed** (only `node --check`). New suite: `tests/schools-messages-fees.authz.test.js` (uses minimal records saved without validation, and mocked SMS/email, so nothing is sent).
+
+New helper `middlewares/tenant.js` (`studentInSchool`, `termInSchool`, `levelInSchool`) derives ownership for models with no `school` field (CurrentFee: audit D-1), without a migration.
+
+| Finding | Route | Change | Compatibility |
+|---|---|---|---|
+| C-6 | `GET /schools` | staff only; returns only the caller's own school (still an array) | admin client sees one school |
+| C-6 | `POST /schools` | administrator only; field allow-list; `permissions` (purchased modules) cannot be chosen | **open question:** there is no platform-level role, so any school administrator can still create a school |
+| C-5 | `PUT /schools`, `PUT /schools/badge` | administrator only; always the caller's own school (a foreign `_id` -> 403); descriptive fields only; badge route no longer upserts | `code` in the badge request body is ignored |
+| C-6 | `DELETE /schools/:id` | always 403 (no cascade; no client calls it) | |
+| — | `GET /schools/:code` | unchanged: public (login page) | still returns the full school document incl. `permissions` |
+| C-6d | `POST /messages/bulk` | recipients filtered by the caller's school (was every school's contacts); administrator only | **teachers can no longer send group messages** — confirm |
+| C-6e | `POST /messages/resend` | resends the *stored* message of the caller's school; posted `body`/`recipient` ignored; unknown/other-school id -> legacy 404 | the UI sends the id, so unchanged for it |
+| C-6 | other `/messages` routes | staff only; delete is administrator-only and school-scoped | |
+| C-6 | `/fees` | staff only; create/update/delete administrator only; every query scoped by school; the level must belong to the school; body fields allow-listed on create | |
+| C-6/C-7 | `/current-fees` | all routes staff only except `GET /history?studentId=` and `GET /current/:id`, which a **student may call for their own id only**; student/term/level/record ownership checked via the school; `PUT` can only change `payment`, `fee`, `active` and cannot move a record; `DELETE` administrator only; server-set issuer fields cannot be forged (already true) | **staff of any role can still record payments and `PUT` payments** (kept so a bursar flow is not blocked) — tighten in Stage 8 (ledger) |
+
+**Known bugs seen, not fixed here (Stage 8, H-12):** `POST /current-fees/student` crashes when it must create a missing record (`create(...).select`), previous arrears always 0, fee lookups ignore the term in some places.
 
 ## 6. Known risks to the refactoring itself
 
