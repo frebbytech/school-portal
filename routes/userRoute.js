@@ -6,7 +6,15 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { createImageUpload } = require("../middlewares/upload");
 const { verifyJWT, verifyRefreshJWT } = require("../middlewares/verifyJWT");
-const { requireRole, isSameSchool } = require("../middlewares/authorize");
+const {
+  requireRole,
+  isSameSchool,
+  requireStaff,
+  requireRoleEnforced,
+  isSelf,
+  getPrincipal,
+  pickFields,
+} = require("../middlewares/authorize");
 const User = require("../models/userModel");
 const Teacher = require("../models/teacherModel");
 const School = require("../models/schoolModel");
@@ -14,6 +22,71 @@ const { isValidObjectId } = require("mongoose");
 const { uploadFile } = require("../config/uploadFile");
 
 const upload = createImageUpload("users");
+
+// Fields a user may change on their own record, and the extra ones only an
+// administrator of the same school may change (finding C-5: mass assignment).
+const SELF_EDITABLE_FIELDS = [
+  "profile",
+  "firstname",
+  "lastname",
+  "username",
+  "dateofbirth",
+  "gender",
+  "email",
+  "phonenumber",
+  "address",
+  "residence",
+  "nationality",
+];
+const ADMIN_EDITABLE_FIELDS = [...SELF_EDITABLE_FIELDS, "role", "permissions", "active"];
+const CREATABLE_FIELDS = [...SELF_EDITABLE_FIELDS, "role", "permissions", "password"];
+const CREATABLE_ROLES = ["administrator", "teacher"];
+
+const SCHOOL_EDITABLE_FIELDS = [
+  "badge",
+  "name",
+  "motto",
+  "address",
+  "location",
+  "district",
+  "region",
+  "email",
+  "website",
+  "phonenumber",
+];
+
+const NOT_ALLOWED = "You do not have permission to perform this action.";
+
+/**
+ * Decide whether the caller may modify user `id`.
+ * - the user themself: profile fields only
+ * - an administrator of the same school: profile fields plus role/permissions/active
+ * Returns { target, isAdmin } or { status, message }. A user of another school is
+ * reported exactly like a missing one so ids cannot be probed.
+ */
+const resolveEditableUser = async (req, id) => {
+  if (!isValidObjectId(id)) return { status: 404, message: "Error updating user info.Try Again Later." };
+  const principal = getPrincipal(req);
+  const target = await User.findById(id).select("school role");
+  if (!target) return { status: 404, message: "Error updating user info.Try Again Later." };
+
+  const isAdmin = principal.role === "administrator" && isSameSchool(req, target.school);
+  const self = isSelf(req, id) && principal.kind === "staff";
+
+  if (isAdmin || self) return { target, isAdmin };
+  if (principal.role === "administrator") {
+    return { status: 404, message: "Error updating user info.Try Again Later." };
+  }
+  return { status: 403, message: NOT_ALLOWED };
+};
+
+const buildUserUpdate = async (body, isAdmin) => {
+  const update = pickFields(body, isAdmin ? ADMIN_EDITABLE_FIELDS : SELF_EDITABLE_FIELDS);
+  if (typeof body.password === "string" && body.password.length > 0) {
+    update.password = await bcrypt.hash(body.password, 10);
+  }
+  return update;
+};
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -36,6 +109,7 @@ const apiLimiter = rateLimit({
 router.get(
   "/",
   verifyJWT,
+  requireStaff,
   asyncHandler(async (req, res) => {
     const users = await User.find({ school: req.user.school })
       .select("-password")
@@ -59,11 +133,17 @@ router.get(
 router.get(
   "/:id",
   verifyJWT,
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!id) return res.status(404).json("Not Found!");
+    if (!id || !isValidObjectId(id)) return res.status(404).json("Not Found!");
 
     const user = await User.findById(id).select("-password");
+
+    // Users of other schools are reported as missing.
+    if (!user || !isSameSchool(req, user.school)) {
+      return res.status(404).json("Not Found!");
+    }
 
     const loggedInUser = {
       _id: user._id?.toString(),
@@ -196,10 +276,19 @@ router.post(
 router.post(
   "/",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   upload.single("profile"),
   asyncHandler(async (req, res) => {
-    const newUser = req.body;
-    const username = req.body.username;
+    // Only listed fields are accepted; the school always comes from the token.
+    const newUser = pickFields(req.body, CREATABLE_FIELDS);
+    const username = newUser.username;
+
+    if (!CREATABLE_ROLES.includes(newUser.role)) {
+      return res.status(400).json("Invalid role");
+    }
+    if (typeof newUser.password !== "string" || newUser.password.length < 6) {
+      return res.status(400).json("Password must be at least 6 characters");
+    }
 
     const itExists = await User.findOne({ username });
 
@@ -221,8 +310,8 @@ router.post(
     }
 
     const user = await User.create({
-      school: req.user.school,
       ...newUser,
+      school: req.user.school,
     });
     // await knex('users').insert(newUser);
 
@@ -239,25 +328,17 @@ router.put(
   "/",
   verifyJWT,
   asyncHandler(async (req, res) => {
-    const { _id, password, isOnlyUpdate, iat, exp, ...rest } = req.body;
+    const { _id, isOnlyUpdate } = req.body;
 
-    if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      rest.password = hashedPassword;
-    } else {
-      delete req.body.password;
-    }
+    const access = await resolveEditableUser(req, _id);
+    if (!access.target) return res.status(access.status).json(access.message);
+
+    const update = await buildUserUpdate(req.body, access.isAdmin);
 
     const updatedUser = await User.findByIdAndUpdate(
       _id,
-      {
-        $set: {
-          ...rest,
-        },
-      },
-      {
-        new: true,
-      }
+      { $set: update },
+      { new: true }
     );
 
     if (_.isEmpty(updatedUser)) {
@@ -300,6 +381,9 @@ router.put(
   upload.single("profile"),
   asyncHandler(async (req, res) => {
     const { _id, user } = req.body;
+
+    const access = await resolveEditableUser(req, _id);
+    if (!access.target) return res.status(access.status).json(access.message);
 
     if (_.isEmpty(req.file)) {
       return res.status(400).json("Please upload a file");
@@ -363,6 +447,12 @@ router.put(
   verifyJWT,
   asyncHandler(async (req, res) => {
     const { id, oldPassword, newPassword } = req.body;
+
+    // Changing a password with the old one is something a user does for themself.
+    if (!isSelf(req, id)) {
+      return res.status(403).json(NOT_ALLOWED);
+    }
+
     const user = await User.findById(id);
     // const user = await knex('users').where('id', id).first();
 
@@ -390,8 +480,14 @@ router.put(
 router.put(
   "/reset-password",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
     const { id, password } = req.body;
+
+    const target = isValidObjectId(id) ? await User.findById(id).select("school") : null;
+    if (!target || !isSameSchool(req, target.school)) {
+      return res.status(404).json("Error updating user info.Try Again Later.");
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -438,11 +534,12 @@ router.put(
 router.patch(
   "/admin/reset-password",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
     const { id, password } = req.body;
-    const user = await User.findById(id);
+    const user = isValidObjectId(id) ? await User.findById(id) : null;
 
-    if (_.isEmpty(user)) {
+    if (_.isEmpty(user) || !isSameSchool(req, user.school)) {
       return res.status(404).json("User does not exist");
     }
 
@@ -464,9 +561,16 @@ router.patch(
   "/",
   verifyJWT,
   asyncHandler(async (req, res) => {
-    const updatedUser = await User.findByIdAndUpdate(req.body.id, req.body, {
-      new: true,
-    });
+    const access = await resolveEditableUser(req, req.body.id);
+    if (!access.target) return res.status(access.status).json(access.message);
+
+    const update = await buildUserUpdate(req.body, access.isAdmin);
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.body.id,
+      { $set: update },
+      { new: true }
+    );
 
     if (_.isEmpty(updatedUser)) {
       return res.status(404).json("Error updating user info");
@@ -480,8 +584,14 @@ router.patch(
 router.put(
   "/account",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
     const { id, active } = req.body;
+
+    const target = isValidObjectId(id) ? await User.findById(id).select("school") : null;
+    if (!target || !isSameSchool(req, target.school)) {
+      return res.status(404).json("Error updating user info");
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       id,
@@ -533,19 +643,16 @@ router.delete(
 router.put(
   "/school",
   verifyJWT,
+  requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
-    const schoolInfo = req.body;
-    const school = await School.findOneAndUpdate(
-      {
-        unique: schoolInfo.unique,
-      },
-
-      schoolInfo,
-
-      {
-        upsert: true,
-        new: true,
-      }
+    // An administrator edits their own school only, and only descriptive fields
+    // (never code, unique or the purchased module permissions). No upsert: this
+    // route can no longer create schools.
+    const schoolInfo = pickFields(req.body, SCHOOL_EDITABLE_FIELDS);
+    const school = await School.findByIdAndUpdate(
+      req.user.school,
+      { $set: schoolInfo },
+      { new: true }
     );
 
     if (_.isEmpty(school)) {

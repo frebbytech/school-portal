@@ -158,6 +158,13 @@ router.post("/login", studentLoginLimiter, async (req, res) => {
       ],
     })
     .populate("level", ["level"]);
+
+  // Deactivated students (never deleted) cannot sign in (finding H-1)
+  if (authStudent?.active === false) {
+    return res.status(403).json({
+      message: "Your account has been deactivated. Please contact your school.",
+    });
+  }
   const { school, ...rest } = authStudent?._doc;
 
   const term = await Term.findOne({
@@ -260,6 +267,11 @@ router.post("/refresh", async (req, res) => {
         ],
       })
       .populate("level", ["level"]);
+
+    // Deactivated students (never deleted) cannot renew a session (finding H-1)
+    if (authStudent?.active === false) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
     const { school, ...rest } = authStudent?._doc;
     const term = await Term.findOne({
       school: school._id,
@@ -320,8 +332,17 @@ router.post("/refresh", async (req, res) => {
 
 router.post("/logout", (req, res) => {
   req.user = null;
-  res.clearCookie("refreshToken", {
+  // Must use the cookie's real name and the attributes it was set with, otherwise
+  // the browser keeps it (finding H-2).
+  res.clearCookie("refresh_token", {
     path: "/api/frebbys/v1/student-auth/refresh",
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    domain:
+      process.env.NODE_ENV === "production"
+        ? "school-portal-aivn.onrender.com"
+        : undefined,
   });
   res.sendStatus(204);
 });

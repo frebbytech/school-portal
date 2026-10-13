@@ -58,6 +58,13 @@ const verifyRefreshJWT = (req, res, next) => {
           .json("Unauthorized Access.Please contact administrator");
       }
 
+      // A disabled account must not be able to renew its session (finding H-1)
+      if (authUser.active === false) {
+        return res
+          .status(401)
+          .json("Unauthorized Access.Please contact administrator");
+      }
+
       loggedInUser = {
         _id: authUser._id,
         id: authUser._id?.toString(),

@@ -11,8 +11,8 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 | 0 | Operational actions and read-only data audit | **Owner action in progress** (credential/secret rotation approved by owner 2026-10-12; completion not yet confirmed to me) |
 | 1 | Test harness and characterization tests | **Done, owner ran tests: passed** (2026-10-13). Characterization tests of *current* behaviour are not written yet |
 | 2 | Close the critical unauthenticated holes | **Done, owner ran tests: passed.** C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
-| 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Code written on branch `refactor/stage-3-foundation`, uncommitted. 29 pure-module tests run here and pass; integration tests and app startup NOT run** (see §5c) |
-| 4 | Authentication, authorization, tenant isolation | Not started |
+| 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Done — owner ran full suite: 53 tests pass** (2026-10-13), branch `refactor/stage-3-foundation` (see §5c) |
+| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (shared guards, users router, H-1, H-2) written on branch `refactor/stage-4a-users-authz`, uncommitted, NOT run (see §5d). Remaining routers not started |
 | 5 | Validation, mass-assignment allow-lists, response adapter | Not started |
 | 6 | Users, schools, academic sessions/terms, levels | Not started |
 | 7 | Students, parents, teachers | Not started |
@@ -192,6 +192,26 @@ Branch `refactor/stage-3-foundation` (from the pushed Stage 1-2 branch). Not com
 | rate limits | student login (`STUDENT_LOGIN_RATE_LIMIT_MAX`, default 10 per 15 min per IP+id, successes not counted), messaging (`MESSAGE_RATE_LIMIT_MAX`, default 60 per 15 min), optional global (`RATE_LIMIT_MAX`, off by default) | 429 on excess |
 
 **Deferred, noticed:** `message` routes still say "delivered" when a send fails (Stage 10); staff login limiter counts successful logins and may lock out schools behind one IP (Stage 4); `GET /student-auth/:id` still unauthenticated (H-3); student logout cookie mismatch (H-2); unused `config/mail/mail.js`, `sendEmail.js` (Stage 10). Audit note M-4 was inaccurate: `mailer.sendMail` swallowed errors.
+
+## 5d. Stage 4a — guards and users router (prepared 2026-10-13)
+
+Branch `refactor/stage-4a-users-authz` (from the Stage 3 branch). **Nothing here has been executed**: only `node --check`. Run `npm test`; new suite is `tests/users.authz.test.js`.
+
+**Shared guards** (`middlewares/authorize.js`): `getPrincipal` (a token without `role` is a student), `requireStaff` (administrator/teacher only), `requireRoleEnforced`, `isSelf`, `pickFields`. `ENFORCE_AUTHZ=false` turns the *role* guards into no-ops (temporary rollback). School-scope checks and field allow-lists inside handlers are always on, as are the Stage 2 guards.
+
+| Finding | Route | Change | Compatibility |
+|---|---|---|---|
+| C-5/C-6 | `GET /users`, `GET /users/:id` | staff only; `:id` must be in the caller's school (else 404; unknown id was a 500) | student app does not call these |
+| C-5 | `POST /users` | administrator only; field allow-list; school from token; role must be administrator/teacher; password ≥ 6 | clients sending other roles or short passwords now get 400 |
+| C-5 | `PUT /users`, `PATCH /users` | self -> profile fields only; administrator of same school -> plus role/permissions/active; others 403/404; `school` never changeable; PATCH now hashes `password` | the admin UI editing another user must be an administrator |
+| C-5 | `PUT /users/profile` | self or same-school administrator | |
+| C-5 | `PUT /users/reset` | caller's own id only (it needs the old password) | |
+| C-5 | `PUT /users/reset-password`, `PATCH /users/admin/reset-password`, `PUT /users/account` | administrator of the same school | **teachers with the "Users" permission lose access**; confirm this is intended |
+| C-5 | `PUT /users/school` | administrator; always the caller's own school; descriptive fields only (not `code`, `unique`, `permissions`); **no upsert** (cannot create schools) | |
+| H-1 | `POST /users/verify`, `POST /student-auth/refresh`, `/login` | disabled staff and deactivated students cannot renew or sign in (student login: 403 with a message) | access tokens already issued stay valid until expiry (<= 1 h staff, 15 min student) |
+| H-2 | `POST /student-auth/logout` | clears `refresh_token` (the name was wrong) with the attributes it was set with | |
+
+**Not covered by tests:** student deactivation on login/refresh (needs a full Student fixture). **Still open:** `GET /users/school` returns the first school to anyone (no auth, wrong for multi-school); other routers (schools, messages, fees, students, examinations, attendance, terms/levels, rest) are Stage 4b onward, and the student allow-list will be applied there.
 
 ## 6. Known risks to the refactoring itself
 
