@@ -179,6 +179,8 @@ const globalLimiter = createGlobalLimiter();
 if (globalLimiter) app.use(globalLimiter);
 
 // Public routes
+// Liveness probe for the host (no data, no database access).
+app.get("/api/frebbys/v1/health", (req, res) => res.status(200).json({ status: "ok" }));
 app.use("/api/frebbys/v1/users", userRoute);
 app.use("/api/frebbys/v1/schools", schoolRoute);
 app.use("/api/frebbys/v1/student-auth", studentAuthRoute);
