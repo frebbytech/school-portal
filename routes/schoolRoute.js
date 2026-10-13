@@ -1,24 +1,13 @@
 const express = require("express");
 const _ = require("lodash");
 const router = express.Router();
-const multer = require("multer");
-const { randomUUID } = require("crypto");
+const { createImageUpload } = require("../middlewares/upload");
 const School = require("../models/schoolModel");
 const asyncHandler = require("express-async-handler");
 const { verifyJWT } = require("../middlewares/verifyJWT");
 const { uploadFile } = require("../config/uploadFile");
 
-const Storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "./images/badges/");
-  },
-  filename: function (req, file, cb) {
-    const ext = file?.originalname?.split(".")[1];
-
-    cb(null, `${randomUUID()}.${ext}`);
-  },
-});
-const upload = multer({ storage: Storage });
+const upload = createImageUpload("badges");
 
 // Get all schools
 router.get(

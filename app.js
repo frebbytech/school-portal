@@ -9,7 +9,6 @@ const asyncHandler = require("express-async-handler");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
 const createError = require("http-errors");
-const rateLimit = require("express-rate-limit");
 
 // Route imports
 const schoolRoute = require("./routes/schoolRoute");
@@ -37,9 +36,15 @@ const noteRoute = require("./routes/noteRoute");
 const userRoute = require("./routes/userRoute");
 const attendanceRoute = require("./routes/attendanceRoute");
 const { verifyJWT } = require("./middlewares/verifyJWT");
+const { requestId } = require("./middlewares/requestId");
+const { errorHandler } = require("./middlewares/errorHandler");
+const { createGlobalLimiter } = require("./middlewares/rateLimiters");
 
 // Initialize express
 const app = express();
+
+// Correlation id for every request (also returned as X-Request-Id)
+app.use(requestId);
 
 // Security headers
 app.use(
@@ -93,6 +98,7 @@ const corsOptions = {
     
   ],
   credentials: true,
+  exposedHeaders: ["X-Request-Id"],
   origin: (origin, callback) => {
     if (!origin || whitelist.includes(normalizeOrigin(origin))) {
       callback(null, true);
@@ -101,15 +107,6 @@ const corsOptions = {
     }
   },
 };
-
-// Rate limiting
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests from this IP, please try again later",
-});
 
 // Middlewares
 app.use(cors(corsOptions));
@@ -177,8 +174,9 @@ app.use(
   express.static(path.join(__dirname, "templates"))
 );
 
-// Apply rate limiting to all routes
-// app.use(apiLimiter);
+// API-wide rate limit: opt-in via RATE_LIMIT_MAX (see middlewares/rateLimiters.js)
+const globalLimiter = createGlobalLimiter();
+if (globalLimiter) app.use(globalLimiter);
 
 // Public routes
 app.use("/api/frebbys/v1/users", userRoute);
@@ -234,29 +232,7 @@ app.use((req, res, next) => {
   next(createError.NotFound());
 });
 
-// Global error handler
-app.use((error, req, res, next) => {
-  const status = error.status || 500;
-
-  let message = "An unexpected error occurred";
-
-  if (error.name === "MongoServerError" && error.code === 11000) {
-    const field = Object.keys(error.keyValue)[0];
-    const value = error.keyValue[field];
-    message = `The ${field} "${value}" is already taken.`;
-  } else {
-    message = process.env.NODE_ENV === "production" ? message : error.message;
-  }
-
-  if (process.env.NODE_ENV !== "test") {
-    console.error(`[${new Date().toISOString()}] ${error.stack || error}`);
-  }
-
-  res.status(status).json({
-    status: "error",
-    statusCode: status,
-    message,
-  });
-});
+// Global error handler (see middlewares/errorHandler.js)
+app.use(errorHandler);
 
 module.exports = app;

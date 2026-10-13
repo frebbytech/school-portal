@@ -1,28 +1,9 @@
-const nodemailer = require("nodemailer");
+const { getTransport } = require("./transport");
+const { logger } = require("../../common/logger");
 
 const sendVerificationEmail = async (email_address, code) => {
   try {
-    const transportMail = nodemailer.createTransport({
-      service: process.env.MAIL_CLIENT_SERVICE,
-      auth: {
-        user: process.env.MAIL_CLIENT_USER,
-        pass: process.env.MAIL_CLIENT_PASS,
-      },
-      port: 465,
-      secure: true,
-      from: process.env.MAIL_CLIENT_USER,
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-
-    // verify connection configuration
-    transportMail.verify(function (error, success) {
-      if (error) {
-      } else {
-        console.log("Server is ready to take our messages");
-      }
-    });
+    const transportMail = getTransport();
 
     const mailOptions = {
       from: `FrebbyTech School Portal ${process.env.MAIL_CLIENT_USER}`,
@@ -36,8 +17,7 @@ const sendVerificationEmail = async (email_address, code) => {
 
     return mailResult;
   } catch (error) {
-    console.log(error.message);
-    // throw error.message;
+    logger.error("verification email could not be sent", { err: error });
   }
 };
 

@@ -1,32 +1,54 @@
 const { ref, uploadBytes, getDownloadURL, uploadString } = require("firebase/storage");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 const { storage } = require("../firebase");
+const { AppError } = require("../common/errors");
+const { logger } = require("../common/logger");
 
+// Folders under ./images that uploads may use
+const ALLOWED_LOCATIONS = new Set(["users", "students", "badges", "school"]);
 
+const normalizeLocation = (location) => String(location || "").replace(/^\/+|\/+$/g, "");
+
+/**
+ * Upload a file that multer saved under ./images/<location>/ to Firebase Storage and
+ * return its download URL. The local copy is always removed afterwards.
+ *
+ * Throws an AppError when the file cannot be stored; it no longer returns
+ * `undefined`, which used to end up saved as the user's profile picture.
+ */
 async function uploadFile(filename, location) {
-  const filePath = path.join(process.cwd(), `/images/${location}`, filename);
+  const folder = normalizeLocation(location);
 
-  // if (process.env.NODE_ENV !== 'production') return filePath
+  if (!ALLOWED_LOCATIONS.has(folder)) {
+    throw new AppError(400, "Invalid upload location", "INVALID_UPLOAD");
+  }
 
-  const storageRef = ref(storage, `${location}/${filename}`);
+  // Only a bare file name is accepted (no directories)
+  const safeName = path.basename(String(filename || ""));
+  if (!safeName || safeName !== filename) {
+    throw new AppError(400, "Invalid file name", "INVALID_UPLOAD");
+  }
+
+  const filePath = path.join(process.cwd(), "images", folder, safeName);
 
   try {
-    // Upload the file to Cloud Storage
+    const storageRef = ref(storage, `${folder}/${safeName}`);
     await uploadBytes(storageRef, fs.readFileSync(filePath));
-
-    // Get the download URL of the uploaded file
-    const downloadURL = await getDownloadURL(storageRef);
-
-      // Clean up local file
-      fs.unlinkSync(filePath);
-    return downloadURL;
+    return await getDownloadURL(storageRef);
   } catch (error) {
-    console.error("Error uploading file to Cloud Storage", error);
+    logger.error("file upload to cloud storage failed", { err: error, folder });
+    throw new AppError(502, "Could not store the uploaded image. Please try again.", "STORAGE_ERROR");
+  } finally {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") logger.warn("could not remove temporary upload", { err: error });
+    }
   }
 }
-
 
 // Upload base64 image to Firebase Storage
 async function uploadBase64Image(base64Image, fileName, uploadPath = "frebbys") {
@@ -44,7 +66,6 @@ async function uploadBase64Image(base64Image, fileName, uploadPath = "frebbys") 
   return imageUrl;
 }
 
-
 async function getImageAsBase64(imageUrl) {
   try {
     const response = await axios.get(imageUrl, { responseType: "arraybuffer" });
@@ -58,30 +79,36 @@ async function getImageAsBase64(imageUrl) {
   }
 }
 
-
+/**
+ * Upload several images. The index number is taken from each original file name
+ * (e.g. "ST001.jpg"). A file that fails is skipped and logged so the others still
+ * succeed; only successful uploads are returned.
+ */
 async function uploadMultipleImages(files, uploadPath = "students/") {
   const uploadedUrls = [];
 
   for (const file of files) {
-   
-    const imageUrl = await uploadFile(file.filename, uploadPath);
+    try {
+      const imageUrl = await uploadFile(file.filename, uploadPath);
 
-    uploadedUrls.push({
-      indexnumber: file.originalname?.split('.')[0],
-      url: imageUrl
-    });
-
-    // Clean up local file
-    fs.unlinkSync(filePath);
+      uploadedUrls.push({
+        indexnumber: file.originalname?.split(".")[0],
+        url: imageUrl,
+      });
+    } catch (error) {
+      logger.warn("skipping image that could not be uploaded", {
+        indexnumber: file.originalname?.split(".")[0],
+        reason: error.message,
+      });
+    }
   }
 
   return uploadedUrls;
 }
 
-
-
-
 module.exports = {
   uploadFile,
-  uploadBase64Image, getImageAsBase64, uploadMultipleImages
+  uploadBase64Image,
+  getImageAsBase64,
+  uploadMultipleImages,
 };

@@ -7,6 +7,7 @@ const Parent = require("../models/parentModel");
 const Message = require("../models/messageModel");
 const sendMail = require("../config/mail/mailer");
 const { sendSMS } = require("../config/sms/messenger");
+const { messageLimiter } = require("../middlewares/rateLimiters");
 
 //POST message
 
@@ -26,6 +27,7 @@ router.get(
 
 router.post(
   "/quick",
+  messageLimiter,
   asyncHandler(async (req, res) => {
     const newMessage = req.body;
     //console.log(newMessage);
@@ -83,6 +85,7 @@ router.post(
 
 router.post(
   "/resend",
+  messageLimiter,
   asyncHandler(async (req, res) => {
     const { id, type, body } = req.body;
 
@@ -117,6 +120,7 @@ router.post(
 
 router.post(
   "/bulk",
+  messageLimiter,
   asyncHandler(async (req, res) => {
     const newMessage = req.body;
     let emailAddresses = [];

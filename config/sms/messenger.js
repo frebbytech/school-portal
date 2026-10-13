@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { logger } = require("../../common/logger");
 const { getInitials, SUBJECT_OPTIONS } = require("../helper");
 
 const sendSMS = async (body, telephoneNumber) => {
@@ -24,7 +25,7 @@ const sendSMS = async (body, telephoneNumber) => {
     //console.log(res.data);
     return res.data;
   } catch (error) {
-    console.log("An error has occured.");
+    logger.error("SMS could not be sent", { err: error });
     // throw new Error("Error sending message.Try again later");
   }
 };
@@ -62,7 +63,7 @@ const sendReportSMS = async (generatedResult, school) => {
     return res.data;
   } catch (error) {
 
-    console.log("An error has occured.");
+    logger.error("SMS could not be sent", { err: error });
     // throw new Error("Error sending message.Try again later");
   }
 };

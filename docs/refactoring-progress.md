@@ -9,9 +9,9 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 | Stage | Name | Status |
 |---|---|---|
 | 0 | Operational actions and read-only data audit | **Owner action in progress** (credential/secret rotation approved by owner 2026-10-12; completion not yet confirmed to me) |
-| 1 | Test harness and characterization tests | **Patch 0001 prepared — NOT executed** (dev dependencies approved; sandbox cannot reach npm). Characterization tests of *current* behaviour are not written yet |
-| 2 | Close the critical unauthenticated holes | **Patch 0002 prepared — NOT executed.** Done in patch: C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
-| 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | Not started |
+| 1 | Test harness and characterization tests | **Done, owner ran tests: passed** (2026-10-13). Characterization tests of *current* behaviour are not written yet |
+| 2 | Close the critical unauthenticated holes | **Done, owner ran tests: passed.** C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
+| 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Code written on branch `refactor/stage-3-foundation`, uncommitted. 29 pure-module tests run here and pass; integration tests and app startup NOT run** (see §5c) |
 | 4 | Authentication, authorization, tenant isolation | Not started |
 | 5 | Validation, mass-assignment allow-lists, response adapter | Not started |
 | 6 | Users, schools, academic sessions/terms, levels | Not started |
@@ -173,6 +173,25 @@ Delivered as patch files (apply in order with `git apply`; the owner commits man
 **To run the tests (on a machine with npm access):** `npm install`, then `npm test`. `mongodb-memory-server` downloads a MongoDB binary on first run. Report any failure to me and I will fix it before Stage 3.
 
 **Known issues noticed but not changed in these patches:** `server.js` calls `db.closeConnection()`, which is not a Mongoose method (graceful shutdown would throw); `GET /student-auth/:id` is still unauthenticated (H-3); user-existence disclosure on reset request (404) kept for compatibility; student logout still does not clear the refresh cookie (H-2, Stage 4).
+
+## 5c. Stage 3 — foundation (prepared 2026-10-13)
+
+Branch `refactor/stage-3-foundation` (from the pushed Stage 1-2 branch). Not committed. Delivered as `0003-foundation.patch`.
+
+**Verification actually performed:** every changed/new JS file passes `node --check`. The four unit suites (`tests/unit/*`: env 10, logger 6, errorHandler 11, upload/`detectImageType` 2 = 29 tests) were executed here with a minimal jest-compatible shim (multer stubbed for the upload suite, since npm is unreachable). All passed. **Not performed:** real `jest` run, `tests/request-id-and-errors.test.js`, `tests/student-login-limit.test.js`, the Stage 1-2 suites against these changes, starting the app, real SMTP or Firebase calls. **Run `npm test` and report failures.**
+
+| Finding | Change | Compatibility / action |
+|---|---|---|
+| H-4 | `unhandledRejection` is logged, no longer exits; `uncaughtException` logs and exits 1 | none |
+| (bootstrap) | `config/env.js` validates env at startup; production refuses to start without `MONGO_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `REFRESH_TOKEN_SECRET`, `SESSION_SECRET`; warns on weak/duplicate secrets (never prints values). Graceful shutdown in `server.js` (the earlier `db.closeConnection()` bug is gone) | **Production must have all five set** |
+| logging | `common/logger.js` JSON logger with redaction; `X-Request-Id` on every response | none |
+| errors | `common/errors.js` + `middlewares/errorHandler.js`: same body `{status, statusCode, message}`, plus optional `code`/`requestId`; duplicate key -> 409, validation/cast -> 400; 5xx messages hidden in production | clients that matched on 500 for duplicate keys will now see 409 |
+| H-7 | `config/uploadFile.js` fixed (missing `axios` import, undefined variable in multi-upload, temp files always removed, failures throw 502); missing import in `teacherRoute.js` | none |
+| uploads | `middlewares/upload.js`: random filenames, jpeg/png/webp only, size limit (`UPLOAD_MAX_MB`, default 5), magic-byte check, max 20 files | **Behaviour change:** other file types or oversize files are now rejected with 400 |
+| H-8 | `config/mail/transport.js`: shared transport, TLS verification on by default (`MAIL_TLS_REJECT_UNAUTHORIZED=false` opts out, logs a warning), timeouts, no per-send `verify()` | **Test against the real SMTP host before production**; if the provider has a bad certificate, set the opt-out temporarily |
+| rate limits | student login (`STUDENT_LOGIN_RATE_LIMIT_MAX`, default 10 per 15 min per IP+id, successes not counted), messaging (`MESSAGE_RATE_LIMIT_MAX`, default 60 per 15 min), optional global (`RATE_LIMIT_MAX`, off by default) | 429 on excess |
+
+**Deferred, noticed:** `message` routes still say "delivered" when a send fails (Stage 10); staff login limiter counts successful logins and may lock out schools behind one IP (Stage 4); `GET /student-auth/:id` still unauthenticated (H-3); student logout cookie mismatch (H-2); unused `config/mail/mail.js`, `sendEmail.js` (Stage 10). Audit note M-4 was inaccurate: `mailer.sendMail` swallowed errors.
 
 ## 6. Known risks to the refactoring itself
 

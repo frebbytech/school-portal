@@ -4,8 +4,7 @@ const rateLimit = require("express-rate-limit");
 const _ = require("lodash");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const multer = require("multer");
-const { randomUUID } = require("crypto");
+const { createImageUpload } = require("../middlewares/upload");
 const { verifyJWT, verifyRefreshJWT } = require("../middlewares/verifyJWT");
 const { requireRole, isSameSchool } = require("../middlewares/authorize");
 const User = require("../models/userModel");
@@ -14,17 +13,7 @@ const School = require("../models/schoolModel");
 const { isValidObjectId } = require("mongoose");
 const { uploadFile } = require("../config/uploadFile");
 
-const Storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "./images/users/");
-  },
-  filename: function (req, file, cb) {
-    const ext = file?.originalname?.split(".")[1];
-
-    cb(null, `${randomUUID()}.${ext}`);
-  },
-});
-const upload = multer({ storage: Storage });
+const upload = createImageUpload("users");
 
 // Rate limiting
 const apiLimiter = rateLimit({

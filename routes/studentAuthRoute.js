@@ -11,6 +11,7 @@ const Term = require("../models/termModel");
 const expressAsyncHandler = require("express-async-handler");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
+const { studentLoginLimiter } = require("../middlewares/rateLimiters");
 
 // Helper functions
 const generateAccessToken = (user) => {
@@ -129,7 +130,7 @@ router.get(
 );
 
 // ✅ LOGIN
-router.post("/login", async (req, res) => {
+router.post("/login", studentLoginLimiter, async (req, res) => {
   const { studentId, password } = req.body;
 
   const student = await StudentAuth.findOne({ indexnumber: studentId });

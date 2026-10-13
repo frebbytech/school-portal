@@ -26,9 +26,7 @@ db.on("disconnected", () => {
   //console.log("db disconnected");
 });
 
-process.on("SIGINT", async () => {
-  await db.close();
-  process.exit(0);
-});
+// Shutdown is handled by server.js (graceful: finish in-flight requests, then close
+// this connection). Scripts that import this module close it themselves.
 
 module.exports = db;

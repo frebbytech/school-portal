@@ -1,26 +1,14 @@
 const router = require("express").Router();
 const AsyncHandler = require("express-async-handler");
-const crypto = require("crypto");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const _ = require("lodash");
-const multer = require("multer");
+const { createImageUpload } = require("../middlewares/upload");
 const User = require("../models/userModel");
 const Course = require("../models/courseModel");
-const { uploadFile } = require("../config/uploadFile");
+const { uploadFile, uploadMultipleImages } = require("../config/uploadFile");
 
-//
-const Storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "./images/users/");
-  },
-  filename: function (req, file, cb) {
-    const ext = file?.originalname?.split(".")[1];
-
-    cb(null, `${crypto.randomUUID()}.${ext}`);
-  },
-});
-const upload = multer({ storage: Storage });
+const upload = createImageUpload("users");
 
 //-------------------------------------------------------------------------------
 

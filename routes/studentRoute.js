@@ -1,5 +1,4 @@
 const router = require("express").Router();
-const { randomUUID } = require("crypto");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
@@ -7,7 +6,7 @@ const {
   Types: { ObjectId },
 } = require("mongoose");
 const _ = require("lodash");
-const multer = require("multer");
+const { createImageUpload } = require("../middlewares/upload");
 const Term = require("../models/termModel");
 const Level = require("../models/levelModel");
 const Student = require("../models/studentModel");
@@ -19,17 +18,7 @@ const { uploadFile, uploadMultipleImages } = require("../config/uploadFile");
 const StudentAuth = require("../models/studentAuthModel");
 const { LEVEL_OPTIONS } = require("../config/helper");
 
-const Storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "./images/students/");
-  },
-  filename: function (req, file, cb) {
-    const ext = file?.originalname?.split(".")[1];
-
-    cb(null, `${randomUUID()}.${ext}`);
-  },
-});
-const upload = multer({ storage: Storage });
+const upload = createImageUpload("students");
 
 //@GET All students
 router.get(

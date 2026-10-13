@@ -1,23 +1,11 @@
-const nodemailer = require("nodemailer");
+const { getTransport } = require("./transport");
+const { logger } = require("../../common/logger");
 const fs = require("fs").promises;
 const path = require("path");
 
 const sendReportMail = async ({ school, email, fullName, id }) => {
   try {
-    const transportMail = nodemailer.createTransport({
-      service: process.env.MAIL_CLIENT_SERVICE,
-      auth: {
-        user: process.env.MAIL_CLIENT_USER,
-        pass: process.env.MAIL_CLIENT_PASS,
-      },
-      // port: 465,
-      // secure: true,
-      from: process.env.MAIL_CLIENT_USER,
-      tls: {
-        rejectUnauthorized: false,
-        // ciphers: 'SSLv3',
-      },
-    });
+    const transportMail = getTransport();
 
     const mailOptions = {
       from: `${school?.name} ${process.env.MAIL_CLIENT_USER}`,
@@ -50,8 +38,8 @@ const sendReportMail = async ({ school, email, fullName, id }) => {
 
     return mailResult;
   } catch (error) {
-    // throw error.message;
-    console.log(error.message);
+    // `mailResult` stays undefined, which callers treat as "not sent"
+    logger.error("report email could not be sent", { err: error });
   }
 };
 

@@ -1,29 +1,9 @@
-const nodemailer = require('nodemailer');
+const { getTransport } = require('./transport');
+const { logger } = require('../../common/logger');
 
 const sendMail = async (body, emailList) => {
   try {
-    const transportMail = nodemailer.createTransport({
-      service: process.env.MAIL_CLIENT_SERVICE,
-      auth: {
-        user: process.env.MAIL_CLIENT_USER,
-        pass: process.env.MAIL_CLIENT_PASS,
-      },
-      // port: 465,
-      // secure: true,
-      from: process.env.MAIL_CLIENT_USER,
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-
-    // verify connection configuration
-    transportMail.verify(function (error, success) {
-      if (error) {
-        console.log('Err is', error);
-      } else {
-        console.log('Server is ready to take our messages');
-      }
-    });
+    const transportMail = getTransport();
 
     const mailOptions = {
       from: `FrebbyTech School Portal ${process.env.MAIL_CLIENT_USER}`,
@@ -56,9 +36,12 @@ const sendMail = async (body, emailList) => {
     };
 
     await transportMail.sendMail(mailOptions);
+    return true;
   } catch (error) {
-    console.log(error);
-    // throw new Error("Error sending message.Try again later");
+    logger.error('email could not be sent', { err: error, subject: body?.title });
+    // Callers historically ignore the result; it is returned so they can start
+    // reporting failures accurately.
+    return false;
   }
 };
 
