@@ -12,7 +12,7 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 | 1 | Test harness and characterization tests | **Done, owner ran tests: passed** (2026-10-13). Characterization tests of *current* behaviour are not written yet |
 | 2 | Close the critical unauthenticated holes | **Done, owner ran tests: passed.** C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
 | 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Done — owner ran full suite: 53 tests pass** (2026-10-13), branch `refactor/stage-3-foundation` (see §5c) |
-| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees, student allow-list for fee endpoints): written on branch `refactor/stage-4b-schools-messages-fees`, NOT run (see §5e). Remaining: students, examinations, attendance, terms/levels, the rest |
+| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees): done, owner ran tests, passed. 4c (students, examinations, attendance, teacher scope): written on branch `refactor/stage-4c-students-exams-attendance`, NOT run (see §5f). Remaining: teachers, terms/levels/courses, the rest |
 | 5 | Validation, mass-assignment allow-lists, response adapter | Not started |
 | 6 | Users, schools, academic sessions/terms, levels | Not started |
 | 7 | Students, parents, teachers | Not started |
@@ -233,6 +233,26 @@ New helper `middlewares/tenant.js` (`studentInSchool`, `termInSchool`, `levelInS
 | C-6/C-7 | `/current-fees` | all routes staff only except `GET /history?studentId=` and `GET /current/:id`, which a **student may call for their own id only**; student/term/level/record ownership checked via the school; `PUT` can only change `payment`, `fee`, `active` and cannot move a record; `DELETE` administrator only; server-set issuer fields cannot be forged (already true) | **staff of any role can still record payments and `PUT` payments** (kept so a bursar flow is not blocked) — tighten in Stage 8 (ledger) |
 
 **Known bugs seen, not fixed here (Stage 8, H-12):** `POST /current-fees/student` crashes when it must create a missing record (`create(...).select`), previous arrears always 0, fee lookups ignore the term in some places.
+
+## 5f. Stage 4c — students, results, attendance, teacher scope (prepared 2026-10-20)
+
+Branch `refactor/stage-4c-students-exams-attendance` (from 4b). **Not executed** (only `node --check`). New suite: `tests/students-exams-attendance.authz.test.js` (minimal records saved without validation; the heavy report endpoints are only checked for "not 403").
+
+**Teacher scope rule (owner decision), implemented in `middlewares/access.js`:** administrators have every level of their school; a teacher has a level when they are its class teacher (`Level.teacher`) — whole level — or teach a course in it (`Course.teacher`) — their own subjects only. Tenant checks (level/student/record belongs to the school) are always on; role and teacher-scope rules are skipped under `ENFORCE_AUTHZ=false`.
+
+| Router | Change | Compatibility / confirm |
+|---|---|---|
+| students | reads: any staff of the school; **writes (create, import, edit, profile photos, disable) administrator only**; all queries scoped by school; `PUT` has no upsert and only changes personal fields (not `school`, `active`, `indexnumber`); class/term must belong to the school; imported existing ids must be in the school | teachers can no longer edit students — confirm |
+| students | `DELETE /students` **deactivates** instead of deleting (same path, returns the student record) — owner decision | `PATCH /students/disable` re-enables |
+| students | `GET /students/:id`: a student may read only their own record (student portal) | missing/other-school ids now 403 instead of 400 |
+| attendance | every route resolved through the register's level; teachers need class/course access; `PUT` only changes `status`/`active`; `GET /attendances` lists only accessible levels | |
+| attendance | `GET /attendances/level/:id` (student dashboard): school-scoped (it returned every school's registers), a student gets their own level only and **only their own entry in each register** | **UI risk:** if the student dashboard needs classmates' entries it will show fewer; `ENFORCE_AUTHZ=false` restores full registers (still school-scoped) |
+| examinations | every route resolved through the record's level; a student may read only their own results (`GET /:id`, `/analytics/:id`, `/academic/:id`), never publish; teachers need class/course access; **course teachers may read/enter only their own subjects** (`/subject`, `POST /`, `/bulk`, `/update`); report cards (`/reports`, `/publish`, `?publish=`) and remarks (`PUT /comments`) need the whole level (class teacher or administrator) | **confirm** publishing/remarks by class teacher + administrator only |
+| examinations | `POST /update` keeps other subjects' scores intact when a course teacher saves (the route deletes omitted scores) | |
+
+**Assumption to verify:** a score's `_id` is the *subject* id (inferred from `/subject` and `/bulk`). If the client sends a different id, course teachers' score entry would be refused; class teachers and administrators are unaffected.
+
+**Still open:** teachers, terms, levels, courses, subjects, grades, sessions, departments, houses, parents, events, announcements, holidays, notes, notifications (Stage 4d); teachers can still read every student of their school (fees, parents) — tighten if wanted.
 
 ## 6. Known risks to the refactoring itself
 

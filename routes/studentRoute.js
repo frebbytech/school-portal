@@ -17,12 +17,40 @@ const Fee = require("../models/feeModel");
 const { uploadFile, uploadMultipleImages } = require("../config/uploadFile");
 const StudentAuth = require("../models/studentAuthModel");
 const { LEVEL_OPTIONS } = require("../config/helper");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  pickFields,
+} = require("../middlewares/authorize");
+const { requireStudentAccess } = require("../middlewares/access");
+const { levelInSchool, termInSchool } = require("../middlewares/tenant");
+
+// Students are read by any staff member of their school and managed (created,
+// edited, deactivated) by administrators only. A student may read only their own
+// record (the student portal calls GET /students/:id).
+const adminOnly = requireRoleEnforced("administrator");
+
+const PERSONAL_FIELDS = [
+  "profile",
+  "firstname",
+  "surname",
+  "othername",
+  "dateofbirth",
+  "gender",
+  "email",
+  "phonenumber",
+  "address",
+  "residence",
+  "nationality",
+];
+const FORBIDDEN = "You do not have permission to perform this action.";
 
 const upload = createImageUpload("students");
 
 //@GET All students
 router.get(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const students = await Student.find({
       school: req.user.school,
@@ -45,9 +73,11 @@ router.get(
 //@GET All students details
 router.get(
   "/details",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { sessionId, termId } = req.query;
     const terms = await Term.find({
+      school: req.user.school,
       session: new ObjectId(sessionId),
     }).select(["term", "academicYear"]);
 
@@ -58,6 +88,7 @@ router.get(
     }));
 
     const allLevels = await Level.find({
+      school: req.user.school,
       session: new ObjectId(sessionId),
     })
       .populate("term", ["term", "academicYear"])
@@ -93,6 +124,7 @@ router.get(
 
     //Current Students in current sessions
     const currentStudents = await Level.find({
+      school: req.user.school,
       session: new ObjectId(sessionId),
       term: new ObjectId(termId),
     })
@@ -165,6 +197,7 @@ router.get(
 //@GET student by student index number
 router.get(
   "/index-number",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { id } = req.query;
 
@@ -182,6 +215,7 @@ router.get(
 //@GET student by student id
 router.get(
   "/:id",
+  requireStudentAccess((req) => req.params.id),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -275,6 +309,8 @@ router.get(
 //@GET student by student id
 router.get(
   "/:id/profile",
+  requireStaff,
+  requireStudentAccess((req) => req.params.id),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -300,6 +336,8 @@ router.get(
 //@GET Parent by student ID
 router.get(
   "/:id/parent",
+  requireStaff,
+  requireStudentAccess((req) => req.query.id),
   asyncHandler(async (req, res) => {
     const { id } = req.query;
     const parent = await Parent.findOne({
@@ -316,12 +354,26 @@ router.get(
 //@POST students
 router.post(
   "/",
+  adminOnly,
   upload.single("profile"),
   asyncHandler(async (req, res) => {
     const { details } = req.body;
 
-    const studentDetails = JSON.parse(details);
+    let studentDetails;
+    try {
+      studentDetails = JSON.parse(details);
+    } catch (error) {
+      return res.status(400).json("Invalid student details");
+    }
     const { session, personal, medical, academic, parent } = studentDetails;
+
+    // The class and term must belong to the caller's school.
+    if (
+      !(await levelInSchool(req, academic?.level?._id)) ||
+      !(await termInSchool(req, session?.termId))
+    ) {
+      return res.status(403).json(FORBIDDEN);
+    }
 
     const doesStudentExists = await Student.findOne({
       indexnumber: personal?.indexnumber,
@@ -384,8 +436,8 @@ router.post(
     }
 
     //Add Student to current class
-    const level = await Level.findByIdAndUpdate(
-      academic.level?._id,
+    const level = await Level.findOneAndUpdate(
+      { _id: academic.level?._id, school: req.user.school },
       { $push: { students: student?._id } },
       { new: true }
     );
@@ -417,8 +469,16 @@ router.post(
 //@PUT students
 router.post(
   "/many",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { session, students, type } = req.body;
+
+    if (
+      !(await levelInSchool(req, session?.levelId)) ||
+      !(await termInSchool(req, session?.termId))
+    ) {
+      return res.status(403).json(FORBIDDEN);
+    }
 
     const indexNumbers = _.compact(_.map(students, "indexnumber"));
     const existingStudents = await Student.find({
@@ -438,6 +498,17 @@ router.post(
     }
 
     let studentIds = _.map(students, "_id");
+
+    // Existing students being added to a class must belong to this school.
+    if (type !== "file") {
+      const owned = await Student.countDocuments({
+        _id: { $in: _.compact(studentIds) },
+        school: req.user.school,
+      });
+      if (studentIds.length === 0 || owned !== studentIds.length) {
+        return res.status(403).json(FORBIDDEN);
+      }
+    }
 
     if (type === "file") {
       const modifiedStudents = students?.map((student) => {
@@ -479,8 +550,8 @@ router.post(
     }
 
     //Add Students to current class
-    await Level.findByIdAndUpdate(
-      session.levelId,
+    await Level.findOneAndUpdate(
+      { _id: session.levelId, school: req.user.school },
       {
         $push: { students: studentIds },
       },
@@ -508,6 +579,7 @@ router.post(
 //@PUT students
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const id = req.body._id;
 
@@ -517,50 +589,57 @@ router.put(
         .json("Error updating student info.Try again later.");
     }
 
+    // Only students of the caller's school; no upsert, so this cannot create or
+    // move records, and only the fields each kind of edit is meant to change.
+    const scope = { _id: id, school: req.user.school };
     const modifiedStudent = req.body;
     let updatedStudent = null;
-    if (req.body?.type === "medical") {
-      updatedStudent = await Student.findByIdAndUpdate(id, {
-        $set: {
-          medical: modifiedStudent.medical,
-        },
-      });
-    }
-    if (req.body?.type === "academic") {
-      updatedStudent = await Student.findByIdAndUpdate(
-        id,
+
+    if (modifiedStudent?.type === "medical") {
+      updatedStudent = await Student.findOneAndUpdate(
+        scope,
+        { $set: { medical: modifiedStudent.medical } },
+        { new: true }
+      );
+    } else if (modifiedStudent?.type === "academic") {
+      if (!(await levelInSchool(req, modifiedStudent?.level))) {
+        return res.status(403).json(FORBIDDEN);
+      }
+      const before = await Student.findOne(scope).select("level");
+      updatedStudent = await Student.findOneAndUpdate(
+        scope,
         {
           $set: {
             academic: modifiedStudent?.academic,
             level: modifiedStudent?.level,
           },
         },
-        {
-          upsert: true,
-          new: true,
-        }
+        { new: true }
       );
 
-      if (updatedStudent.level !== modifiedStudent?.level) {
-        await Level.findByIdAndUpdate(
-          modifiedStudent?.level,
-          { $push: { students: id } },
+      if (updatedStudent && String(before?.level) !== String(modifiedStudent?.level)) {
+        await Level.findOneAndUpdate(
+          { _id: modifiedStudent?.level, school: req.user.school },
+          { $addToSet: { students: id } },
           { new: true }
         );
       }
     } else {
-      updatedStudent = await Student.findByIdAndUpdate(id, modifiedStudent, {
-        upsert: true,
-        new: true,
-      });
-
-      await StudentAuth.findOneAndUpdate(
-        { indexnumber: updatedStudent?.indexnumber },
-        {
-          email: updatedStudent?.email,
-          phonenumber: updatedStudent?.phonenumber,
-        }
+      updatedStudent = await Student.findOneAndUpdate(
+        scope,
+        { $set: pickFields(modifiedStudent, PERSONAL_FIELDS) },
+        { new: true }
       );
+
+      if (updatedStudent) {
+        await StudentAuth.findOneAndUpdate(
+          { indexnumber: updatedStudent?.indexnumber },
+          {
+            email: updatedStudent?.email,
+            phonenumber: updatedStudent?.phonenumber,
+          }
+        );
+      }
     }
 
     if (_.isEmpty(updatedStudent)) {
@@ -576,6 +655,7 @@ router.put(
 //@POST Update Student profile
 router.put(
   "/profile",
+  adminOnly,
   upload.single("profile"),
   asyncHandler(async (req, res) => {
     const { _id } = req.body;
@@ -587,11 +667,12 @@ router.put(
     const filename = req.file?.filename;
     const studentPhoto = await uploadFile(filename, "students/");
 
-    const updatedStudent = await Student.findByIdAndUpdate(_id, {
-      $set: {
-        profile: studentPhoto,
-      },
-    });
+    const updatedStudent = mongoose.isValidObjectId(_id)
+      ? await Student.findOneAndUpdate(
+          { _id, school: req.user.school },
+          { $set: { profile: studentPhoto } }
+        )
+      : null;
 
     if (_.isEmpty(updatedStudent)) {
       return res
@@ -606,6 +687,7 @@ router.put(
 //@POST Update Student bulk profile
 router.put(
   "/bulk-profile",
+  adminOnly,
   upload.array("profile", 10),
   asyncHandler(async (req, res) => {
     if (!req.files || req.files.length === 0) {
@@ -617,6 +699,7 @@ router.put(
     const updatedStudents = uploadedUrls?.map(async (student) => {
       return await Student.findOneAndUpdate(
         {
+          school: req.user.school,
           indexnumber: student?.indexnumber,
         },
         {
@@ -640,6 +723,7 @@ router.put(
 //@DISABLE Student account
 router.patch(
   "/disable",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { id, active } = req.query;
 
@@ -649,15 +733,12 @@ router.patch(
         .json("Error updating student info.Try again later.");
     }
 
-    const updatedStudent = await Student.findByIdAndUpdate(
-      id,
+    const updatedStudent = await Student.findOneAndUpdate(
+      { _id: id, school: req.user.school },
       {
         $set: { active: active === "Yes" ? false : true },
       },
-      {
-        upsert: true,
-        new: true,
-      }
+      { new: true }
     );
     if (_.isEmpty(updatedStudent)) {
       return res
@@ -674,8 +755,12 @@ router.patch(
 );
 
 //@DELETE student
+// Owner decision: students are never deleted, only deactivated. This route keeps its
+// path and its response (the student record) but deactivates instead of removing, so
+// the student's results, fees and attendance stay intact and they can be re-enabled.
 router.delete(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const id = req.query.id;
 
@@ -686,7 +771,11 @@ router.delete(
       });
     }
 
-    const student = await Student.findByIdAndDelete(id);
+    const student = await Student.findOneAndUpdate(
+      { _id: id, school: req.user.school },
+      { $set: { active: false } },
+      { new: true }
+    );
     if (student === null) {
       return res.json({
         error: true,

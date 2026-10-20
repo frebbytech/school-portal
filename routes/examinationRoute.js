@@ -29,11 +29,82 @@ const {
   preparePerformanceIndexChartData,
   getTrend,
 } = require("../config/helpers/examination");
+const {
+  requireStaff,
+  getPrincipal,
+  authzEnabled,
+} = require("../middlewares/authorize");
+const {
+  FORBIDDEN,
+  requireLevelAccess,
+  requireExamAccess,
+  requireStudentAccess,
+  canGradeSubjects,
+} = require("../middlewares/access");
+const { isValidObjectId } = require("mongoose");
+
+// Results are tenant-scoped through the level (Examination has no `school`, audit
+// D-1) and, for teachers, limited to levels they are the class teacher of or teach a
+// course in; a course teacher may only touch their own subjects. A student may read
+// only their own results (the student portal calls the three GET routes below).
+const deny = (res) => res.status(403).json(FORBIDDEN);
+
+// A student may open only their own examination record; staff go through the
+// level checks (publishing a report needs the whole level: class teacher/admin).
+const examinationRead = async (req, res, next) => {
+  try {
+    const principal = getPrincipal(req);
+    if (principal.kind === "student" && authzEnabled()) {
+      if (req.query.publish || !isValidObjectId(req.params.id)) return deny(res);
+      const exam = await Examination.findById(req.params.id).select("student level");
+      const sameSchool = exam && (await Level.exists({ _id: exam.level, school: principal.schoolId }));
+      if (!exam || !sameSchool || String(exam.student) !== principal.id) return deny(res);
+      return next();
+    }
+    return requireStaff(req, res, (err) =>
+      err
+        ? next(err)
+        : requireExamAccess((r) => r.params.id, { full: Boolean(req.query.publish) })(req, res, next)
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Subject-level rule for a course teacher on a subject-specific read.
+const requireSubjectAccess = (req, res, next) => {
+  const access = req.levelAccess;
+  if (access && !access.full && !access.subjectIds.has(String(req.query.subject))) {
+    return deny(res);
+  }
+  next();
+};
+
+// Examination records addressed by session/term/student are resolved to their id so
+// the same record-level checks apply.
+const resolveUpdateTarget = async (req, res, next) => {
+  try {
+    const session = req.body?.session || {};
+    if (!session.examsId && session.studentId) {
+      const exam = await Examination.findOne({
+        session: session.sessionId,
+        term: session.termId,
+        student: session.studentId,
+      }).select("_id");
+      if (exam) session.examsId = String(exam._id);
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
 //@GET
 
 router.get(
   "/details",
+  requireStaff,
+  requireLevelAccess((req) => req.query.level),
   asyncHandler(async (req, res) => {
     const { level } = req.query;
 
@@ -150,6 +221,8 @@ router.get(
 
 router.get(
   "/reports",
+  requireStaff,
+  requireLevelAccess((req) => req.query.levelId, { full: true }),
   asyncHandler(async (req, res) => {
     const { sessionId, termId, levelId } = req.query;
 
@@ -210,6 +283,8 @@ router.get(
 
 router.get(
   "/publish",
+  requireStaff,
+  requireLevelAccess((req) => req.query.levelId, { full: true }),
   asyncHandler(async (req, res) => {
     const publishType = req.query.type || "sms";
     const { sessionId, termId, levelId } = req.query;
@@ -401,6 +476,9 @@ router.get(
 //@GET students results by subject
 router.get(
   "/subject",
+  requireStaff,
+  requireLevelAccess((req) => req.query.id),
+  requireSubjectAccess,
   asyncHandler(async (req, res) => {
     const { id, subject } = req.query;
 
@@ -486,6 +564,7 @@ router.get(
 
 router.get(
   "/analytics/:id",
+  requireStudentAccess((req) => req.params.id, { teacherScoped: true }),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const records = await Examination.find({
@@ -539,6 +618,7 @@ router.get(
 //GET Student academic dashboard information
 router.get(
   "/academic/:studentId",
+  requireStudentAccess((req) => req.params.studentId, { teacherScoped: true }),
   asyncHandler(async (req, res) => {
     const { studentId } = req.params;
 
@@ -615,6 +695,7 @@ router.get(
 //@GET
 router.get(
   "/:id",
+  examinationRead,
   asyncHandler(async (req, res) => {
     const publish = req.query.publish || "";
     const publishType = req.query.type || "sms";
@@ -771,6 +852,9 @@ router.get(
 
 router.post(
   "/student/academics",
+  requireStaff,
+  requireLevelAccess((req) => req.body?.level),
+  requireStudentAccess((req) => req.body?.student),
   asyncHandler(async (req, res) => {
     const { session, term, level, student } = req.body;
 
@@ -826,8 +910,14 @@ router.post(
 
 router.post(
   "/",
+  requireStaff,
+  requireExamAccess((req) => req.body?.examsId),
   asyncHandler(async (req, res) => {
     const newExamsScore = req.body;
+
+    // A course teacher may only enter scores for their own subjects.
+    const submitted = (newExamsScore.scores || []).map((score) => score?._id);
+    if (!canGradeSubjects(req.levelAccess, submitted)) return deny(res);
 
     // Find if student exam details exists
     const examsInfo = await Examination.findById(newExamsScore.examsId);
@@ -862,8 +952,14 @@ router.post(
 
 router.post(
   "/bulk",
+  requireStaff,
+  requireLevelAccess((req) => req.body?.level),
   asyncHandler(async (req, res) => {
     const { session, term, level, results } = req.body;
+
+    if (!canGradeSubjects(req.levelAccess, _.uniq((results || []).map((r) => r?._id)))) {
+      return deny(res);
+    }
 
     //Extract student index numbers from a specific level
     const selectedLevel = await Level.findById(level)
@@ -929,8 +1025,18 @@ router.post(
 
 router.post(
   "/update",
+  requireStaff,
+  resolveUpdateTarget,
+  requireExamAccess((req) => req.body?.session?.examsId),
   asyncHandler(async (req, res) => {
     const { session, scores } = req.body;
+
+    // A course teacher may only change their own subjects; scores for the other
+    // subjects stay exactly as they are (the route treats omitted scores as deleted).
+    const access = req.levelAccess;
+    if (!canGradeSubjects(access, (scores || []).map((score) => score?._id))) {
+      return deny(res);
+    }
 
     let examsInfo = {};
 
@@ -954,7 +1060,13 @@ router.post(
     const latestScores = _.values(newScores);
 
     //Remove all deleted Scores
-    const filteredScores = _.intersectionBy(latestScores, scores, "_id");
+    let filteredScores = _.intersectionBy(latestScores, scores, "_id");
+    if (!access.full) {
+      const untouched = (examsInfo?.scores || []).filter(
+        (score) => !access.subjectIds.has(String(score?._id))
+      );
+      filteredScores = [...untouched, ...filteredScores];
+    }
 
     const overallScore = _.sumBy(filteredScores, (score) =>
       Number(score?.totalScore)
@@ -984,6 +1096,8 @@ router.post(
 
 router.put(
   "/comments",
+  requireStaff,
+  requireExamAccess((req) => req.body?._id, { full: true }),
   asyncHandler(async (req, res) => {
     const newExamsComments = req.body;
 
