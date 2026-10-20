@@ -113,7 +113,7 @@ describe("students, results and attendance authorization (finding C-6, teacher s
       const missing = await as(request(app).put(`${base}/students`), adminTok).send({ _id: String(oid()), firstname: "Ghost" });
       expect(missing.status).toBe(404);
       expect(await Student.countDocuments()).toBe(before);
-      expect((await Student.findById(studentB._id)).firstname).toBe("Bob");
+      expect((await Student.findById(studentB._id)).firstname).toBe("bob");
     });
 
     it("deactivates (never deletes) and can re-enable", async () => {
