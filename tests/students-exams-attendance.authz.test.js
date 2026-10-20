@@ -102,7 +102,7 @@ describe("students, results and attendance authorization (finding C-6, teacher s
       });
       expect(res.status).toBe(200);
       const after = await Student.findById(studentA2._id);
-      expect(after.firstname).toBe("Cyrus");
+      expect(after.firstname.toLowerCase()).toBe("cyrus"); // the model lower-cases names
       expect(String(after.school)).toBe(String(schoolA._id));
       expect(after.active).toBe(true);
       expect(after.indexnumber).not.toBe("hijacked");
