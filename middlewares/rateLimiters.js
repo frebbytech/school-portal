@@ -26,6 +26,19 @@ const studentLoginLimiter = rateLimit({
     res.status(429).json({ message: "Too many login attempts. Please try again later." }),
 });
 
+// Platform administrator login: N failed attempts per username per IP per 15 minutes
+const platformLoginLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES,
+  max: () => positiveInt(process.env.PLATFORM_LOGIN_RATE_LIMIT_MAX, 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) =>
+    `${req.ip}|${String(req.body?.username ?? "").trim().toLowerCase()}`,
+  handler: (req, res) =>
+    res.status(429).json("Too many requests from this user, please try again after some time!"),
+});
+
 // Sending SMS/email: per signed-in user, so one account cannot flood recipients
 const messageLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES,
@@ -57,4 +70,4 @@ function createGlobalLimiter() {
   });
 }
 
-module.exports = { studentLoginLimiter, messageLimiter, createGlobalLimiter };
+module.exports = { studentLoginLimiter, platformLoginLimiter, messageLimiter, createGlobalLimiter };

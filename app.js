@@ -12,6 +12,7 @@ const createError = require("http-errors");
 
 // Route imports
 const schoolRoute = require("./routes/schoolRoute");
+const platformRoute = require("./routes/platformRoute");
 const sessionRoute = require("./routes/sessionRoute");
 const termRoute = require("./routes/termRoute");
 const gradeRoute = require("./routes/gradeRoute");
@@ -160,19 +161,11 @@ if (process.env.NODE_ENV !== "production") {
 
 // Static files
 app.use(express.static(path.join(__dirname, "public")));
-app.use("/api/frebbys/v1/views", express.static(path.join(__dirname, "views")));
-app.use(
-  "/api/frebbys/v1/images",
-  express.static(path.join(__dirname, "images"))
-);
-app.use(
-  "/api/frebbys/v1/reports",
-  express.static(path.join(__dirname, "reports"))
-);
-app.use(
-  "/api/frebbys/v1/templates",
-  express.static(path.join(__dirname, "templates"))
-);
+// The /views, /images, /reports and /templates folders used to be served publicly.
+// They hold server-side report templates, temporary uploads and temporary report PDFs
+// named after student ids (finding H-3), and no client links to them, so they are no
+// longer exposed. Import templates are still available through the authenticated
+// GET /api/frebbys/v1/template?name=... route.
 
 // API-wide rate limit: opt-in via RATE_LIMIT_MAX (see middlewares/rateLimiters.js)
 const globalLimiter = createGlobalLimiter();
@@ -185,6 +178,7 @@ app.get("/api/frebbys/v1/health", (req, res) => {
 });
 app.use("/api/frebbys/v1/users", userRoute);
 app.use("/api/frebbys/v1/schools", schoolRoute);
+app.use("/api/frebbys/v1/platform", platformRoute); // own login; every other route checks the platform role
 app.use("/api/frebbys/v1/student-auth", studentAuthRoute);
 
 // Protected routes (require JWT)

@@ -8,6 +8,7 @@ const { verifyJWT } = require("../middlewares/verifyJWT");
 const { uploadFile } = require("../config/uploadFile");
 const {
   requireStaff,
+  requireRole,
   requireRoleEnforced,
   pickFields,
   getPrincipal,
@@ -42,11 +43,16 @@ router.get(
   })
 );
 
-// Get single school
+// Public fields shown before sign-in ("find your school" by code); nothing else
+const PUBLIC_SCHOOL_FIELDS =
+  "code badge name motto address location district region email website phonenumber permissions";
+
+// Get single school by code (public: used to find a school before signing in)
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const school = await School.findOne({ code: req.params.id });
+    const code = String(req.params.id ?? "");
+    const school = await School.findOne({ code }).select(PUBLIC_SCHOOL_FIELDS);
     if (!school) {
       return res.status(404).json("School not found");
     }
@@ -54,13 +60,14 @@ router.get(
   })
 );
 
-// Create school
+// Create school: platform administrators only (a school's own administrator can
+// no longer create schools). Not affected by ENFORCE_AUTHZ.
 router.post(
   "/",
   verifyJWT,
-  requireRoleEnforced("administrator"),
+  requireRole("platform_admin"),
   asyncHandler(async (req, res) => {
-    // `permissions` (purchased modules) cannot be chosen by the caller.
+    // `permissions` (purchased modules) are set through /platform/schools.
     const data = pickFields(req.body, [...SCHOOL_EDITABLE_FIELDS, "code", "unique"]);
     const school = new School(data);
 

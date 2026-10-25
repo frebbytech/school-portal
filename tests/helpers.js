@@ -39,4 +39,25 @@ const studentToken = (id, school) =>
     expiresIn: "15m",
   });
 
-module.exports = { createSchool, createUser, staffToken, studentToken };
+// A platform administrator belongs to no school
+const createPlatformAdmin = async (overrides = {}) => {
+  const n = next();
+  return User.create({
+    firstname: "Platform",
+    lastname: `Admin${n}`,
+    username: `platform${n}`,
+    email: `platform${n}@example.com`,
+    role: "platform_admin",
+    password: await bcrypt.hash("platform-pass-123", 4),
+    ...overrides,
+  });
+};
+
+const platformToken = (user) =>
+  jwt.sign(
+    { id: user._id.toString(), _id: user._id.toString(), role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+
+module.exports = { createSchool, createUser, staffToken, studentToken, createPlatformAdmin, platformToken };

@@ -60,7 +60,7 @@ const UserSchema = new mongoose.Schema(
       required: true,
       lowercase: true,
       trim: true,
-      enum: ["administrator", "teacher", "student", "parent"], // Predefined roles
+      enum: ["administrator", "teacher", "student", "parent", "platform_admin"], // Predefined roles ("platform_admin" has no school)
       index: true,
     },
     permissions: {

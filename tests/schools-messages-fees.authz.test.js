@@ -13,7 +13,7 @@ const Level = require("../models/levelModel");
 const Message = require("../models/messageModel");
 const Fee = require("../models/feeModel");
 const CurrentFee = require("../models/currentFeeModel");
-const { createSchool, createUser, staffToken, studentToken } = require("./helpers");
+const { createSchool, createUser, staffToken, studentToken, createPlatformAdmin, platformToken } = require("./helpers");
 
 const base = "/api/frebbys/v1";
 const oid = () => new mongoose.Types.ObjectId();
@@ -80,13 +80,14 @@ describe("schools, messages and fees authorization (finding C-6)", () => {
       expect(after.permissions).not.toContain("Settings");
     });
 
-    it("refuses school creation by teachers and ignores a chosen permission set", async () => {
-      expect((await as(request(app).post(`${base}/schools`), teacherTok).send({ name: "New" })).status).toBe(403);
-      const res = await as(request(app).post(`${base}/schools`), adminTok).send({
-        name: "Created",
-        code: `NEW${oid().toString().slice(-8)}`,
-        permissions: ["Settings", "Users"],
-      });
+    it("only a platform administrator creates schools, and cannot choose the permission set here", async () => {
+      const body = { name: "Created", code: `NEW${oid().toString().slice(-8)}`, permissions: ["Settings", "Users"] };
+      expect((await as(request(app).post(`${base}/schools`), teacherTok).send(body)).status).toBe(403);
+      expect((await as(request(app).post(`${base}/schools`), adminTok).send(body)).status).toBe(403);
+      expect(await School.exists({ code: body.code })).toBeFalsy();
+
+      const platform = platformToken(await createPlatformAdmin());
+      const res = await as(request(app).post(`${base}/schools`), platform).send(body);
       expect(res.status).toBe(201);
       expect(res.body.permissions).not.toContain("Settings");
     });
@@ -226,17 +227,26 @@ describe("schools, messages and fees authorization (finding C-6)", () => {
       expect(after.payment).toHaveLength(1);
     });
 
+    it("lets only administrators record or edit payments", async () => {
+      const before = await CurrentFee.findById(cfA._id);
+      expect((await as(request(app).post(`${base}/current-fees`), teacherTok).send({ _id: String(cfA._id), payment: { paid: 5 } })).status).toBe(403);
+      expect((await as(request(app).put(`${base}/current-fees`), teacherTok).send({ id: String(cfA._id), payment: [] })).status).toBe(403);
+      expect((await as(request(app).post(`${base}/current-fees`), studentTokA).send({ _id: String(cfA._id), payment: { paid: 5 } })).status).toBe(403);
+      const after = await CurrentFee.findById(cfA._id);
+      expect(after.payment).toHaveLength(before.payment.length);
+    });
+
     it("records a payment in the caller's school with server-set issuer fields", async () => {
-      const res = await as(request(app).post(`${base}/current-fees`), teacherTok).send({
+      const res = await as(request(app).post(`${base}/current-fees`), adminTok).send({
         _id: String(cfA._id), payment: { paid: 50, issuerID: "forged" },
       });
       expect(res.status).toBe(200);
       expect(res.body.paid).toBe(50);
-      expect(res.body.issuerID).toBe(String(teacherA._id));
+      expect(res.body.issuerID).toBe(String(adminA._id));
     });
 
     it("does not let an update move a record to another student", async () => {
-      const res = await as(request(app).put(`${base}/current-fees`), teacherTok).send({
+      const res = await as(request(app).put(`${base}/current-fees`), adminTok).send({
         id: String(cfA._id), student: String(studentB._id), payment: [{ paid: 1 }],
       });
       expect(res.status).toBe(200);

@@ -8,11 +8,11 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 
 | Stage | Name | Status |
 |---|---|---|
-| 0 | Operational actions and read-only data audit | **Owner action in progress** (credential/secret rotation approved by owner 2026-10-12; completion not yet confirmed to me) |
+| 0 | Operational actions and read-only data audit | **Rotation done (owner confirmed 2026-10-25).** Read-only data audit still to do |
 | 1 | Test harness and characterization tests | **Done, owner ran tests: passed** (2026-10-13). Characterization tests of *current* behaviour are not written yet |
 | 2 | Close the critical unauthenticated holes | **Done, owner ran tests: passed.** C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
 | 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Done — owner ran full suite: 53 tests pass** (2026-10-13), branch `refactor/stage-3-foundation` (see §5c) |
-| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees): done, owner ran tests, passed. 4c (students, examinations, attendance, teacher scope): done, owner ran tests: all pass (see §5f). 4d (teachers, terms, levels, courses, subjects, grades, sessions, departments, houses, parents, events, announcements, holidays, notes, notifications): written on branch `refactor/stage-4d-remaining-routers`, NOT run (see §5g) |
+| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees): done, owner ran tests, passed. 4c (students, examinations, attendance, teacher scope): done, owner ran tests: all pass (see §5f). 4d (teachers, terms, levels, courses, subjects, grades, sessions, departments, houses, parents, events, announcements, holidays, notes, notifications): written on branch `refactor/stage-4d-remaining-routers`, NOT run (see §5g). 4e (platform role, school creation, payments admin-only, H-3 exposures): on branch `refactor/stage-4e-platform-role-and-exposures` (stacked on 4d), NOT run (see §5h) |
 | 5 | Validation, mass-assignment allow-lists, response adapter | Not started |
 | 6 | Users, schools, academic sessions/terms, levels | Not started |
 | 7 | Students, parents, teachers | Not started |
@@ -278,6 +278,25 @@ Branch `refactor/stage-4d-remaining-routers` (from 4c). **Not executed** (only `
 **Verified against the clients (2026-10-25):** the student portal uses only `/levels/dashboard-info`, `/levels/recent/birthday`, announcements, events, holidays, notes and notifications from this stage's routers (its term, subject, parent and level-list API modules are not imported by any page). The admin client's term/grade/course payloads carry the fields the allow-lists keep.
 
 **Still open (to confirm):** any administrator can create a school (no platform role); payments by any staff role (Stage 8); `GET /users/school` and `GET /student-auth/:id` unauthenticated (H-3); static `/reports`, `/images`, `/views` public; teacher term list has a typo (`status: "curent"`) that returns nothing for teachers, left as is; "Duplicate schema index" warning and the open-handle warning after tests (cleanup in Stage 10).
+
+## 5h. Stage 4e — platform role, payments, exposures (prepared 2026-10-25)
+
+Branch `refactor/stage-4e-platform-role-and-exposures` (from 4d, so 4d must be merged or tested first). **Not executed** (only `node --check`). New suite: `tests/platform-and-exposure.test.js`; two existing tests updated (`tests/schools-messages-fees.authz.test.js`: school creation is now platform-only, payments need an administrator).
+
+**Owner decisions applied (2026-10-25):** a platform-level role that alone creates schools; recording/editing payments restricted to administrators.
+
+| Area | Change | Compatibility / confirm |
+|---|---|---|
+| Platform role | new role `platform_admin` (no school). Own sign-in `POST /platform/login` (username + password, no school code, 1-hour token, no refresh cookie, 5 failed attempts per username+IP per 15 min, `PLATFORM_LOGIN_RATE_LIMIT_MAX`). It cannot sign in through `/users/login`, and its token is refused by every school-level endpoint (it is not a "staff" principal). The platform guards are **not** affected by `ENFORCE_AUTHZ` | create the first one with `scripts/create-platform-admin.js` (env vars `PLATFORM_*`, password at least 12 characters) |
+| Platform routes | `GET/POST /platform/schools`, `PUT /platform/schools/:id` (the only place `permissions`, i.e. purchased modules, can be set), `POST /platform/schools/:id/administrators` (creates a school's first administrator; role and school are forced) | the admin client has no screens for these yet; use the API until one is built |
+| `POST /schools` | now **platform administrators only** (a school's administrator gets 403); `permissions` still ignored on this legacy path | **the admin client's "register school" action, if any, will now fail for school administrators** |
+| Payments | `POST /current-fees` (record a payment) and `PUT /current-fees` (edit a fee record, which can rewrite its payments) are administrator only; teachers and students get 403 | the teacher UI uses no fee endpoint (verified in 4c) |
+| H-3 | `GET /users/school` required no sign-in and returned the first school in the database; now needs a token and returns the caller's own school | no client calls it |
+| H-3 | `GET /student-auth/:id` required no sign-in and returned any student's record; now needs a token, and only staff of that student's school or the student themselves can read it. It also always crashed (destructured a Mongoose document), now fixed | the student portal does not call it |
+| H-3 | `GET /schools/:code` stays public (the "find your school" page) but returns only public fields (no `unique`, no timestamps) | `permissions` kept: the client may use it before sign-in |
+| H-3 | `/views`, `/images`, `/reports`, `/templates` are no longer served as static files. They held report templates, temporary uploads and temporary report PDFs named after student ids. No client references them; import templates remain at the authenticated `GET /template?name=` | |
+
+**Still open:** the term/level/student login-and-refresh code still crashes if a school has no current term (`term._id`); no screens in the admin client for platform administration; teachers can read every student of their school; "Duplicate schema index" and open-handle warnings in tests (Stage 10).
 
 ## 6. Known risks to the refactoring itself
 

@@ -12,6 +12,9 @@ const expressAsyncHandler = require("express-async-handler");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const { studentLoginLimiter } = require("../middlewares/rateLimiters");
+const { verifyJWT } = require("../middlewares/verifyJWT");
+const { getPrincipal, requireMember } = require("../middlewares/authorize");
+const { isValidObjectId } = require("mongoose");
 
 // Helper functions
 const generateAccessToken = (user) => {
@@ -65,13 +68,20 @@ const resetLimiter = rateLimit({
 });
 
 //@GET student by student id
+// Requires a token (it used to be open: anyone could read any student's record by id).
+// Staff of the student's school, or the student themselves, may read it.
 router.get(
   "/:id",
+  verifyJWT,
+  requireMember,
   expressAsyncHandler(async (req, res) => {
     const id = req.params?.id;
 
     if (_.isEmpty(id)) {
       return res.status(400).json({ message: "Student ID is required" });
+    }
+    if (!isValidObjectId(id)) {
+      return res.status(403).json("You do not have permission to perform this action.");
     }
     //Personal Info
     const student = await Student.findById(id)
@@ -95,7 +105,24 @@ router.get(
       return res.status(400).json("No Such Student exists");
     }
 
-    const { school, ...rest } = student;
+    // Same answer for "other school" and "someone else", so ids cannot be probed
+    const principal = getPrincipal(req);
+    const sameSchool = String(student.school?._id) === principal.schoolId;
+    let allowed = sameSchool && principal.kind === "staff";
+    if (sameSchool && principal.kind === "student") {
+      const account = await StudentAuth.findById(principal.id).select("indexnumber");
+      allowed =
+        Boolean(account) &&
+        String(account.indexnumber).toLowerCase() === String(student.indexnumber).toLowerCase();
+    }
+    if (!allowed) {
+      return res.status(403).json("You do not have permission to perform this action.");
+    }
+
+    // (destructuring a Mongoose document does not copy its fields, so `school` was
+    // undefined here and this route always failed with a server error)
+    const school = student.school;
+    const rest = student;
 
     const term = await Term.findOne({
       school: school._id,
@@ -115,7 +142,7 @@ router.get(
         isPromotionTerm: term?.isPromotionTerm,
       },
       exams: term?.exams,
-      termId: term._id,
+      termId: term?._id,
       sessionId: term?.session?._id,
       status: term?.status,
       active: term?.active,

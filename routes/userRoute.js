@@ -10,6 +10,7 @@ const {
   requireRole,
   isSameSchool,
   requireStaff,
+  requireMember,
   requireRoleEnforced,
   isSelf,
   getPrincipal,
@@ -120,10 +121,14 @@ router.get(
 );
 
 // GET School Information
+// Returns the caller's own school (it used to return the first school in the database
+// to anyone, signed in or not)
 router.get(
   "/school",
+  verifyJWT,
+  requireMember,
   asyncHandler(async (req, res) => {
-    const school = await School.findOne();
+    const school = await School.findById(req.user.school);
 
     res.status(200).json(school);
   })
@@ -177,7 +182,8 @@ router.post(
     const { username, code, password } = req.body;
     const user = await User.findByUsernameAndSchool({ username, school: code });
 
-    if (_.isEmpty(user)) {
+    // Platform administrators sign in at /platform/login only
+    if (_.isEmpty(user) || user.role === "platform_admin") {
       return res.status(404).json(" Username or Password is incorrect !");
     }
     const isTrue = bcrypt.compareSync(password, user.password);

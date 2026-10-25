@@ -493,10 +493,10 @@ router.post(
   })
 );
 
-//Add new School current Fees
+// Recording a payment: administrators only (owner decision 2026-10-25)
 router.post(
   "/",
-  requireStaff,
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { _id, payment } = req.body;
 
@@ -537,10 +537,10 @@ router.post(
   })
 );
 
-//@PUT Update Existing School current Fees
+// Editing a fee record (which can rewrite its payments): administrators only
 router.put(
   "/",
-  requireStaff,
+  adminOnly,
   asyncHandler(async (req, res) => {
     // The record must belong to the caller's school, and it cannot be moved to a
     // different student/term/level/session.
