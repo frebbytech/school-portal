@@ -14,6 +14,11 @@ const {
   getPrincipal,
 } = require("../middlewares/authorize");
 const { isValidObjectId } = require("mongoose");
+const { validate, text, oneOfValues, objectId, phone, email } = require("../common/validation");
+const { withPagination } = require("../common/pagination");
+
+const MESSAGE_TYPES = ["sms", "email", "both"];
+const MESSAGE_GROUPS = ["students", "teachers", "parents"];
 
 // Messaging is a staff feature (students never call these routes); sending to a
 // whole group is administrator-only.
@@ -24,9 +29,13 @@ router.use(requireStaff);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const messages = await Message.find({
-      school: req.user.school,
-    }).sort({ createdAt: -1 });
+    const filter = { school: req.user.school };
+    const messages = await withPagination(
+      req,
+      res,
+      Message.find(filter).sort({ createdAt: -1, _id: -1 }),
+      () => Message.countDocuments(filter)
+    );
 
     // //console.log(messages);
 
@@ -38,6 +47,13 @@ router.get(
 router.post(
   "/quick",
   messageLimiter,
+  validate(
+    oneOfValues("body", "type", MESSAGE_TYPES),
+    text("body", "title", { optional: true, min: 0, max: 200 }),
+    text("body", "message", { max: 1000 }),
+    phone("body", "phonenumber", { optional: true }),
+    email("body", "email", { optional: true })
+  ),
   asyncHandler(async (req, res) => {
     const newMessage = req.body;
     //console.log(newMessage);
@@ -96,6 +112,7 @@ router.post(
 router.post(
   "/resend",
   messageLimiter,
+  validate(objectId("body", "id")),
   asyncHandler(async (req, res) => {
     const { id } = req.body;
 
@@ -140,6 +157,12 @@ router.post(
   "/bulk",
   requireRoleEnforced("administrator"),
   messageLimiter,
+  validate(
+    oneOfValues("body", "type", MESSAGE_TYPES),
+    oneOfValues("body", "group", MESSAGE_GROUPS, { optional: true }),
+    text("body", "title", { optional: true, min: 0, max: 200 }),
+    text("body", "message", { max: 1000 })
+  ),
   asyncHandler(async (req, res) => {
     const newMessage = req.body;
     let emailAddresses = [];

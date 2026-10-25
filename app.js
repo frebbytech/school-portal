@@ -13,6 +13,7 @@ const createError = require("http-errors");
 // Route imports
 const schoolRoute = require("./routes/schoolRoute");
 const platformRoute = require("./routes/platformRoute");
+const { rejectUnsafeInput } = require("./middlewares/sanitizeInput");
 const sessionRoute = require("./routes/sessionRoute");
 const termRoute = require("./routes/termRoute");
 const gradeRoute = require("./routes/gradeRoute");
@@ -99,7 +100,7 @@ const corsOptions = {
     
   ],
   credentials: true,
-  exposedHeaders: ["X-Request-Id"],
+  exposedHeaders: ["X-Request-Id", "X-Total-Count", "X-Page", "X-Page-Size"],
   origin: (origin, callback) => {
     if (!origin || whitelist.includes(normalizeOrigin(origin))) {
       callback(null, true);
@@ -121,6 +122,9 @@ app.use(
     parameterLimit: 50000,
   })
 );
+
+// Refuse `$operator` keys and prototype-pollution keys in the body and query string
+app.use(rejectUnsafeInput);
 
 // Session configuration
 const sessionConfig = {

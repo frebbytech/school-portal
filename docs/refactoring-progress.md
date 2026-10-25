@@ -13,7 +13,7 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 | 2 | Close the critical unauthenticated holes | **Done, owner ran tests: passed.** C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
 | 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Done — owner ran full suite: 53 tests pass** (2026-10-13), branch `refactor/stage-3-foundation` (see §5c) |
 | 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees): done, owner ran tests, passed. 4c (students, examinations, attendance, teacher scope): done, owner ran tests: all pass (see §5f). 4d (teachers, terms, levels, courses, subjects, grades, sessions, departments, houses, parents, events, announcements, holidays, notes, notifications): written on branch `refactor/stage-4d-remaining-routers`, NOT run (see §5g). 4e (platform role, school creation, payments admin-only, H-3 exposures): on branch `refactor/stage-4e-platform-role-and-exposures` (stacked on 4d), NOT run (see §5h) |
-| 5 | Validation, mass-assignment allow-lists, response adapter | Not started |
+| 5 | Validation, mass-assignment allow-lists, response adapter | Written on branch `refactor/stage-5-validation` (stacked on 4e), NOT run (see §5i). Mass-assignment allow-lists were done route by route in 4a–4e |
 | 6 | Users, schools, academic sessions/terms, levels | Not started |
 | 7 | Students, parents, teachers | Not started |
 | 8 | Fees and payments | Not started |
@@ -297,6 +297,22 @@ Branch `refactor/stage-4e-platform-role-and-exposures` (from 4d, so 4d must be m
 | H-3 | `/views`, `/images`, `/reports`, `/templates` are no longer served as static files. They held report templates, temporary uploads and temporary report PDFs named after student ids. No client references them; import templates remain at the authenticated `GET /template?name=` | |
 
 **Still open:** the term/level/student login-and-refresh code still crashes if a school has no current term (`term._id`); no screens in the admin client for platform administration; teachers can read every student of their school; "Duplicate schema index" and open-handle warnings in tests (Stage 10).
+
+## 5i. Stage 5 — validation and request hygiene (prepared 2026-10-26)
+
+Branch `refactor/stage-5-validation` (from 4e). **Not executed** (only `node --check` and a plain-Node check of the pure modules; the sandbox cannot install npm packages). New suite: `tests/validation.test.js`.
+
+Mass-assignment allow-lists and id checks were delivered with each router in Stages 4a–4e, so Stage 5 adds the shared pieces that were still missing:
+
+| Piece | What it does | Compatibility |
+|---|---|---|
+| `middlewares/sanitizeInput.js` (global, after body parsing) | refuses `$operator` keys (`{"username":{"$ne":""}}`, `?id[$gt]=`), `__proto__`/`constructor`/`prototype` keys and nesting deeper than 20, in the body and query string, with a 400 (`VALIDATION_ERROR`, key not echoed) | no client sends such keys; multipart bodies (file uploads) are parsed later and are not covered |
+| `common/validation.js` | `validate(...)` plus checkers for ids (24-hex strings), id lists, text (type and length), email, phone, enums, booleans and dates. They only check; they never rewrite the input | |
+| Applied to | `POST /users/login` (text, optional school id), `POST /messages/quick`, `/bulk`, `/resend` (type, group, text length, recipient format, id) | messages: an unknown `type`/`group` or an empty/oversized message was accepted before; phone check accepts the client's formats such as `+233(024)1234567` |
+| `common/pagination.js` | opt-in `?page=&limit=` (limit capped at 200, bad values 400); same array body, total in `X-Total-Count` (also `X-Page`, `X-Page-Size`, exposed through CORS) | no change unless the client asks. Applied to notifications, messages, events, announcements, students |
+| `docs/legacy-quirks.md` | the checked-in table of response behaviours to preserve | there is deliberately no runtime response adapter (see that file) |
+
+**Not done on purpose:** per-endpoint schemas for the academic and fee routes. Those inputs are reshaped in Stages 6–9 (terms/levels, students, fees, examinations), so each module gets its validation then, with the same helpers.
 
 ## 6. Known risks to the refactoring itself
 

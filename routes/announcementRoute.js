@@ -14,6 +14,7 @@ const {
   pickFields,
 } = require("../middlewares/authorize");
 const { sessionInSchool, termInSchool } = require("../middlewares/tenant");
+const { withPagination } = require("../common/pagination");
 
 const adminOnly = requireRoleEnforced("administrator");
 const FORBIDDEN = "You do not have permission to perform this action.";
@@ -36,9 +37,13 @@ router.get(
   "/",
   requireMember,
   asyncHandler(async (req, res) => {
-    const announcements = await Announcement.find({
-      school: getPrincipal(req).schoolId,
-    }).sort({ createdAt: -1 });
+    const filter = { school: getPrincipal(req).schoolId };
+    const announcements = await withPagination(
+      req,
+      res,
+      Announcement.find(filter).sort({ createdAt: -1, _id: -1 }),
+      () => Announcement.countDocuments(filter)
+    );
 
     res.status(200).json(announcements);
   })

@@ -5,6 +5,7 @@ const _ = require("lodash");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { createImageUpload } = require("../middlewares/upload");
+const { validate, text, objectId } = require("../common/validation");
 const { verifyJWT, verifyRefreshJWT } = require("../middlewares/verifyJWT");
 const {
   requireRole,
@@ -178,6 +179,11 @@ router.get(
 router.post(
   "/login",
   apiLimiter,
+  validate(
+    text("body", "username", { max: 100 }),
+    text("body", "password", { max: 200 }),
+    objectId("body", "code", { optional: true })
+  ),
   asyncHandler(async (req, res) => {
     const { username, code, password } = req.body;
     const user = await User.findByUsernameAndSchool({ username, school: code });

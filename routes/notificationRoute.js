@@ -4,6 +4,7 @@ const asyncHandler = require('express-async-handler');
 const { isValidObjectId } = require('mongoose');
 const Notification = require('../models/notificationModel');
 const { requireMember, getPrincipal, isSelf } = require('../middlewares/authorize');
+const { withPagination } = require('../common/pagination');
 
 // Notifications belong to one person: every query is limited to the caller's own.
 router.use(requireMember);
@@ -15,9 +16,13 @@ const mine = (req) => getPrincipal(req).id;
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const notifications = await Notification.find({
-      user: mine(req),
-    }).sort({ createdAt: -1 });
+    const filter = { user: mine(req) };
+    const notifications = await withPagination(
+      req,
+      res,
+      Notification.find(filter).sort({ createdAt: -1, _id: -1 }),
+      () => Notification.countDocuments(filter)
+    );
 
     res.status(200).json(notifications);
   })

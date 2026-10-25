@@ -1,4 +1,5 @@
 const router = require("express").Router();
+const { withPagination } = require("../common/pagination");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
@@ -52,9 +53,13 @@ router.get(
   "/",
   requireStaff,
   asyncHandler(async (req, res) => {
-    const students = await Student.find({
-      school: req.user.school,
-    });
+    const filter = { school: req.user.school };
+    const students = await withPagination(
+      req,
+      res,
+      Student.find(filter).sort({ _id: 1 }), // stable order so pages do not overlap
+      () => Student.countDocuments(filter)
+    );
     res.json(students);
   })
 );
