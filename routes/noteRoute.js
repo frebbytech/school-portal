@@ -2,13 +2,20 @@ const router = require("express").Router();
 const asyncHandler = require("express-async-handler");
 const { body, validationResult } = require("express-validator");
 
+const { isValidObjectId } = require("mongoose");
 const Note = require("../models/noteModel");
+const { requireMember, getPrincipal, pickFields } = require("../middlewares/authorize");
+
+// Notes are private: every query below is limited to the caller's own notes.
+const NOTE_FIELDS = ["title", "content", "color", "position"];
+
+router.use(requireMember);
 
 router.get(
   "/",
   asyncHandler(async (req, res) => {
     const notes = await Note.find({
-      user: req.user.id,
+      user: getPrincipal(req).id,
     }).sort({ createdAt: -1 });
 
     res.json(notes);
@@ -30,13 +37,12 @@ router.post(
 
     try {
       const note = new Note({
-        ...req.body,
-        user: req.user.id,
+        ...pickFields(req.body, NOTE_FIELDS),
+        user: getPrincipal(req).id,
       });
       await note.save();
       res.status(201).json(note);
     } catch (err) {
-      console.log(err);
       res.status(400).json({ message: err.message });
     }
   })
@@ -57,15 +63,17 @@ router.put(
     }
 
     try {
-      const note = await Note.findByIdAndUpdate(
-        req.params.id,
-        {
-          title: req.body.title,
-          content: req.body.content,
-          color: req.body.color,
-        },
-        { new: true, runValidators: true }
-      );
+      const note = isValidObjectId(req.params.id)
+        ? await Note.findOneAndUpdate(
+            { _id: req.params.id, user: getPrincipal(req).id },
+            {
+              title: req.body.title,
+              content: req.body.content,
+              color: req.body.color,
+            },
+            { new: true, runValidators: true }
+          )
+        : null;
 
       if (!note) {
         return res.status(404).json({ message: "Note not found" });
@@ -82,7 +90,9 @@ router.put(
 router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    const note = await Note.findByIdAndDelete(req.params.id);
+    const note = isValidObjectId(req.params.id)
+      ? await Note.findOneAndDelete({ _id: req.params.id, user: getPrincipal(req).id })
+      : null;
 
     if (!note) {
       return res.status(404).json({ message: "Note not found" });

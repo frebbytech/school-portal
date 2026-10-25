@@ -1,73 +1,93 @@
 const router = require("express").Router();
 const _ = require("lodash");
 const asyncHandler = require("express-async-handler");
-const Department = require("../models/departmentModel");
+const { isValidObjectId } = require("mongoose");
+const Model = require("../models/departmentModel");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+} = require("../middlewares/authorize");
+const { sessionInSchool, staffInSchool } = require("../middlewares/tenant");
 
-//GET department
+const adminOnly = requireRoleEnforced("administrator");
+
+const CREATABLE_FIELDS = ["session", "name", "initials", "hod"];
+const EDITABLE_FIELDS = ["session", "name", "initials", "hod", "active"];
+const FORBIDDEN = "You do not have permission to perform this action.";
+
+// session and hod must belong to the caller's school
+const referencesOk = async (req, data) =>
+  (data.session === undefined || (await sessionInSchool(req, data.session))) &&
+  (data.hod === undefined ||
+    data.hod === null ||
+    (await staffInSchool(req, data.hod)));
+
+//GET department list
 router.get(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const departments = await Department.find({
-      school: req.user.school,
-    })
+    const items = await Model.find({ school: getPrincipal(req).schoolId })
       .populate("hod", "firstname lastname")
       .sort({ createdAt: -1 });
 
-    res.status(200).json(departments);
+    res.status(200).json(items);
   })
 );
 
-//@GET Department by id
+//@GET department by id
 router.get(
   "/:id",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    const department = await Department.findById(id);
-    res.status(200).json(department);
+    const { id } = req.params;
+    const item = isValidObjectId(id)
+      ? await Model.findOne({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
+    res.status(200).json(item);
   })
 );
-
-//Edit department
 
 router.post(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const department = req.body;
+    const data = pickFields(req.body, CREATABLE_FIELDS);
+    if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);
 
-    const newDepartment = await Department.create({
-      school: req.user.school,
-      session: department?.session,
-      name: department.name,
-      initials: department.initials,
-      hod: department.hod,
-      createdBy: req.user._id,
+    const principal = getPrincipal(req);
+    const created = await Model.create({
+      ...data,
+      school: principal.schoolId,
+      createdBy: principal.id,
     });
 
-    if (_.isEmpty(newDepartment)) {
+    if (_.isEmpty(created)) {
       return res.status(404).json("Error occurred.Try again later...");
     }
 
     res.status(200).json("Changes Saved!");
   })
 );
-//Edit department
 
 router.put(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const department = req.body;
-    
-    const updatedDepartment = await Department.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: { ...department },
-      },
-      {
-        new: true,
-      }
+    const { id } = req.params;
+    const data = pickFields(req.body, EDITABLE_FIELDS);
+    if (!isValidObjectId(id)) return res.status(404).json("Error occurred.Try again later...");
+    if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);
+
+    const updated = await Model.findOneAndUpdate(
+      { _id: id, school: getPrincipal(req).schoolId },
+      { $set: data },
+      { new: true }
     );
 
-    if (_.isEmpty(updatedDepartment)) {
+    if (_.isEmpty(updated)) {
       return res.status(404).json("Error occurred.Try again later...");
     }
 
@@ -75,46 +95,39 @@ router.put(
   })
 );
 
-//DELETE department
 router.delete(
   "/remove",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { departments } = req.body;
+    const ids = [].concat(req.body?.departments ?? []);
+    if (ids.length === 0 || !ids.every((id) => isValidObjectId(id))) {
+      return res.status(404).json("Error removing department.Try again later...");
+    }
 
-    const department = await Department.deleteMany(
-      {
-        _id: { $in: departments },
-      },
-      {
-        new: true,
-      }
-    );
+    const result = await Model.deleteMany({
+      _id: { $in: ids },
+      school: getPrincipal(req).schoolId,
+    });
 
-    if (_.isEmpty(department)) {
-      return res
-        .status(404)
-        .json("Error removing department.Try again later...");
+    if (!result?.deletedCount) {
+      return res.status(404).json("Error removing department.Try again later...");
     }
 
     res.status(200).json("Department Removed!");
   })
 );
 
-//DELETE department
-
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
+    const { id } = req.params;
+    const removed = isValidObjectId(id)
+      ? await Model.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
 
-    const department = await Department.findByIdAndDelete(id, {
-      new: true,
-    });
-
-    if (_.isEmpty(department)) {
-      return res
-        .status(404)
-        .json("Error removing department.Try again later...");
+    if (_.isEmpty(removed)) {
+      return res.status(404).json("Error removing department.Try again later...");
     }
 
     res.status(200).json("Department deleted successfully!!!");

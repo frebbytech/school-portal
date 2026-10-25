@@ -1,18 +1,26 @@
 const router = require("express").Router();
 const asyncHandler = require("express-async-handler");
+const { isValidObjectId } = require("mongoose");
 const Session = require("../models/sessionModel");
-const _ = require("lodash");
+const Term = require("../models/termModel");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+} = require("../middlewares/authorize");
+
+const adminOnly = requireRoleEnforced("administrator");
+
+// Fields an administrator may set; `school` and `createdBy` always come from the token.
+const SESSION_FIELDS = ["from", "to", "academicYear", "name", "active"];
 
 //@GET All school sessions
 router.get(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const sessions = await Session.find({
-      school: req.session?.user.school,
-    });
-
-    // const sessions_ = await knex("sessions").select("*");
-
+    const sessions = await Session.find({ school: getPrincipal(req).schoolId });
     res.status(200).json(sessions);
   })
 );
@@ -20,13 +28,12 @@ router.get(
 //@GET School Session by id
 router.get(
   "/:id",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const session = await Session.findById(req.params.id);
-
-    // const session_ = await knex("sessions")
-    //   .where("_id", req.params.id)
-    //   .limit(1);
-
+    const { id } = req.params;
+    const session = isValidObjectId(id)
+      ? await Session.findOne({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
     res.status(200).json(session);
   })
 );
@@ -34,20 +41,14 @@ router.get(
 //Add new School Session
 router.post(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    //Create new Session
+    const principal = getPrincipal(req);
     const session = await Session.create({
-      ...req.body,
-      school: req.session?.user.school,
-      createdBy: req.session?.user.createdBy,
+      ...pickFields(req.body, SESSION_FIELDS),
+      school: principal.schoolId,
+      createdBy: principal.id,
     });
-
-    // const sessionID = randomUUID();
-    // const session_ = await knex("sessions").insert({
-    //   _id: sessionID,
-    //   ...req.body,
-    // });
-
 
     if (!session) {
       return res.status(404).send("Error creating new session.Try again later");
@@ -59,19 +60,20 @@ router.post(
 //@PUT Update Existing School Session
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { id, ...rest } = req.body;
-    const modifiedSession = await Session.findByIdAndUpdate(id, rest);
+    const { id } = req.body || {};
+    if (!isValidObjectId(id)) {
+      return res.status(404).send("Error updating session info.Try again later");
+    }
 
-    // const modifiedSession_ = await knex("sessions")
-    //   .where("_id", id)
-    //   .update(rest);
-
+    const modifiedSession = await Session.findOneAndUpdate(
+      { _id: id, school: getPrincipal(req).schoolId },
+      { $set: pickFields(req.body, SESSION_FIELDS) }
+    );
 
     if (!modifiedSession) {
-      return res
-        .status(404)
-        .send("Error updating session info.Try again later");
+      return res.status(404).send("Error updating session info.Try again later");
     }
 
     res.send(modifiedSession);
@@ -80,11 +82,22 @@ router.put(
 
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    await Session.findByIdAndDelete(id);
-    // await knex("sessions").where("_id", id).del();
+    const { id } = req.params;
+    const { schoolId } = getPrincipal(req);
+    if (!isValidObjectId(id)) return res.sendStatus(204);
 
+    // A session that still has terms would leave them orphaned (term lifecycle is
+    // reworked in Stage 6); refuse instead of silently breaking them.
+    const inUse = await Term.exists({ session: id, school: schoolId });
+    if (inUse) {
+      return res
+        .status(409)
+        .json("This session still has terms. Remove its terms first.");
+    }
+
+    await Session.findOneAndDelete({ _id: id, school: schoolId });
     res.sendStatus(204);
   })
 );

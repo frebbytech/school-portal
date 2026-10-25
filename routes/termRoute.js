@@ -11,7 +11,28 @@ const CurrentFee = require("../models/currentFeeModel");
 const {
   Types: { ObjectId },
 } = require("mongoose");
-const { verifyJWT } = require("../middlewares/verifyJWT");
+const { isValidObjectId } = require("mongoose");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+} = require("../middlewares/authorize");
+
+const adminOnly = requireRoleEnforced("administrator");
+const TERM_STATUSES = ["upcoming", "current", "archived"];
+// Term details an administrator may edit (`active`, `status`, `school`, `session`
+// have their own endpoints or are fixed at creation).
+const TERM_CORE_FIELDS = [
+  "name",
+  "from",
+  "to",
+  "term",
+  "academicYear",
+  "vacationDate",
+  "reOpeningDate",
+  "isPromotionTerm",
+];
 const moment = require("moment/moment");
 const { query } = require("express-validator");
 // const knex = require("../db/knex");
@@ -27,7 +48,7 @@ async function setActive(termId, schoolId, active = true) {
 //@GET All school Terms
 router.get(
   "/",
-  verifyJWT,
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { session, type } = req.query;
     const { role, school } = req.user;
@@ -97,7 +118,7 @@ router.get(
 //@GET All school Terms
 router.get(
   "/sessions",
-  verifyJWT,
+  requireStaff,
   asyncHandler(async (req, res) => {
     const session = req.query?.session;
     const { role, school } = req.user;
@@ -142,6 +163,7 @@ router.get(
 //@GET School Term by id
 router.get(
   "/valid",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { academicYear, term } = req.query;
     //Find if a term already exits
@@ -167,9 +189,13 @@ router.get(
 //@GET School Term by id
 router.get(
   "/:id",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const term = await Term.findById(id).populate("session");
+    const term = isValidObjectId(id)
+      ? await Term.findOne({ _id: id, school: getPrincipal(req).schoolId }).populate("session")
+      : null;
+    if (!term) return res.status(404).json("Term not found");
 
     const modifiedTerm = {
       core: {
@@ -197,7 +223,7 @@ router.get(
 //Add new School Term
 router.post(
   "/",
-  verifyJWT,
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { core, levels, students, exams, report } = req.body;
 
@@ -286,7 +312,10 @@ router.post(
 
     let grades = null;
     if (!_.isEmpty(grade)) {
-      const itGradeExisting = await Grade.findOne({ name: grade.name });
+      const itGradeExisting = await Grade.findOne({
+        name: grade.name,
+        school: req.user.school,
+      });
 
       if (_.isEmpty(itGradeExisting)) {
         const newGrade = await Grade.create({
@@ -400,23 +429,29 @@ router.post(
 //@PUT Update Existing School Session
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { termId, ...rest } = req.body;
 
-    const modifiedTerm = await Term.findByIdAndUpdate(termId, {
-      $set: {
-        ...rest?.core,
-        exams: {
-          ...rest?.exams,
-        },
-        report: {
-          ...rest?.report,
-        },
-        headmaster: {
-          ...rest?.headmaster,
-        },
-      },
-    });
+    if (!isValidObjectId(termId)) {
+      return res
+        .status(404)
+        .send("Error updating session info.Try again later");
+    }
+
+    // Only the sections that were sent are replaced (an omitted `report` used to be
+    // overwritten with an empty object).
+    const update = pickFields(rest?.core, TERM_CORE_FIELDS);
+    for (const section of ["exams", "report", "headmaster"]) {
+      if (rest?.[section] !== undefined && rest[section] !== null) {
+        update[section] = { ...rest[section] };
+      }
+    }
+
+    const modifiedTerm = await Term.findOneAndUpdate(
+      { _id: termId, school: getPrincipal(req).schoolId },
+      { $set: update }
+    );
 
     // const modifiedTerm = await knex("terms")
     //   .where({ _id: id })
@@ -437,8 +472,15 @@ router.put(
 //@PUT Update Existing School Session
 router.patch(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { termId, type, ...rest } = req.body;
+
+    if (!isValidObjectId(termId)) {
+      return res
+        .status(404)
+        .send("Error updating session info.Try again later");
+    }
 
     let query = {};
     if (type === "headmaster") {
@@ -455,9 +497,10 @@ router.patch(
         },
       };
     }
-    const modifiedTerm = await Term.findByIdAndUpdate(termId, {
-      $set: query,
-    });
+    const modifiedTerm = await Term.findOneAndUpdate(
+      { _id: termId, school: getPrincipal(req).schoolId },
+      { $set: query }
+    );
 
     if (_.isEmpty(modifiedTerm)) {
       return res
@@ -472,16 +515,18 @@ router.patch(
 //Enable or Disable a particular Term
 router.put(
   "/account",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { id, active } = req.body;
 
-    const updatedTerm = await Term.findByIdAndUpdate(
-      id,
-      { $set: { active } },
-      {
-        new: true,
-      }
-    );
+    const updatedTerm =
+      isValidObjectId(id) && typeof active === "boolean"
+        ? await Term.findOneAndUpdate(
+            { _id: id, school: getPrincipal(req).schoolId },
+            { $set: { active } },
+            { new: true }
+          )
+        : null;
 
     // await setActive(id, req.user.school, active);
 
@@ -497,10 +542,18 @@ router.put(
 //Enable or Disable a particular Term
 router.patch(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { status } = req.query;
-    const schoolId = req.user?.school;
+    const schoolId = getPrincipal(req).schoolId;
+
+    if (!isValidObjectId(id) || !TERM_STATUSES.includes(status)) {
+      return res.status(400).json("Invalid information provided.");
+    }
+    if (!(await Term.exists({ _id: id, school: schoolId }))) {
+      return res.status(404).json("Error updating Session info");
+    }
 
     if (status === "current") {
       await Term.updateMany(
@@ -518,7 +571,7 @@ router.patch(
       }
     );
 
-    if (_.isEmpty(updatedTerm)) {
+    if (!updatedTerm?.matchedCount) {
       return res.status(404).json("Error updating Session info");
     }
 
@@ -528,19 +581,21 @@ router.patch(
 
 router.put(
   "/remove",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const sessions = req.body;
+    const sessions = [].concat(req.body ?? []);
+    if (sessions.length === 0 || !sessions.every((id) => isValidObjectId(id))) {
+      return res
+        .status(404)
+        .json("Error removing session info.Try again later");
+    }
 
-    const deletedTerms = await Term.deleteMany(
-      {
-        _id: { $in: sessions },
-      },
-      {
-        new: true,
-      }
-    );
+    const deletedTerms = await Term.deleteMany({
+      _id: { $in: sessions },
+      school: getPrincipal(req).schoolId,
+    });
 
-    if (_.isEmpty(deletedTerms)) {
+    if (!deletedTerms?.deletedCount) {
       return res
         .status(404)
         .json("Error removing session info.Try again later");
@@ -552,9 +607,12 @@ router.put(
 
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const id = req.params.id;
-    const deletedTerm = await Term.findByIdAndDelete(id);
+    const deletedTerm = isValidObjectId(id)
+      ? await Term.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
 
     // const deletedTerm = await knex("terms").where("_id", id).del();
 

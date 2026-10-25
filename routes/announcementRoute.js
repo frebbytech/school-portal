@@ -1,21 +1,44 @@
 const router = require("express").Router();
 const _ = require("lodash");
 const asyncHandler = require("express-async-handler");
+const { isValidObjectId } = require("mongoose");
 const User = require("../models/userModel");
 const Announcement = require("../models/announcementModel");
 const Notification = require("../models/notificationModel");
 const StudentAuth = require("../models/studentAuthModel");
 const { truncateWords } = require("../config/helper");
+const {
+  requireMember,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+} = require("../middlewares/authorize");
+const { sessionInSchool, termInSchool } = require("../middlewares/tenant");
 
-//GET announcement
+const adminOnly = requireRoleEnforced("administrator");
+const FORBIDDEN = "You do not have permission to perform this action.";
+const ANNOUNCEMENT_FIELDS = [
+  "session",
+  "term",
+  "title",
+  "description",
+  "priority",
+  "bgColor",
+  "active",
+];
+
+const referencesOk = async (req, data) =>
+  (data.session === undefined || (await sessionInSchool(req, data.session))) &&
+  (data.term === undefined || (await termInSchool(req, data.term)));
+
+//GET announcement (staff and students of the school)
 router.get(
   "/",
+  requireMember,
   asyncHandler(async (req, res) => {
     const announcements = await Announcement.find({
-      school: req.user.school,
+      school: getPrincipal(req).schoolId,
     }).sort({ createdAt: -1 });
-
-    // console.log(req.user);
 
     res.status(200).json(announcements);
   })
@@ -24,9 +47,12 @@ router.get(
 //@GET Announcement by id
 router.get(
   "/:id",
+  requireMember,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    const announcement = await Announcement.findById(id);
+    const { id } = req.params;
+    const announcement = isValidObjectId(id)
+      ? await Announcement.findOne({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
     res.status(200).json(announcement);
   })
 );
@@ -34,13 +60,18 @@ router.get(
 //POST announcement
 router.post(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const newAnnouncement = req.body;
+    // `group` only decides who is notified; it is not stored on the announcement
+    const group = req.body?.group;
+    const newAnnouncement = pickFields(req.body, ANNOUNCEMENT_FIELDS);
+    if (!(await referencesOk(req, newAnnouncement))) return res.status(403).json(FORBIDDEN);
 
+    const principal = getPrincipal(req);
     const announcement = await Announcement.create({
       ...newAnnouncement,
-      school: req.user.school,
-      createdBy: req.user.id,
+      school: principal.schoolId,
+      createdBy: principal.id,
     });
 
     if (_.isEmpty(announcement)) {
@@ -49,26 +80,26 @@ router.post(
         .json("Couldnt create announcement.Please try again later...");
     }
 
-    let users = await User.find({}, "_id"); // Get all user IDs
+    // Recipients are limited to THIS school (this used to notify every user and
+    // student of every school, and pushed an array in place of a student id)
+    const recipients = (await User.find({ school: principal.schoolId }, "_id")).map((u) => u._id);
 
-
-    if (["all", "students"].includes(newAnnouncement.group)) {
-      const student = await StudentAuth.find({}, "_id");
-
-      users.push(student);
+    if (["all", "students"].includes(group)) {
+      const students = await StudentAuth.find({ school: principal.schoolId }, "_id");
+      students.forEach((student) => recipients.push(student._id));
     }
 
-    const notifications = users.map((user) => ({
-      user: user._id,
-      school: req.user.school,
+    const notifications = recipients.map((id) => ({
+      user: id,
+      school: principal.schoolId,
       session: newAnnouncement?.session,
       term: newAnnouncement?.term,
       type: "Announcement",
       title: newAnnouncement?.title,
       description: truncateWords(newAnnouncement?.description, 20),
       album: null,
-      link: `/announcements?_title=${announcement.title}`,
-      createdBy: req.user.id,
+      link: `/announcements?_title=${encodeURIComponent(announcement.title ?? "")}`,
+      createdBy: principal.id,
     }));
 
     await Notification.insertMany(notifications);
@@ -78,20 +109,20 @@ router.post(
 );
 
 //Edit announcement
-
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const announcement = req.body;
+    const { _id } = req.body || {};
+    const data = pickFields(req.body, ANNOUNCEMENT_FIELDS);
 
-    const updatedAnnouncement = await Announcement.findByIdAndUpdate(
-      announcement?._id,
-      {
-        $set: { ...announcement },
-      },
-      {
-        new: true,
-      }
+    if (!isValidObjectId(_id)) return res.status(404).json("Error occurred.Try again later...");
+    if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);
+
+    const updatedAnnouncement = await Announcement.findOneAndUpdate(
+      { _id, school: getPrincipal(req).schoolId },
+      { $set: data },
+      { new: true }
     );
 
     if (_.isEmpty(updatedAnnouncement)) {
@@ -101,41 +132,39 @@ router.put(
     res.status(200).json("Chnages Saved!");
   })
 );
-//DELETE announcement
 
+//DELETE announcements (bulk)
 router.put(
   "/remove",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { announcements } = req.body;
+    const ids = [].concat(req.body?.announcements ?? []);
+    if (ids.length === 0 || !ids.every((id) => isValidObjectId(id))) {
+      return res.status(404).json("Error removing announcement.Try again later...");
+    }
 
-    const announcement = await Announcement.deleteMany(
-      {
-        _id: { $in: announcements },
-      },
-      {
-        new: true,
-      }
-    );
+    const result = await Announcement.deleteMany({
+      _id: { $in: ids },
+      school: getPrincipal(req).schoolId,
+    });
 
-    if (_.isEmpty(announcement)) {
-      return res
-        .status(404)
-        .json("Error removing announcement.Try again later...");
+    if (!result?.deletedCount) {
+      return res.status(404).json("Error removing announcement.Try again later...");
     }
 
     res.status(200).json("Announcement Removed!");
   })
 );
-//DELETE announcement
 
+//DELETE announcement
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-
-    const announcement = await Announcement.findByIdAndDelete(id, {
-      new: true,
-    });
+    const { id } = req.params;
+    const announcement = isValidObjectId(id)
+      ? await Announcement.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
 
     if (_.isEmpty(announcement)) {
       return res

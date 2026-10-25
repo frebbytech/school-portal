@@ -16,13 +16,58 @@ const {
   getAttendanceByGender,
 } = require("../config/helper");
 const sendMail = require("../config/mail/mailer");
+const { isValidObjectId } = require("mongoose");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+  authzEnabled,
+} = require("../middlewares/authorize");
+const {
+  termInSchool,
+  sessionInSchool,
+  levelInSchool,
+  subjectInSchool,
+  staffInSchool,
+} = require("../middlewares/tenant");
+
+const adminOnly = requireRoleEnforced("administrator");
+const FORBIDDEN = "You do not have permission to perform this action.";
+const COURSE_CREATABLE_FIELDS = ["session", "term", "level", "subject", "teacher"];
+const COURSE_EDITABLE_FIELDS = ["teacher", "active"];
+
+/**
+ * session / term / teacher query parameters of the two teacher views. They must be
+ * valid ids, and a teacher may only ask about themselves (administrators: any
+ * teacher of their school).
+ */
+const teacherView = async (req, res) => {
+  const { session, term, teacher } = req.query;
+  const principal = getPrincipal(req);
+
+  if (![session, term, teacher].every((id) => isValidObjectId(id))) {
+    res.status(400).json("Invalid information provided.");
+    return null;
+  }
+  if (authzEnabled() && principal.role === "teacher" && teacher !== principal.id) {
+    res.status(403).json(FORBIDDEN);
+    return null;
+  }
+  if (!(await staffInSchool(req, teacher)) || !(await termInSchool(req, term))) {
+    res.status(403).json(FORBIDDEN);
+    return null;
+  }
+  return { session, term, teacher, schoolId: principal.schoolId };
+};
 
 //@GET All school courses
 router.get(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const courses = await Course.find({
-      school: req.user.school,
+      school: getPrincipal(req).schoolId,
     });
     res.status(200).json(courses);
   })
@@ -31,12 +76,15 @@ router.get(
 //@GET All school courses
 router.get(
   "/dashboard",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const { session, term, teacher } = req.query;
+    const view = await teacherView(req, res);
+    if (!view) return;
+    const { session, term, teacher, schoolId } = view;
 
     //Get course assigned to teacher
     const courses = await Course.find({
-      // school: req.user.school,
+      school: schoolId,
       session: new ObjectId(session),
       term: new ObjectId(term),
       teacher: new ObjectId(teacher),
@@ -44,6 +92,7 @@ router.get(
 
     //Get levels assigned to teacher
     const levels = await Level.find({
+      school: schoolId,
       session: new ObjectId(session),
       term: new ObjectId(term),
       teacher: teacher,
@@ -123,10 +172,14 @@ router.get(
 //@GET School Course by teacher
 router.get(
   "/teacher",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const { session, term, teacher } = req.query;
+    const view = await teacherView(req, res);
+    if (!view) return;
+    const { session, term, teacher, schoolId } = view;
 
     const courses = await Course.find({
+      school: schoolId,
       session: new ObjectId(session),
       term: new ObjectId(term),
       teacher: new ObjectId(teacher),
@@ -155,8 +208,12 @@ router.get(
 //@GET School Course by id
 router.get(
   "/:id",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const course = await Course.findById(req.params.id).populate("subject");
+    const { id } = req.params;
+    const course = isValidObjectId(id)
+      ? await Course.findOne({ _id: id, school: getPrincipal(req).schoolId }).populate("subject")
+      : null;
     res.status(200).json(course);
   })
 );
@@ -164,11 +221,23 @@ router.get(
 //Add new School Course
 router.post(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { subject, level, term, session, teacher, subjectName, levelName } =
-      req.body;
+    const data = pickFields(req.body, COURSE_CREATABLE_FIELDS);
+    const { subject, level, term, session, teacher } = data;
+    const { subjectName, levelName } = req.body;
+    const principal = getPrincipal(req);
+
+    const referencesOk =
+      (await sessionInSchool(req, session)) &&
+      (await termInSchool(req, term)) &&
+      (await levelInSchool(req, level)) &&
+      (await subjectInSchool(req, subject)) &&
+      (teacher === undefined || teacher === null || (await staffInSchool(req, teacher, "teacher")));
+    if (!referencesOk) return res.status(403).json(FORBIDDEN);
 
     const courses = await Course.find({
+      school: principal.schoolId,
       session,
       term,
       level,
@@ -181,39 +250,40 @@ router.post(
 
     //Create new Course
     const course = await Course.create({
-      ...req.body,
-      school: req.user.school,
+      ...data,
+      school: principal.schoolId,
     });
 
     if (!course) {
       return res.status(404).json("Error creating new course.Try again later");
     }
 
-    const notification = {
-      user: teacher,
-      school: req.user.school,
-      session: session,
-      term: term,
-      type: "Information",
-      title: `Course Assignment - ${subjectName}`,
-      description: `You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
-      album: null,
-      link: "/course/assign",
-      createdBy: req.user.id,
-    };
+    if (teacher) {
+      const notification = {
+        user: teacher,
+        school: principal.schoolId,
+        session: session,
+        term: term,
+        type: "Information",
+        title: `Course Assignment - ${subjectName}`,
+        description: `You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
+        album: null,
+        link: "/course/assign",
+        createdBy: principal.id,
+      };
 
-    await Notification.create(notification);
+      await Notification.create(notification);
 
-    const teacherUser = await User.findById(teacher);
+      const teacherUser = await User.findById(teacher);
 
-    const body = {
-      title: `Course Assignment - ${subjectName}`,
-      message: `Dear ${teacherUser?.firstname} ${teacherUser?.lastname}, You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
-    };
+      const body = {
+        title: `Course Assignment - ${subjectName}`,
+        message: `Dear ${teacherUser?.firstname} ${teacherUser?.lastname}, You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
+      };
 
-    await sendMail(body, teacherUser?.email);
+      await sendMail(body, teacherUser?.email);
+    }
 
-    //console.log(course);
     res.status(201).json("New Course assigned!");
   })
 );
@@ -221,13 +291,22 @@ router.post(
 //@PUT Update Existing School Course
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { id, ...rest } = req.body;
-    const modifiedCourse = await Course.findByIdAndUpdate(id, {
-      $set: {
-        ...rest,
-      },
-    });
+    const { id } = req.body || {};
+    const update = pickFields(req.body, COURSE_EDITABLE_FIELDS);
+
+    if (
+      !isValidObjectId(id) ||
+      (update.teacher && !(await staffInSchool(req, update.teacher, "teacher")))
+    ) {
+      return res.status(404).json("Error updating course info.Try again later");
+    }
+
+    const modifiedCourse = await Course.findOneAndUpdate(
+      { _id: id, school: getPrincipal(req).schoolId },
+      { $set: update }
+    );
 
     if (!modifiedCourse) {
       return res.status(404).json("Error updating course info.Try again later");
@@ -239,9 +318,12 @@ router.put(
 
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    await Course.findByIdAndDelete(id);
+    const { id } = req.params;
+    if (isValidObjectId(id)) {
+      await Course.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId });
+    }
 
     res.status(204).json("Course Removed!");
   })

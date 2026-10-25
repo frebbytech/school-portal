@@ -3,10 +3,21 @@ const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const Holiday = require("../models/holidayModel");
 const asyncHandler = require("express-async-handler");
+const { isValidObjectId } = require("mongoose");
+const {
+  requireMember,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+} = require("../middlewares/authorize");
+
+const adminOnly = requireRoleEnforced("administrator");
+const HOLIDAY_FIELDS = ["name", "date", "recurring", "description"];
 
 // Get all holidays
 router.get(
   "/",
+  requireMember,
   asyncHandler(async (req, res) => {
     const year = req.query?.year || "";
     let query = {};
@@ -18,7 +29,7 @@ router.get(
     }
 
     const holidays = await Holiday.find({
-      school: req.user.school,
+      school: getPrincipal(req).schoolId,
     }).sort({ date: 1 });
 
     res.json(holidays);
@@ -28,8 +39,12 @@ router.get(
 // Get single holiday
 router.get(
   "/:id",
+  requireMember,
   asyncHandler(async (req, res) => {
-    const holiday = await Holiday.findById(req.params.id);
+    const { id } = req.params;
+    const holiday = isValidObjectId(id)
+      ? await Holiday.findOne({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
     if (!holiday) {
       return res.status(404).json({ message: "Holiday not found" });
     }
@@ -40,6 +55,7 @@ router.get(
 // Create holiday
 router.post(
   "/",
+  adminOnly,
   [
     body("name").notEmpty().withMessage("Name is required"),
     body("date").isISO8601().withMessage("Invalid date format"),
@@ -51,7 +67,7 @@ router.post(
     }
 
     const holiday = new Holiday({
-      school: req.user.school,
+      school: getPrincipal(req).schoolId,
       name: req.body.name,
       date: req.body.date,
       recurring: req.body.recurring || false,
@@ -70,17 +86,16 @@ router.post(
 // Update holiday
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const holiday = await Holiday.findByIdAndUpdate(
-      req.body._id,
-      {
-        name: req.body.name,
-        date: req.body.date,
-        recurring: req.body.recurring,
-        description: req.body.description,
-      },
-      { new: true, runValidators: true }
-    );
+    const { _id } = req.body || {};
+    const holiday = isValidObjectId(_id)
+      ? await Holiday.findOneAndUpdate(
+          { _id, school: getPrincipal(req).schoolId },
+          { $set: pickFields(req.body, HOLIDAY_FIELDS) },
+          { new: true, runValidators: true }
+        )
+      : null;
 
     if (!holiday) {
       return res.status(404).json({ message: "Holiday not found" });
@@ -108,8 +123,12 @@ router.put(
  */
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const holiday = await Holiday.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+    const holiday = isValidObjectId(id)
+      ? await Holiday.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
     if (!holiday) {
       return res.status(404).json({ message: "Holiday not found" });
     }

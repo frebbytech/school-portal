@@ -19,13 +19,60 @@ const {
 } = require("../config/helper");
 const sendMail = require("../config/mail/mailer");
 const { LEVEL_OPTIONS } = require("../config/helper");
+const { isValidObjectId } = require("mongoose");
+const Grade = require("../models/gradeModel");
+const {
+  requireStaff,
+  requireMember,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+  authzEnabled,
+} = require("../middlewares/authorize");
+const {
+  termInSchool,
+  sessionInSchool,
+  levelInSchool,
+  subjectInSchool,
+  staffInSchool,
+  allInSchool,
+} = require("../middlewares/tenant");
+
+const adminOnly = requireRoleEnforced("administrator");
+const FORBIDDEN = "You do not have permission to perform this action.";
+const LEVEL_CREATABLE_FIELDS = [
+  "session",
+  "term",
+  "department",
+  "teacher",
+  "fee",
+  "level",
+  "initials",
+  "subjects",
+  "grades",
+  "rollNumber",
+  "attendance",
+];
+const MAX_BATCH = 200;
+const schoolOf = (req) => getPrincipal(req).schoolId;
+
+/** session and term query/body values must be valid ids of the caller's school. */
+const sessionTermOk = async (req, session, term) =>
+  isValidObjectId(session) &&
+  isValidObjectId(term) &&
+  (await sessionInSchool(req, session)) &&
+  (await termInSchool(req, term));
 
 //@GET all current level by current school session
 router.get(
   "/session",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { session, term } = req.query;
+    if (!(await sessionTermOk(req, session, term))) return res.status(403).json(FORBIDDEN);
+
     const levels = await Level.find({
+      school: schoolOf(req),
       session: new ObjectId(session),
       term: new ObjectId(term),
       active: true,
@@ -147,8 +194,10 @@ router.get(
 //Get dashboard info
 router.get(
   "/dashboard-info",
+  requireMember,
   asyncHandler(async (req, res) => {
     const { session, term } = req.query;
+    if (!(await sessionTermOk(req, session, term))) return res.status(403).json(FORBIDDEN);
 
     //No of teachers
     const noOfTeachers = await User.find({
@@ -158,6 +207,7 @@ router.get(
 
     //No of levels
     const levels = await Level.find({
+      school: req.user.school,
       session: new ObjectId(session),
       term: new ObjectId(term),
     })
@@ -235,15 +285,20 @@ router.get(
 //@GET all current level by current school session
 router.get(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const id = req.query.id;
-    const level = await Level.findById(id)
-      .populate({
-        path: "students",
-        match: { active: true },
-      })
-      .populate("subjects") // Populate subjects
-      .populate("grades"); // Populate grades
+    const level = isValidObjectId(id)
+      ? await Level.findOne({ _id: id, school: schoolOf(req) })
+          .populate({
+            path: "students",
+            match: { active: true },
+          })
+          .populate("subjects") // Populate subjects
+          .populate("grades") // Populate grades
+      : null;
+
+    if (!level) return res.status(200).json(null);
 
     if (level.students?.length !== 0) {
       const modifiedStudents = level?.students.map((student) => {
@@ -269,11 +324,13 @@ router.get(
 //@GET all current level by current school session
 router.get(
   "/previous",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { session, term, student } = req.query;
-   
+    if (!(await sessionTermOk(req, session, term))) return res.status(200).json([]);
 
     const levels = await Level.find({
+      school: schoolOf(req),
       session,
       term,
     })
@@ -326,10 +383,12 @@ router.get(
 //@GET all current subjects by level id
 router.get(
   "/subject",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const levelId = req.query.levelId;
-    //console.log(levelId);
-    const subjects = await Level.findById(levelId).select("subjects grades");
+    const subjects = isValidObjectId(levelId)
+      ? await Level.findOne({ _id: levelId, school: schoolOf(req) }).select("subjects grades")
+      : null;
     // console.log(subjects);
 
     res.status(200).json(subjects);
@@ -339,20 +398,23 @@ router.get(
 //@GET all current level by current school session
 router.get(
   "/:id",
+  requireStaff,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const level = await Level.findById(id)
-      .populate({
-        path: "students",
-        match: { active: true },
-      })
-      .populate("subjects") // Populate subjects
-      .populate("grades") // Populate grades
-      .populate("fee") // Populate fees
-      .populate({
-        path: "teacher",
-        select: ["firstname", "lastname", "profile"],
-      }); // Populate Teacher
+    const level = isValidObjectId(id)
+      ? await Level.findOne({ _id: id, school: schoolOf(req) })
+          .populate({
+            path: "students",
+            match: { active: true },
+          })
+          .populate("subjects") // Populate subjects
+          .populate("grades") // Populate grades
+          .populate("fee") // Populate fees
+          .populate({
+            path: "teacher",
+            select: ["firstname", "lastname", "profile"],
+          }) // Populate Teacher
+      : null;
 
     res.status(200).json(level);
   })
@@ -360,10 +422,13 @@ router.get(
 
 router.post(
   "/students/all",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const { sessionId, termId } = req.body;
+    const { sessionId, termId } = req.body || {};
+    if (!(await sessionTermOk(req, sessionId, termId))) return res.status(200).json([]);
 
     const AllStudents = await Level.find({
+      school: schoolOf(req),
       session: new ObjectId(sessionId),
       term: new ObjectId(termId),
     }).populate({
@@ -393,11 +458,14 @@ router.post(
 //Generate next term level details if not exists
 router.post(
   "/generate",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { sessionId, termId } = req.body;
+    const { sessionId, termId } = req.body || {};
+    if (!(await sessionTermOk(req, sessionId, termId))) return res.status(403).json(FORBIDDEN);
 
     //FInd if current level exists
     const currentLevels = await Level.find({
+      school: schoolOf(req),
       session: sessionId,
       term: termId,
     });
@@ -409,6 +477,7 @@ router.post(
     //find prevoius levels
     //FInd if levels exists
     const levels = await Level.find({
+      school: schoolOf(req),
       session: sessionId,
     });
 
@@ -418,6 +487,7 @@ router.post(
 
     //GET all existing students
     const previousLevels = await Level.find({
+      school: schoolOf(req),
       session: sessionId,
     });
 
@@ -476,13 +546,22 @@ router.post(
 //@POST add new level to current school session
 router.post(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const newLevel = req.body;
+    const newLevel = pickFields(req.body, LEVEL_CREATABLE_FIELDS);
+
+    const referencesOk =
+      (await sessionTermOk(req, newLevel.session, newLevel.term)) &&
+      (newLevel.teacher == null || (await staffInSchool(req, newLevel.teacher, "teacher"))) &&
+      (await allInSchool(Grade, req, newLevel.grades)) &&
+      (newLevel.department === undefined ||
+        (await allInSchool(Department, req, newLevel.department)));
+    if (!referencesOk) return res.status(403).json(FORBIDDEN);
 
     const level = await Level.create({
-      school: req.user.school,
       ...newLevel,
-      createdBy: req.user?.id,
+      school: schoolOf(req),
+      createdBy: getPrincipal(req).id,
     });
 
     if (_.isEmpty(level)) {
@@ -495,8 +574,23 @@ router.post(
 //@POST add new level to current school session
 router.post(
   "/many",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { session, term, levels } = req.body;
+    const { session, term, levels } = req.body || {};
+
+    if (
+      !Array.isArray(levels) ||
+      levels.length === 0 ||
+      levels.length > MAX_BATCH ||
+      !(await sessionTermOk(req, session, term)) ||
+      !(await allInSchool(
+        Level,
+        req,
+        levels.filter((l) => l?.importStudents).map((l) => l?.previousLevelId)
+      ))
+    ) {
+      return res.status(403).json(FORBIDDEN);
+    }
 
     const existingLevels = await Level.find({
       school: req.user.school,
@@ -521,9 +615,10 @@ router.post(
 
     const modifiedLevels = levels.map(async (level) => {
       if (!_.isEmpty(level?.previousLevelId) && level?.importStudents) {
-        const previousLevel = await Level.findById(
-          level?.previousLevelId
-        ).select(["students"]);
+        const previousLevel = await Level.findOne({
+          _id: level?.previousLevelId,
+          school: req.user.school,
+        }).select(["students"]);
         const newLevel = await Level.create({
           school: req.user.school,
           session,
@@ -539,6 +634,7 @@ router.post(
         });
         await Student.updateMany(
           {
+            school: req.user.school,
             _id: {
               $in: previousLevel?.students,
             },
@@ -580,10 +676,19 @@ router.post(
 
 router.put(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const updatedLevel = req.body;
-    const level = await Level.findByIdAndUpdate(
-      updatedLevel._id,
+    const updatedLevel = req.body || {};
+    if (
+      !isValidObjectId(updatedLevel._id) ||
+      (updatedLevel.teacher != null &&
+        !(await staffInSchool(req, updatedLevel.teacher, "teacher")))
+    ) {
+      return res.status(404).json("Error updating level info.Try again later");
+    }
+
+    const level = await Level.findOneAndUpdate(
+      { _id: updatedLevel._id, school: schoolOf(req) },
       {
         $set: {
           level: updatedLevel?.level,
@@ -605,11 +710,23 @@ router.put(
 
 router.put(
   "/grade",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { levels, grade } = req.body;
+    const { levels, grade } = req.body || {};
+
+    if (
+      !Array.isArray(levels) ||
+      levels.length === 0 ||
+      !isValidObjectId(grade) ||
+      !(await allInSchool(Level, req, levels)) ||
+      !(await allInSchool(Grade, req, grade))
+    ) {
+      return res.status(403).json(FORBIDDEN);
+    }
 
     const level = await Level.updateMany(
       {
+        school: schoolOf(req),
         _id: {
           $in: levels,
         },
@@ -634,9 +751,12 @@ router.put(
 
 router.delete(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { sessionId, termId, id } = req.query;
-    const deletedLevel = await Level.findByIdAndDelete(id);
+    const { id } = req.query;
+    const deletedLevel = isValidObjectId(id)
+      ? await Level.findOneAndDelete({ _id: id, school: schoolOf(req) })
+      : null;
 
     if (_.isEmpty(deletedLevel)) {
       return res.status(404).json("Error removing level info.Try again later");
@@ -646,13 +766,24 @@ router.delete(
   })
 );
 
+// Used to pass the request body straight to `deleteMany` as the filter, so a body
+// without `ids` (the admin client sends a bare array) matched, and deleted, EVERY
+// level of EVERY school. Now: a list of level ids of the caller's school, nothing else.
 router.post(
   "/delete/many",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const ids = req.body.ids;
-    const deletedLevels = await Level.deleteMany(ids);
+    const ids = Array.isArray(req.body) ? req.body : req.body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => isValidObjectId(id))) {
+      return res.status(404).json("Error removing levels info.Try again later");
+    }
 
-    if (_.isEmpty(deletedLevels)) {
+    const deletedLevels = await Level.deleteMany({
+      _id: { $in: ids },
+      school: schoolOf(req),
+    });
+
+    if (!deletedLevels?.deletedCount) {
       return res.status(404).json("Error removing levels info.Try again later");
     }
 
@@ -666,11 +797,21 @@ router.post(
 
 router.put(
   "/subject",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { levelId, subjects } = req.body;
-    const newSubjects = await Level.findByIdAndUpdate(levelId, {
-      subjects: _.map(subjects, (subject) => new ObjectId(subject)),
-    });
+    const { levelId, subjects } = req.body || {};
+
+    if (!Array.isArray(subjects) || !(await levelInSchool(req, levelId))) {
+      return res.status(404).send("Error creating new Subjects.Try again later");
+    }
+    for (const subject of subjects) {
+      if (!(await subjectInSchool(req, subject))) return res.status(403).json(FORBIDDEN);
+    }
+
+    const newSubjects = await Level.findOneAndUpdate(
+      { _id: levelId, school: schoolOf(req) },
+      { subjects: _.map(subjects, (subject) => new ObjectId(subject)) }
+    );
     if (_.isEmpty(newSubjects)) {
       return res
         .status(404)
@@ -684,20 +825,30 @@ router.put(
 //@GET Teacher current level
 router.post(
   "/assign-teacher",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const { sessionId, termId, teacher } = req.body;
+    const { sessionId, termId, teacher } = req.body || {};
+    const principal = getPrincipal(req);
 
+    if (!(await sessionTermOk(req, sessionId, termId)) || !isValidObjectId(teacher)) {
+      return res.status(403).json(FORBIDDEN);
+    }
+    // a teacher can look up only their own class
+    if (authzEnabled() && principal.role === "teacher" && teacher !== principal.id) {
+      return res.status(403).json(FORBIDDEN);
+    }
+
+    // (`level` is an embedded object, not a reference, so it is not populated)
     const level = await Level.findOne({
+      school: principal.schoolId,
       session: new ObjectId(sessionId),
       term: new ObjectId(termId),
-      teacher: {
-        _id: teacher,
-      },
-    }).populate("level");
+      teacher: new ObjectId(teacher),
+    });
 
     const modifiedLevel = {
       _id: level?._id || "",
-      type: `${level?.level?.name}${level?.level?.type}` || "",
+      type: level ? `${level.level?.name}${level.level?.type}` : "",
     };
 
     res.status(200).json(modifiedLevel);
@@ -707,13 +858,24 @@ router.post(
 //@PUT Assign a Teacher
 router.put(
   "/assign-teacher",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { _id, teacher } = req.body;
+    const { _id, teacher } = req.body || {};
 
-    const isLevelAssigned = await Level.findById(_id).populate({
-      path: "teacher",
-      select: ["firstname", "lastname", "profile"],
-    });
+    if (!(await staffInSchool(req, teacher, "teacher"))) {
+      return res.status(400).json("Error assigning Level.Try again later");
+    }
+
+    const isLevelAssigned = isValidObjectId(_id)
+      ? await Level.findOne({ _id, school: schoolOf(req) }).populate({
+          path: "teacher",
+          select: ["firstname", "lastname", "profile"],
+        })
+      : null;
+
+    if (!isLevelAssigned) {
+      return res.status(400).json("Error assigning Level.Try again later");
+    }
 
     if (!_.isEmpty(isLevelAssigned.teacher)) {
       return res
@@ -721,8 +883,8 @@ router.put(
         .json(`Level already assigned to ${isLevelAssigned.teacher?.fullname}`);
     }
 
-    const level = await Level.findByIdAndUpdate(
-      _id,
+    const level = await Level.findOneAndUpdate(
+      { _id, school: schoolOf(req) },
       {
         $set: {
           teacher,
@@ -767,16 +929,23 @@ router.put(
 
 router.put(
   "/unassign-teacher",
+  adminOnly,
   asyncHandler(async (req, res) => {
     const id = req.query.id;
-    const level = await Level.findByIdAndUpdate(id, {
-      $set: {
-        teacher: null,
-      },
-    });
+    const level = isValidObjectId(id)
+      ? await Level.findOneAndUpdate(
+          { _id: id, school: schoolOf(req) },
+          { $set: { teacher: null } }
+        )
+      : null;
 
     if (_.isEmpty(level)) {
       return res.status(404).json("Error updating info.Try again later");
+    }
+
+    // nobody was assigned, so there is nobody to tell
+    if (!level.teacher) {
+      return res.status(201).json("Changes Saved!!!");
     }
 
     const notification = {
@@ -811,6 +980,7 @@ router.put(
 
 router.get(
   "/recent/birthday",
+  requireMember,
   asyncHandler(async (req, res) => {
     const targetDate = new Date();
     const month = targetDate.getMonth();
@@ -819,6 +989,7 @@ router.get(
     // return res.status(200).json([]);
 
     const students = await Student.find({
+      school: getPrincipal(req).schoolId,
       $expr: {
         $and: [
           { $eq: [{ $month: { $toDate: "$dateofbirth" } }, month + 1] }, // +1 since JS months are 0-based

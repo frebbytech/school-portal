@@ -12,7 +12,7 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 | 1 | Test harness and characterization tests | **Done, owner ran tests: passed** (2026-10-13). Characterization tests of *current* behaviour are not written yet |
 | 2 | Close the critical unauthenticated holes | **Done, owner ran tests: passed.** C-1, C-2, C-3, C-4, H-10. Deferred: H-3 (needs student-app check) |
 | 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Done — owner ran full suite: 53 tests pass** (2026-10-13), branch `refactor/stage-3-foundation` (see §5c) |
-| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees): done, owner ran tests, passed. 4c (students, examinations, attendance, teacher scope): written on branch `refactor/stage-4c-students-exams-attendance`, NOT run (see §5f). Remaining: teachers, terms/levels/courses, the rest |
+| 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees): done, owner ran tests, passed. 4c (students, examinations, attendance, teacher scope): done, owner ran tests: all pass (see §5f). 4d (teachers, terms, levels, courses, subjects, grades, sessions, departments, houses, parents, events, announcements, holidays, notes, notifications): written on branch `refactor/stage-4d-remaining-routers`, NOT run (see §5g) |
 | 5 | Validation, mass-assignment allow-lists, response adapter | Not started |
 | 6 | Users, schools, academic sessions/terms, levels | Not started |
 | 7 | Students, parents, teachers | Not started |
@@ -252,7 +252,32 @@ Branch `refactor/stage-4c-students-exams-attendance` (from 4b). **Not executed**
 
 **Verified against the client (2026-10-20):** a score's `_id` is the subject id (`client/src/pages/examination/ExamsScoreInput.jsx`: `_id: values.subject._id`, subjects from the level). The student attendance dashboard (`student/src/pages/attendance/attendance-dashboard.jsx`) calls `/attendances/level/<student id>` but does not use the response, so trimming it to the student's own entry cannot break it. The teacher UI (`client/src/pages/layouts/Root.jsx` `teacherRoutes`) uses only assigned courses (per-subject scores), the class level (scores, reports, attendance) and events, which matches the teacher scope implemented here; it uses no student, fee, message or user endpoints.
 
-**Still open:** teachers, terms, levels, courses, subjects, grades, sessions, departments, houses, parents, events, announcements, holidays, notes, notifications (Stage 4d); teachers can still read every student of their school (fees, parents) — tighten if wanted.
+**Still open after 4c:** teachers can still read every student of their school (fees, parents) — tighten if wanted. The remaining routers are Stage 4d (§5g).
+
+## 5g. Stage 4d — remaining routers (prepared 2026-10-25)
+
+Branch `refactor/stage-4d-remaining-routers` (from 4c). **Not executed** (only `node --check`; the sandbox cannot install npm packages). New suite: `tests/remaining-routers.authz.test.js`. New helpers: `requireMember` (staff or student token) in `middlewares/authorize.js`; `sessionInSchool`, `subjectInSchool`, `staffInSchool`, `allInSchool` in `middlewares/tenant.js`.
+
+**Rules applied everywhere:** every read and write is limited to the caller's school (other schools' records answer "not found"/403); every write is **administrator only** except a user's own notes and notifications; request bodies go through field allow-lists (no `school`/`createdBy`/`role` from the client, no `upsert`); referenced ids (session, term, level, subject, teacher, grade, student) must belong to the school; student tokens are accepted only where the student portal needs them.
+
+| Router | Change | Compatibility / confirm |
+|---|---|---|
+| **levels** | **`POST /levels/delete/many` passed the request body to `deleteMany` as the filter; the admin client sends a bare array of term ids, so it matched and deleted EVERY level of EVERY school for any signed-in user.** Now: admin only, a list of level ids of the caller's school (bare array or `{ids}`), 404 when nothing matches | **the UI button sends term ids, so it will now report "Error removing levels" until Stage 6 reworks term/level removal; before this it wiped everything. Confirm** |
+| levels | reads staff only, school-scoped; `/levels/dashboard-info` and `/levels/recent/birthday` also open to students (the only level endpoints the student portal uses); `/levels/session`, `/levels/:id` etc. no longer open to students (unused by the portal) | |
+| levels | writes admin only with allow-lists and reference checks (`POST /`, `/many`, `PUT /`, `/grade`, `/subject`, `/assign-teacher`, `/unassign-teacher`, `DELETE /`, `/generate`); `POST /assign-teacher` (the teacher's own-class lookup) queried `teacher: {_id}` and populated a non-reference, so it failed; fixed, and a teacher may only ask about themselves; unassigning a level with no teacher no longer sends a notification/email to nobody | `/levels/generate` is still the old (incoherent) algorithm, only guarded; reworked in Stage 6 |
+| terms | reads staff only; writes admin only; school-scoped; `PUT /` only changes core details and only replaces `exams`/`report`/`headmaster` when sent (an omitted `report` used to be overwritten with `{}`); `PATCH /:id?status=` validates the status (was storing any text and always answering success); `POST /` reuses a grade only from the same school (was global by name) | removing a term (`DELETE`, `PUT /remove`) still deletes the document only; safe archiving is Stage 6 |
+| sessions | admin writes; uses the token's school (it read `req.session.user.school`); a session that still has terms cannot be deleted (409) | |
+| grades, subjects, departments, houses | staff read, admin write, school-scoped; subjects have no `school` field, so ownership is derived from their term | `Grade.name` is still globally unique in the schema (two schools cannot use the same grade-system name): Stage 6 |
+| courses | staff read; admin write; a teacher sees only their own `/courses/teacher` and `/courses/dashboard`; `PUT` only changes `teacher`/`active` | |
+| teachers | read: staff of the school; **create/import/edit/photo/deactivate admin only** (owner decision); username unique across schools (checked globally, was per-school and ended in a database error); `PUT` has no upsert, cannot change role/password/school and cannot touch administrators | uploads run only after the admin check |
+| parents | staff read, admin write, school-scoped, `DELETE` deactivates; `GET /parents` always crashed when there were parents (undefined variable); fixed | |
+| events, announcements | read: staff and students of the school; write: admin; **notifications now go to the staff of the school only (they went to every user of every school)**; announcement for students/all goes to the school's students (it pushed an array in place of an id, creating ownerless notifications) | announcement notification link now URL-encodes the title |
+| holidays | read: staff and students of the school; write: admin; `?year=` is still ignored (as before) | the clients call `DELETE /holidays/remove`, which has never existed; not changed here |
+| notes, notifications | strictly the caller's own (list, read, edit, delete); `PUT /notifications` only changes `active`; `read-all` and `/:id/all` only for yourself | |
+
+**Verified against the clients (2026-10-25):** the student portal uses only `/levels/dashboard-info`, `/levels/recent/birthday`, announcements, events, holidays, notes and notifications from this stage's routers (its term, subject, parent and level-list API modules are not imported by any page). The admin client's term/grade/course payloads carry the fields the allow-lists keep.
+
+**Still open (to confirm):** any administrator can create a school (no platform role); payments by any staff role (Stage 8); `GET /users/school` and `GET /student-auth/:id` unauthenticated (H-3); static `/reports`, `/images`, `/views` public; teacher term list has a typo (`status: "curent"`) that returns nothing for teachers, left as is; "Duplicate schema index" warning and the open-handle warning after tests (cleanup in Stage 10).
 
 ## 6. Known risks to the refactoring itself
 

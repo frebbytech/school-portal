@@ -95,7 +95,17 @@ const pickFields = (source, fields) => {
   return out;
 };
 
+/** Staff or student tokens (any signed-in member of a school); rejects unknown roles. */
+const requireMember = enforce((req, res, next) => {
+  const { kind } = getPrincipal(req);
+  if (kind !== "staff" && kind !== "student") {
+    return res.status(403).json("You do not have permission to perform this action.");
+  }
+  next();
+});
+
 Object.assign(module.exports, {
+  requireMember,
   STAFF_ROLES,
   authzEnabled,
   getPrincipal,

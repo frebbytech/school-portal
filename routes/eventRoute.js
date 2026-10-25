@@ -1,21 +1,48 @@
 const router = require('express').Router();
 const _ = require('lodash');
 const asyncHandler = require('express-async-handler');
+const { isValidObjectId } = require('mongoose');
 const User = require('../models/userModel');
 const Event = require('../models/eventModel');
 const Notification = require('../models/notificationModel');
-// const sendMail = require('../config/mail/mailer');
-// const sendSMS = require('../config/sms/messenger');
 const { truncateWords } = require('../config/helper');
+const {
+  requireMember,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+} = require('../middlewares/authorize');
+const { sessionInSchool, termInSchool } = require('../middlewares/tenant');
 
-//GET event
+const adminOnly = requireRoleEnforced('administrator');
+const FORBIDDEN = 'You do not have permission to perform this action.';
+const EVENT_FIELDS = [
+  'session',
+  'term',
+  'type',
+  'title',
+  'caption',
+  'description',
+  'start',
+  'end',
+  'album',
+  'active',
+];
+
+const referencesOk = async (req, data) =>
+  (data.session === undefined || (await sessionInSchool(req, data.session))) &&
+  (data.term === undefined || (await termInSchool(req, data.term)));
+
+//GET event (staff and students of the school)
 router.get(
   '/',
+  requireMember,
   asyncHandler(async (req, res) => {
     const events = await Event.find({
-      school: req.user.school
-    }).populate('createdBy', ['firstname', 'lastname', 'profile']).sort({ createdAt: -1 });
- 
+      school: getPrincipal(req).schoolId,
+    })
+      .populate('createdBy', ['firstname', 'lastname', 'profile'])
+      .sort({ createdAt: -1 });
 
     res.status(200).json(events);
   })
@@ -24,25 +51,32 @@ router.get(
 //@GET Event by id
 router.get(
   '/:id',
+  requireMember,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    const event = await Event.findById(id).populate('createdBy', ['firstname', 'lastname', 'profile'])
+    const { id } = req.params;
+    const event = isValidObjectId(id)
+      ? await Event.findOne({ _id: id, school: getPrincipal(req).schoolId }).populate(
+          'createdBy',
+          ['firstname', 'lastname', 'profile']
+        )
+      : null;
     res.status(200).json(event);
   })
 );
 
-
-
 //POST event
 router.post(
   '/',
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const newEvent = req.body;
+    const newEvent = pickFields(req.body, EVENT_FIELDS);
+    if (!(await referencesOk(req, newEvent))) return res.status(403).json(FORBIDDEN);
 
+    const principal = getPrincipal(req);
     const event = await Event.create({
       ...newEvent,
-      school: req.user.school,
-      createdBy: req.user.id
+      school: principal.schoolId,
+      createdBy: principal.id,
     });
 
     if (_.isEmpty(event)) {
@@ -51,44 +85,44 @@ router.post(
         .json('Couldnt create event.Please try again later...');
     }
 
-
-    const users = await User.find({}, "_id"); // Get all user IDs
+    // Notify the staff of THIS school only (this used to notify every user of every school)
+    const users = await User.find({ school: principal.schoolId }, '_id');
 
     const notifications = users.map((user) => ({
       user: user._id,
-      school: req.user.school,
+      school: principal.schoolId,
       session: newEvent?.session,
       term: newEvent?.term,
       type: 'Event',
       title: newEvent?.title,
       description: truncateWords(newEvent?.caption, 20),
       album: null,
-      // album: newEvent?.album,
       link: `/events/${event._id}`,
-      createdBy: req.user.id,
+      createdBy: principal.id,
     }));
-
 
     await Notification.insertMany(notifications);
 
     res.status(200).json('Event Created!');
-
   })
 );
 
-
 //Edit event
-
 router.put(
   '/',
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const event = req.body;
+    const { _id } = req.body || {};
+    const data = pickFields(req.body, EVENT_FIELDS);
 
-    const updatedEvent = await Event.findByIdAndUpdate(event?._id, {
-      $set: { ...event }
-    }, {
-      new: true
-    })
+    if (!isValidObjectId(_id)) return res.status(404).json('Error occurred.Try again later...');
+    if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);
+
+    const updatedEvent = await Event.findOneAndUpdate(
+      { _id, school: getPrincipal(req).schoolId },
+      { $set: data },
+      { new: true }
+    );
 
     if (_.isEmpty(updatedEvent)) {
       return res.status(404).json('Error occurred.Try again later...');
@@ -97,37 +131,39 @@ router.put(
     res.status(200).json('Chnages Saved!');
   })
 );
-//DELETE event
 
+//DELETE events (bulk)
 router.put(
   '/remove',
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { events } = req.body;
+    const ids = [].concat(req.body?.events ?? []);
+    if (ids.length === 0 || !ids.every((id) => isValidObjectId(id))) {
+      return res.status(404).json('Error removing event.Try again later...');
+    }
 
+    const result = await Event.deleteMany({
+      _id: { $in: ids },
+      school: getPrincipal(req).schoolId,
+    });
 
-    const event = await Event.deleteMany({
-      _id: { $in: events }
-    }, {
-      new: true
-    })
-
-    if (_.isEmpty(event)) {
+    if (!result?.deletedCount) {
       return res.status(404).json('Error removing event.Try again later...');
     }
 
     res.status(200).json('Event Removed!');
   })
 );
-//DELETE event
 
+//DELETE event
 router.delete(
   '/:id',
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-
-    const event = await Event.findByIdAndDelete(id, {
-      new: true,
-    });
+    const { id } = req.params;
+    const event = isValidObjectId(id)
+      ? await Event.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
 
     if (_.isEmpty(event)) {
       return res.status(404).json('Error removing event.Try again later...');

@@ -1,74 +1,93 @@
 const router = require("express").Router();
 const _ = require("lodash");
 const asyncHandler = require("express-async-handler");
-const House = require("../models/houseModel");
+const { isValidObjectId } = require("mongoose");
+const Model = require("../models/houseModel");
+const {
+  requireStaff,
+  requireRoleEnforced,
+  getPrincipal,
+  pickFields,
+} = require("../middlewares/authorize");
+const { sessionInSchool, staffInSchool } = require("../middlewares/tenant");
 
-//GET house
+const adminOnly = requireRoleEnforced("administrator");
+
+const CREATABLE_FIELDS = ["session", "name", "initials", "color", "master"];
+const EDITABLE_FIELDS = ["session", "name", "initials", "color", "master", "active"];
+const FORBIDDEN = "You do not have permission to perform this action.";
+
+// session and master must belong to the caller's school
+const referencesOk = async (req, data) =>
+  (data.session === undefined || (await sessionInSchool(req, data.session))) &&
+  (data.master === undefined ||
+    data.master === null ||
+    (await staffInSchool(req, data.master)));
+
+//GET house list
 router.get(
   "/",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const houses = await House.find({
-      school: req.user.school,
-    })
+    const items = await Model.find({ school: getPrincipal(req).schoolId })
       .populate("master", "firstname lastname")
       .sort({ createdAt: -1 });
 
-    res.status(200).json(houses);
+    res.status(200).json(items);
   })
 );
 
-//@GET House by id
+//@GET house by id
 router.get(
   "/:id",
+  requireStaff,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    const house = await House.findById(id);
-    res.status(200).json(house);
+    const { id } = req.params;
+    const item = isValidObjectId(id)
+      ? await Model.findOne({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
+    res.status(200).json(item);
   })
 );
-
-//Edit house
 
 router.post(
   "/",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const house = req.body;
+    const data = pickFields(req.body, CREATABLE_FIELDS);
+    if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);
 
-    const newHouse = await House.create({
-      school: req.user.school,
-      session: house?.session,
-      name: house.name,
-      initials: house.initials,
-      color: house.color,
-      master: house.master,
-      createdBy: req.user._id,
+    const principal = getPrincipal(req);
+    const created = await Model.create({
+      ...data,
+      school: principal.schoolId,
+      createdBy: principal.id,
     });
 
-    if (_.isEmpty(newHouse)) {
+    if (_.isEmpty(created)) {
       return res.status(404).json("Error occurred.Try again later...");
     }
 
     res.status(200).json("Changes Saved!");
   })
 );
-//Edit house
 
 router.put(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const house = req.body;
+    const { id } = req.params;
+    const data = pickFields(req.body, EDITABLE_FIELDS);
+    if (!isValidObjectId(id)) return res.status(404).json("Error occurred.Try again later...");
+    if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);
 
-    const updatedHouse = await House.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: { ...house },
-      },
-      {
-        new: true,
-      }
+    const updated = await Model.findOneAndUpdate(
+      { _id: id, school: getPrincipal(req).schoolId },
+      { $set: data },
+      { new: true }
     );
 
-    if (_.isEmpty(updatedHouse)) {
+    if (_.isEmpty(updated)) {
       return res.status(404).json("Error occurred.Try again later...");
     }
 
@@ -76,22 +95,21 @@ router.put(
   })
 );
 
-//DELETE house
 router.delete(
   "/remove",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const { houses } = req.body;
+    const ids = [].concat(req.body?.houses ?? []);
+    if (ids.length === 0 || !ids.every((id) => isValidObjectId(id))) {
+      return res.status(404).json("Error removing house.Try again later...");
+    }
 
-    const house = await House.deleteMany(
-      {
-        _id: { $in: houses },
-      },
-      {
-        new: true,
-      }
-    );
+    const result = await Model.deleteMany({
+      _id: { $in: ids },
+      school: getPrincipal(req).schoolId,
+    });
 
-    if (_.isEmpty(house)) {
+    if (!result?.deletedCount) {
       return res.status(404).json("Error removing house.Try again later...");
     }
 
@@ -99,18 +117,16 @@ router.delete(
   })
 );
 
-//DELETE house
-
 router.delete(
   "/:id",
+  adminOnly,
   asyncHandler(async (req, res) => {
-    const id = req.params.id;
+    const { id } = req.params;
+    const removed = isValidObjectId(id)
+      ? await Model.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId })
+      : null;
 
-    const house = await House.findByIdAndDelete(id, {
-      new: true,
-    });
-
-    if (_.isEmpty(house)) {
+    if (_.isEmpty(removed)) {
       return res.status(404).json("Error removing house.Try again later...");
     }
 
