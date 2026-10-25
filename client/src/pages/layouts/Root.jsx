@@ -116,6 +116,7 @@ const OtherComponents = {
   About: lazy(() => import("../About")),
   Settings: lazy(() => import("../settings/Settings")),
   SchoolSession: lazy(() => import("../SchoolSession")),
+  Platform: lazy(() => import("../platform")),
   Level: lazy(() => import("../level")),
   LevelDashboard: lazy(() => import("../level/LevelDashboard")),
   CurrentLevel: lazy(() => import("../level/CurrentLevel")),
@@ -699,6 +700,11 @@ const Root = () => {
         element={<LazyComponent component={OtherComponents.SchoolSession} />}
       />
       <Route path="/login" element={<Login />} />
+      {/* Platform administration: own sign-in, outside the school session flow */}
+      <Route
+        path="/platform"
+        element={<LazyComponent component={OtherComponents.Platform} />}
+      />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
