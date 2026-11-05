@@ -8,6 +8,10 @@ const Term = require("../models/termModel");
 const Session = require("../models/sessionModel");
 const Examination = require("../models/examinationModel");
 const CurrentFee = require("../models/currentFeeModel");
+const Attendance = require("../models/attendanceModel");
+const Course = require("../models/courseModel");
+const Fee = require("../models/feeModel");
+const Subject = require("../models/subjectModel");
 const {
   Types: { ObjectId },
 } = require("mongoose");
@@ -20,6 +24,25 @@ const {
 } = require("../middlewares/authorize");
 
 const adminOnly = requireRoleEnforced("administrator");
+const { createRollback } = require("../common/rollback");
+const { allInSchool } = require("../middlewares/tenant");
+const MAX_LEVELS_PER_TERM = 100;
+const MAX_STUDENTS_PER_LEVEL = 1000;
+// Fields accepted for a student created together with a term
+const STUDENT_IMPORT_FIELDS = [
+  "indexnumber",
+  "profile",
+  "firstname",
+  "surname",
+  "othername",
+  "dateofbirth",
+  "gender",
+  "email",
+  "phonenumber",
+  "address",
+  "residence",
+  "nationality",
+];
 const TERM_STATUSES = ["upcoming", "current", "archived"];
 // Term details an administrator may edit (`active`, `status`, `school`, `session`
 // have their own endpoints or are fixed at creation).
@@ -132,7 +155,7 @@ router.get(
     }
 
     if (role === "teacher") {
-      query.status = "curent";
+      query.status = "current";
       query.active = true;
     }
 
@@ -220,206 +243,186 @@ router.get(
   })
 );
 
-//Add new School Term
+//Add new School Term (with its session, grade system, levels, students, exam and fee records)
+//
+// Everything is validated BEFORE anything is written, and the writes run one level at
+// a time. If a step fails, everything this request created is removed again, so a
+// failure no longer leaves a half-built term. (It used to answer twice, and leave the
+// term behind, when a student index number already existed.)
 router.post(
   "/",
   adminOnly,
   asyncHandler(async (req, res) => {
-    const { core, levels, students, exams, report } = req.body;
+    const { core, levels = [], students = [], exams, report } = req.body || {};
+    const principal = getPrincipal(req);
+    const schoolId = principal.schoolId;
+    const bad = (message) => res.status(400).json(message);
 
+    if (!core || typeof core !== "object" || !exams || typeof exams !== "object") {
+      return bad("Invalid session details.");
+    }
     const { name, from, to, term, isPromotionTerm, active } = core;
     const { grade, ...examsRest } = exams;
+
+    if (
+      typeof term !== "string" || !term ||
+      Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to)) ||
+      !Array.isArray(levels) || levels.length > MAX_LEVELS_PER_TERM ||
+      !Array.isArray(students)
+    ) {
+      return bad("Invalid session details.");
+    }
 
     const academicStart = moment(new Date(from)).year();
     const academicEnd = moment(new Date(to)).year();
     const academicYear = `${academicStart}/${academicEnd}`;
 
-    //Find if a term already exits
-    const exists = await Term.findOne({
-      school: req.user.school,
-      academicYear,
-      term,
-      active: true,
-    });
-
-    //Check if term already exists
+    // Find if a term already exists
+    const exists = await Term.findOne({ school: schoolId, academicYear, term, active: true });
     if (!_.isEmpty(exists)) {
-      return res
-        .status(400)
-        .json(
-          `Academic year ${academicYear} with the term ${term} already exists.`
-        );
+      return bad(`Academic year ${academicYear} with the term ${term} already exists.`);
     }
 
-    //Find if a session already exits
-    const session = await Session.findOne({
-      school: req.user.school,
-      academicYear,
+    // ---- validate the student lists up front -----------------------------------
+    const groups = levels.map((level) => {
+      const group = students.find((entry) => _.isEqual(entry?.class, level));
+      const data = Array.isArray(group?.data) ? group.data : [];
+      return { level, isPrevious: Boolean(group?.isPrevious), data };
     });
-    let sessionId = session?._id;
+    if (groups.some((g) => g.data.length > MAX_STUDENTS_PER_LEVEL)) {
+      return bad("Too many students in one class.");
+    }
 
-    if (_.isEmpty(session)) {
-      //Create new Session
-      const newSession = await Session.create({
-        school: req.user.school,
-        from: academicStart,
-        to: academicEnd,
-        academicYear,
-        name,
-
-        createdBy: req.user.id,
+    // Index numbers are unique across ALL schools (owner decision), so the check is global
+    const newIndexNumbers = groups
+      .filter((g) => !g.isPrevious)
+      .flatMap((g) => g.data.map((s) => String(s?.indexnumber ?? "").trim().toLowerCase()))
+      .filter(Boolean);
+    const repeated = newIndexNumbers.filter((n, i) => newIndexNumbers.indexOf(n) !== i);
+    const taken = newIndexNumbers.length
+      ? await Student.find({ indexnumber: { $in: newIndexNumbers } }).select("indexnumber")
+      : [];
+    if (taken.length || repeated.length) {
+      return res.status(400).json({
+        isDuplicateError: true,
+        message: `ID of some students already exist.Please check and try again.`,
+        data: _.uniq([..._.map(taken, "indexnumber"), ...repeated]),
       });
-
-      if (_.isEmpty(newSession)) {
-        return res
-          .status(404)
-          .json("Error creating new session.Try again later!!!");
-      }
-      sessionId = newSession._id;
     }
 
-    //Create new term with new Session id
-    const newTerm = await Term.create({
-      school: req.user.school,
-      session: sessionId,
-      name,
-      from,
-      to,
-      term,
-      academicYear,
-      vacationDate: to,
-      reOpeningDate: to,
-      isPromotionTerm,
-      status: active === "Yes" ? "upcoming" : "archived",
-      active: active === "Yes" ? true : false,
-      exams: {
-        scorePreference: "50/50",
-        ...examsRest,
-      },
-      report,
-    });
-
-    if (_.isEmpty(newTerm)) {
-      return res
-        .status(404)
-        .json("Error creating new session.Try again later!!!");
+    // Existing students that are carried over must belong to this school
+    const previousIds = groups.filter((g) => g.isPrevious).flatMap((g) => g.data.map((s) => s?._id));
+    if (!(await allInSchool(Student, req, previousIds))) {
+      return res.status(403).json("You do not have permission to perform this action.");
     }
 
-    // if (newTerm?.active) {
-    //   // Set the new term as active
-    //   await setActive(newTerm._id, req.user.school, true);
-    // }
+    // ---- write, with rollback --------------------------------------------------
+    const created = createRollback();
+    try {
+      let session = await Session.findOne({ school: schoolId, academicYear });
+      let sessionId = session?._id;
 
-    let grades = null;
-    if (!_.isEmpty(grade)) {
-      const itGradeExisting = await Grade.findOne({
-        name: grade.name,
-        school: req.user.school,
-      });
-
-      if (_.isEmpty(itGradeExisting)) {
-        const newGrade = await Grade.create({
-          ...grade,
-          school: req.user.school,
-          session: sessionId,
-          term: newTerm._id,
-          createdBy: req.user.id,
-        });
-
-        grades = newGrade?._id;
-      } else {
-        grades = itGradeExisting?._id;
-      }
-    }
-
-    if (!_.isEmpty(levels)) {
-      // create levels
-      const modifiedLevels = levels.map(async (level) => {
-        // update student data in the session
-        const newLevel = await Level.create({
-          school: req.user.school,
-          session: sessionId,
-          term: newTerm._id,
-          level,
-          students: [],
-          grades: grades,
-          createdBy: req.user.id,
-        });
-
-        const student = students.find((student) =>
-          _.isEqual(student?.class, level)
+      if (_.isEmpty(session)) {
+        const newSession = created.track(
+          Session,
+          await Session.create({
+            school: schoolId,
+            from: academicStart,
+            to: academicEnd,
+            academicYear,
+            name,
+            createdBy: principal.id,
+          })
         );
+        sessionId = newSession._id;
+      }
 
-        if (!_.isEmpty(student?.data)) {
-          // const existingIndexNumbers = _.flatMap(
-          //   students,
-          //   (student) => student?.data
-          // );
-          const indexNumbers = _.compact(_.map(student?.data, "indexnumber"));
+      const newTerm = created.track(
+        Term,
+        await Term.create({
+          school: schoolId,
+          session: sessionId,
+          name,
+          from,
+          to,
+          term,
+          academicYear,
+          vacationDate: to,
+          reOpeningDate: to,
+          isPromotionTerm,
+          status: active === "Yes" ? "upcoming" : "archived",
+          active: active === "Yes" ? true : false,
+          exams: { scorePreference: "50/50", ...examsRest },
+          report: pickFields(report, ["template", "dimension"]),
+        })
+      );
 
-          const existingStudents = await Student.find({
-            school: req.user.school,
-            indexnumber: {
-              $in: indexNumbers,
-            },
-          }).select("indexnumber");
-
-          if (!_.isEmpty(existingStudents)) {
-            return res.status(400).json({
-              isDuplicateError: true,
-              message: `ID of some students already exist.Please check and try again.`,
-              data: _.map(existingStudents, "indexnumber"),
-            });
-          }
-        }
-
-        const modifiedStudents = student?.data?.map((student) => {
-          return {
-            ...student,
-            school: req.user.school,
-            createdBy: req.user.id,
-            level: newLevel._id,
-          };
-        });
-
-        let studentIds = [];
-        if (student?.isPrevious) {
-          studentIds = _.map(student?.data, "_id");
+      // A grade system is reused only when it belongs to this school
+      let grades = null;
+      if (!_.isEmpty(grade)) {
+        const existing = await Grade.findOne({ name: grade.name, school: schoolId });
+        if (_.isEmpty(existing)) {
+          const newGrade = created.track(
+            Grade,
+            await Grade.create({
+              ...pickFields(grade, ["name", "ratings"]),
+              school: schoolId,
+              session: sessionId,
+              term: newTerm._id,
+              createdBy: principal.id,
+            })
+          );
+          grades = newGrade._id;
         } else {
-          const createdStudents = await Student.insertMany(modifiedStudents, {
-            ordered: false,
-          });
+          grades = existing._id;
+        }
+      }
+
+      for (const { level, isPrevious, data } of groups) {
+        const newLevel = created.track(
+          Level,
+          await Level.create({
+            school: schoolId,
+            session: sessionId,
+            term: newTerm._id,
+            level,
+            initials: level?.initials, // required by the model (it is also inside `level`)
+            students: [],
+            grades,
+            createdBy: principal.id,
+          })
+        );
+
+        let studentIds;
+        if (isPrevious) {
+          studentIds = _.map(data, "_id");
+        } else {
+          const docs = data.map((student) => ({
+            ...pickFields(student, [...STUDENT_IMPORT_FIELDS]),
+            school: schoolId,
+            createdBy: principal.id,
+            level: newLevel._id,
+          }));
+          const createdStudents = created.track(Student, await Student.insertMany(docs, { ordered: true }));
           studentIds = _.map(createdStudents, "_id");
         }
 
-        // update student data in the session
-        await Level.findByIdAndUpdate(
-          newLevel._id,
-          {
-            students: studentIds,
-          },
-          { new: true }
-        );
+        await Level.updateOne({ _id: newLevel._id }, { $set: { students: studentIds } });
 
-        //Create Exams and fees details for each inserted Student
-        const examsDetails = studentIds.map((student) => {
-          return {
-            session: sessionId,
-            term: newTerm._id,
-            level: newLevel?._id,
-            student: student,
-            createdBy: req.user.id,
-          };
-        });
-
-        await Examination.insertMany(examsDetails);
-        await CurrentFee.insertMany(examsDetails);
-
-        return newLevel;
-      });
-
-      await Promise.all(modifiedLevels);
-      return res.status(201).json("New Session created Successfully!!!");
+        // Examination and fee records for each student of the level
+        const records = studentIds.map((student) => ({
+          session: sessionId,
+          term: newTerm._id,
+          level: newLevel._id,
+          student,
+          createdBy: principal.id,
+        }));
+        created.track(Examination, await Examination.insertMany(records));
+        created.track(CurrentFee, await CurrentFee.insertMany(records));
+      }
+    } catch (error) {
+      await created.undo();
+      throw error;
     }
 
     res.status(201).json("New Session created Successfully!!!");
@@ -539,7 +542,10 @@ router.put(
     );
   })
 );
-//Enable or Disable a particular Term
+// Change a term's status (upcoming | current | archived).
+// Only one term per school can be "current": every other current term is archived
+// FIRST and the chosen one is set after, so a failure part-way can never leave a school
+// with two current terms (at worst it has none, and the call can simply be repeated).
 router.patch(
   "/:id",
   adminOnly,
@@ -557,19 +563,12 @@ router.patch(
 
     if (status === "current") {
       await Term.updateMany(
-        { school: schoolId, status: "current" },
+        { school: schoolId, status: "current", _id: { $ne: id } },
         { $set: { status: "archived" } }
       );
     }
 
-    // 2️⃣ Set the specific item to active
-    const updatedTerm = await Term.updateOne(
-      { _id: id, school: schoolId },
-      { $set: { status } },
-      {
-        new: true,
-      }
-    );
+    const updatedTerm = await Term.updateOne({ _id: id, school: schoolId }, { $set: { status } });
 
     if (!updatedTerm?.matchedCount) {
       return res.status(404).json("Error updating Session info");
@@ -579,51 +578,80 @@ router.patch(
   })
 );
 
+/**
+ * Terms that hold real records cannot be removed: a term is history (results, fees,
+ * attendance). Only a term with no enrolled students, no recorded scores, no payments
+ * and no attendance can be removed, together with its empty scaffolding. Anything else
+ * should be archived instead (PATCH /terms/:id?status=archived).
+ */
+async function termBlockers(schoolId, termId) {
+  const [levelsWithStudents, scored, paid, attendance] = await Promise.all([
+    Level.countDocuments({ school: schoolId, term: termId, "students.0": { $exists: true } }),
+    Examination.countDocuments({ term: termId, "scores.0": { $exists: true } }),
+    CurrentFee.countDocuments({ term: termId, "payment.0": { $exists: true } }),
+    Attendance.countDocuments({ term: termId }),
+  ]);
+  const reasons = [];
+  if (levelsWithStudents) reasons.push(`${levelsWithStudents} class(es) with students`);
+  if (scored) reasons.push(`${scored} student result record(s) with scores`);
+  if (paid) reasons.push(`${paid} fee record(s) with payments`);
+  if (attendance) reasons.push(`${attendance} attendance register(s)`);
+  return reasons;
+}
+
+async function removeTerms(req, res, ids) {
+  const { schoolId } = getPrincipal(req);
+  const NOT_REMOVED = "Error removing session info.Try again later";
+
+  if (ids.length === 0 || !ids.every((id) => isValidObjectId(id))) {
+    return res.status(404).json(NOT_REMOVED);
+  }
+
+  const owned = await Term.find({ _id: { $in: ids }, school: schoolId }).select("_id");
+  if (owned.length === 0) return res.status(404).json(NOT_REMOVED);
+
+  // All or nothing: if any term is protected, none is removed
+  for (const { _id } of owned) {
+    const reasons = await termBlockers(schoolId, _id);
+    if (reasons.length) {
+      return res
+        .status(409)
+        .json(
+          `This session cannot be removed because it holds records (${reasons.join(
+            ", "
+          )}). Archive it instead.`
+        );
+    }
+  }
+
+  const termIds = owned.map((t) => t._id);
+  await Promise.all([
+    Level.deleteMany({ school: schoolId, term: { $in: termIds } }),
+    Course.deleteMany({ school: schoolId, term: { $in: termIds } }),
+    Fee.deleteMany({ school: schoolId, term: { $in: termIds } }),
+    Examination.deleteMany({ term: { $in: termIds } }),
+    CurrentFee.deleteMany({ term: { $in: termIds } }),
+    Subject.deleteMany({ term: { $in: termIds } }),
+  ]);
+  // A grade system is removed only when nothing else uses it
+  for (const grade of await Grade.find({ school: schoolId, term: { $in: termIds } }).select("_id")) {
+    if (!(await Level.exists({ grades: grade._id }))) await Grade.deleteOne({ _id: grade._id });
+  }
+  await Term.deleteMany({ _id: { $in: termIds }, school: schoolId });
+
+  return res.status(201).json(" Session have been removed successfully!!!");
+}
+
 router.put(
   "/remove",
   adminOnly,
-  asyncHandler(async (req, res) => {
-    const sessions = [].concat(req.body ?? []);
-    if (sessions.length === 0 || !sessions.every((id) => isValidObjectId(id))) {
-      return res
-        .status(404)
-        .json("Error removing session info.Try again later");
-    }
-
-    const deletedTerms = await Term.deleteMany({
-      _id: { $in: sessions },
-      school: getPrincipal(req).schoolId,
-    });
-
-    if (!deletedTerms?.deletedCount) {
-      return res
-        .status(404)
-        .json("Error removing session info.Try again later");
-    }
-
-    res.status(201).json(" Session have been removed successfully!!!");
-  })
+  asyncHandler(async (req, res) => removeTerms(req, res, [].concat(req.body ?? [])))
 );
 
 router.delete(
   "/:id",
   adminOnly,
-  asyncHandler(async (req, res) => {
-    const id = req.params.id;
-    const deletedTerm = isValidObjectId(id)
-      ? await Term.findOneAndDelete({ _id: id, school: getPrincipal(req).schoolId })
-      : null;
-
-    // const deletedTerm = await knex("terms").where("_id", id).del();
-
-    if (_.isEmpty(deletedTerm)) {
-      return res
-        .status(404)
-        .json("Error removing session info.Try again later");
-    }
-
-    res.status(201).json(" Session have been removed successfully!!!");
-  })
+  asyncHandler(async (req, res) => removeTerms(req, res, [req.params.id]))
 );
 
 module.exports = router;

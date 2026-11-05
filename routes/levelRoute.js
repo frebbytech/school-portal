@@ -18,6 +18,7 @@ const {
   processGeneralWeeklyAttendance,
 } = require("../config/helper");
 const sendMail = require("../config/mail/mailer");
+const { notifyUser } = require("../common/notify");
 const { LEVEL_OPTIONS } = require("../config/helper");
 const { isValidObjectId } = require("mongoose");
 const Grade = require("../models/gradeModel");
@@ -899,29 +900,25 @@ router.put(
       return res.status(400).json("Error assigning Level.Try again later");
     }
 
-    const notification = {
-      user: teacher,
-      school: req.user.school,
-      session: isLevelAssigned?.session,
-      term: isLevelAssigned?.term,
-      type: "Information",
-      title: `Level Assignment - ${level?.levelName}`,
-      description: `You have been assigned to ${level?.levelName} as Form Master.`,
-      album: null,
-      link: "/course/level",
-      createdBy: req.user.id,
-    };
-
-    await Notification.create(notification);
-
-    const teacherUser = await User.findById(teacher);
-
-    const body = {
-      title: `Level Assignment - ${level?.levelName}`,
-      message: `Dear ${teacherUser?.firstname} ${teacherUser?.lastname}, You have been assigned to ${level?.levelName} as Form Master. Please login to your dashboard to view more details.`,
-    };
-
-    await sendMail(body, teacherUser?.email);
+    await notifyUser(
+      { Notification, User, sendMail },
+      {
+        userId: teacher,
+        notification: {
+          school: req.user.school,
+          session: isLevelAssigned?.session,
+          term: isLevelAssigned?.term,
+          type: "Information",
+          title: `Level Assignment - ${level?.levelName}`,
+          description: `You have been assigned to ${level?.levelName} as Form Master.`,
+          album: null,
+          link: "/course/level",
+          createdBy: req.user.id,
+        },
+        title: `Level Assignment - ${level?.levelName}`,
+        message: `You have been assigned to ${level?.levelName} as Form Master. Please login to your dashboard to view more details.`,
+      }
+    );
 
     res.status(201).json("Level has been assigned successfully!!!");
   })
@@ -948,29 +945,25 @@ router.put(
       return res.status(201).json("Changes Saved!!!");
     }
 
-    const notification = {
-      user: level?.teacher,
-      school: req.user.school,
-      session: level?.session,
-      term: level?.term,
-      type: "Information",
-      title: "Level Unassignment",
-      description: `You have been unassigned from ${level?.levelName} as Form Master. If this is a mistake, please contact the administrator.`,
-      album: null,
-      link: "/course/level",
-      createdBy: req.user.id,
-    };
-
-    await Notification.create(notification);
-
-    const teacherUser = await User.findById(level?.teacher);
-
-    const body = {
-      title: "Level Unassignment",
-      message: `Dear ${teacherUser?.firstname} ${teacherUser?.lastname}, You have been unassigned from ${level?.levelName} as Form Master. If this is a mistake, please contact the administrator.`,
-    };
-
-    await sendMail(body, teacherUser?.email);
+    await notifyUser(
+      { Notification, User, sendMail },
+      {
+        userId: level?.teacher,
+        notification: {
+          school: req.user.school,
+          session: level?.session,
+          term: level?.term,
+          type: "Information",
+          title: "Level Unassignment",
+          description: `You have been unassigned from ${level?.levelName} as Form Master. If this is a mistake, please contact the administrator.`,
+          album: null,
+          link: "/course/level",
+          createdBy: req.user.id,
+        },
+        title: "Level Unassignment",
+        message: `You have been unassigned from ${level?.levelName} as Form Master. If this is a mistake, please contact the administrator.`,
+      }
+    );
 
     res.status(201).json("Changes Saved!!!");
   })

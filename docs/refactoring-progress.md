@@ -14,7 +14,7 @@ Companion documents: `docs/backend-audit.md` (findings, IDs referenced below) an
 | 3 | Foundation: bootstrap, config, errors, logging, mail/upload fixes | **Done — owner ran full suite: 53 tests pass** (2026-10-13), branch `refactor/stage-3-foundation` (see §5c) |
 | 4 | Authentication, authorization, tenant isolation | **In progress.** 4a (guards, users router, H-1, H-2): done, owner ran tests, passed. 4b (schools, messages, fees, current-fees): done, owner ran tests, passed. 4c (students, examinations, attendance, teacher scope): done, owner ran tests: all pass (see §5f). 4d (teachers, terms, levels, courses, subjects, grades, sessions, departments, houses, parents, events, announcements, holidays, notes, notifications): written on branch `refactor/stage-4d-remaining-routers`, NOT run (see §5g). 4e (platform role, school creation, payments admin-only, H-3 exposures): on branch `refactor/stage-4e-platform-role-and-exposures` (stacked on 4d), NOT run (see §5h) |
 | 5 | Validation, mass-assignment allow-lists, response adapter | Written on branch `refactor/stage-5-validation` (stacked on 4e), NOT run (see §5i). Mass-assignment allow-lists were done route by route in 4a–4e |
-| 6 | Users, schools, academic sessions/terms, levels | Not started |
+| 6 | Users, schools, academic sessions/terms, levels | Written on branch `refactor/stage-6-term-lifecycle` (stacked on the data-audit branch), NOT run (see §5k). The unique-index part waits for the data audit |
 | 7 | Students, parents, teachers | Not started |
 | 8 | Fees and payments | Not started |
 | 9 | Examinations, grading, report publishing; attendance | Not started |
@@ -326,6 +326,23 @@ Branch `refactor/data-audit` (from Stage 5). Script: `scripts/data-audit.js`. **
 **Safety:** it uses its own variable (never `MONGO_URL`), does not load the app's models (loading a model creates indexes, which is a write), and calls only find/aggregate/count/indexes. `autoIndex` and `autoCreate` are off.
 
 **What it checks:** duplicate index numbers, usernames and emails (ignoring case/spaces, and across schools); records without a school or pointing at a missing school; orphans (terms, levels, courses, subjects, students, fees, examinations, attendance, parents) and cross-school references; level/student list mismatches; schools with several or no current term; duplicates that would block new unique indexes (examinations, fee records, attendance, courses, subjects, levels, grade names); payments with missing or negative amounts, no receipt id, or more than 2 decimals; score records outside 0-100; and the indexes that exist today (to compare with the models, e.g. the term index).
+
+## 5k. Stage 6 — term and level lifecycle (prepared 2026-11-05)
+
+Branch `refactor/stage-6-term-lifecycle` (from `refactor/data-audit`, so Stage 5 and the audit script are included). **Not executed** (only `node --check`). New suite: `tests/term-lifecycle.test.js`. **The data audit has not been run yet**, so nothing here adds a database index automatically.
+
+| Area | Change | Compatibility / confirm |
+|---|---|---|
+| Create term (`POST /terms`) | everything is validated before anything is written (details, dates, list sizes, index numbers, carried-over students); writes run one class at a time; if a step fails, everything this request created is removed (`common/rollback.js`). Before, a duplicate index number answered twice and left the term behind, and failures left half-built terms | same payload and success body. The duplicate check is now **global** (index numbers are unique across schools) and also catches repeats inside the request |
+| Create term | imported students accept only the listed personal fields (no `school`, `_id`, `active`, `createdBy` from the client); carried-over students must belong to the school; a grade system is reused only from the same school; `initials` is now copied onto the level (the model requires it, so creating a term with classes could not have worked before) | **please test creating a term with classes in the UI**: this part could not have worked as written |
+| Status (`PATCH /terms/:id?status=`) | other current terms are archived first, then the chosen one is set, so a school can never end up with two current terms | |
+| Teachers' term list | `GET /terms/sessions` filtered on `"curent"`; fixed to `"current"` | teachers now see the current term there |
+| Removing terms | a term holding students, scores, payments or attendance cannot be removed (409, "Archive it instead"); an empty one is removed with its empty classes, courses, fees, subjects and unused grade system; bulk removal is all or nothing | **this makes the "remove session" button safe**: it only works for empty terms; use archive otherwise |
+| Assignment emails | course/class assignment and unassignment: the in-app notification and email are sent after saving and failures are logged, not returned as errors (`common/notify.js`). Unassigning a class that has no teacher no longer tries to notify nobody | |
+| Schema | removed a malformed index declaration on terms (it put `unique`/`partialFilterExpression` in the key list; MongoDB rejects it, so it never existed and only logged an error at startup) | |
+| Migration | `scripts/migrations/001-one-current-term.js`: dry run by default; with `--apply` creates a partial unique index "one current term per school", but only if no school currently has two current terms. Never changes documents. Rollback: `db.terms.dropIndex("one_current_term_per_school")` | run the data audit first |
+
+**Not changed on purpose:** `POST /levels/generate` (no client calls it; its algorithm is incoherent and it is guarded admin-only), term/level moving of existing students between terms, and the "teacher can read every student" question. Transactions are not used because they need a replica set; the rollback helper works on any MongoDB.
 
 ## 6. Known risks to the refactoring itself
 

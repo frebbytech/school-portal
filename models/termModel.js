@@ -54,10 +54,10 @@ const TermSchema = new mongoose.Schema(
 
 TermSchema.index({ school: 1 });
 TermSchema.index({ session: 1 });
-TermSchema.index({
-  active: 1,
-  unique: true,
-  partialFilterExpression: { active: true },
-});
+// (Removed: an index declaration that put `unique` and `partialFilterExpression` in the
+// key list instead of the options. MongoDB rejects that key pattern, so it never
+// existed and only logged an error at startup. The real rule, "one current term per
+// school", is a partial unique index created by scripts/migrations/001-one-current-term.js
+// after the data has been checked, not by the application at startup.)
 
 module.exports = db.model("Term", TermSchema);

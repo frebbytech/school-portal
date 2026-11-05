@@ -16,6 +16,7 @@ const {
   getAttendanceByGender,
 } = require("../config/helper");
 const sendMail = require("../config/mail/mailer");
+const { notifyUser } = require("../common/notify");
 const { isValidObjectId } = require("mongoose");
 const {
   requireStaff,
@@ -259,29 +260,25 @@ router.post(
     }
 
     if (teacher) {
-      const notification = {
-        user: teacher,
-        school: principal.schoolId,
-        session: session,
-        term: term,
-        type: "Information",
-        title: `Course Assignment - ${subjectName}`,
-        description: `You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
-        album: null,
-        link: "/course/assign",
-        createdBy: principal.id,
-      };
-
-      await Notification.create(notification);
-
-      const teacherUser = await User.findById(teacher);
-
-      const body = {
-        title: `Course Assignment - ${subjectName}`,
-        message: `Dear ${teacherUser?.firstname} ${teacherUser?.lastname}, You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
-      };
-
-      await sendMail(body, teacherUser?.email);
+      await notifyUser(
+        { Notification, User, sendMail },
+        {
+          userId: teacher,
+          notification: {
+            school: principal.schoolId,
+            session: session,
+            term: term,
+            type: "Information",
+            title: `Course Assignment - ${subjectName}`,
+            description: `You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
+            album: null,
+            link: "/course/assign",
+            createdBy: principal.id,
+          },
+          title: `Course Assignment - ${subjectName}`,
+          message: `You have been assigned to teach ${subjectName} for ${levelName}. Please login to your dashboard to view more details.`,
+        }
+      );
     }
 
     res.status(201).json("New Course assigned!");

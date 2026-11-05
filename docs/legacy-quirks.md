@@ -16,5 +16,6 @@ The refactoring keeps these exactly as they are until the owning stage changes t
 | Bulk delete bodies | `DELETE /departments/remove` takes `{ departments }`, `/houses/remove` `{ houses }`, `PUT /events/remove` `{ events }`, `PUT /announcements/remove` `{ announcements }`, `DELETE /notifications/remove` `{ notifications }`, `PUT /terms/remove` a bare array of ids | respective routers |
 | Names | student first names are stored lower-cased by the model | `studentModel` |
 | Create-on-read | attendance and examination records may be created when first read (to be changed only behind a flag, Stage 9) | attendance, examinations |
-| Terms | `GET /terms/sessions` for teachers filters on the misspelt status `"curent"` and therefore returns nothing for them | `termRoute` |
+| Terms | (changed in Stage 6) `GET /terms/sessions` for teachers now filters on `"current"`; it used to filter on the misspelt `"curent"` and return nothing for them | `termRoute` |
+| Term removal | (changed in Stage 6) `DELETE /terms/:id` and `PUT /terms/remove` answer **409** and remove nothing when a term holds students, scores, payments or attendance; success is still 201 with the same bare string | `termRoute` |
 | Holidays | `GET /holidays?year=` ignores `year` and returns every holiday of the school; the clients call a `DELETE /holidays/remove` that does not exist | `holidayRoute` |
