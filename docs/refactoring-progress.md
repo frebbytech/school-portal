@@ -314,6 +314,19 @@ Mass-assignment allow-lists and id checks were delivered with each router in Sta
 
 **Not done on purpose:** per-endpoint schemas for the academic and fee routes. Those inputs are reshaped in Stages 6–9 (terms/levels, students, fees, examinations), so each module gets its validation then, with the same helpers.
 
+## 5j. Read-only data audit (prepared 2026-11-05)
+
+Branch `refactor/data-audit` (from Stage 5). Script: `scripts/data-audit.js`. **Not run** (it needs your database; the sandbox has no access and no npm).
+
+**How to run (about a minute):**
+1. In MongoDB Atlas create a database user with the built-in **read** role only (or use a restored copy of the data).
+2. `AUDIT_MONGO_URL="<read-only connection string>" node scripts/data-audit.js audit-report.md`
+3. Send me `audit-report.md`. It holds counts and database ids only (no names, phones, emails or index numbers); keep it private anyway.
+
+**Safety:** it uses its own variable (never `MONGO_URL`), does not load the app's models (loading a model creates indexes, which is a write), and calls only find/aggregate/count/indexes. `autoIndex` and `autoCreate` are off.
+
+**What it checks:** duplicate index numbers, usernames and emails (ignoring case/spaces, and across schools); records without a school or pointing at a missing school; orphans (terms, levels, courses, subjects, students, fees, examinations, attendance, parents) and cross-school references; level/student list mismatches; schools with several or no current term; duplicates that would block new unique indexes (examinations, fee records, attendance, courses, subjects, levels, grade names); payments with missing or negative amounts, no receipt id, or more than 2 decimals; score records outside 0-100; and the indexes that exist today (to compare with the models, e.g. the term index).
+
 ## 6. Known risks to the refactoring itself
 
 - Behaviour that "looks wrong" may be relied on by a UI (create-on-read attendance, 404-for-bad-credentials, 403-on-expiry, bare-string bodies). Mitigation: contract tests + legacy-quirks table; change one quirk per release.
