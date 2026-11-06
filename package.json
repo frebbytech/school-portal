@@ -15,7 +15,7 @@
     "test:watch": "jest --runInBand --watch"
   },
   "engines": {
-    "node": "20.17.0 || >=22.9.0",
+    "node": "20.17.0 || >=22.9.0 <25",
     "npm": "9.0.0 || >=10.9.2"
   },
   "keywords": [],
