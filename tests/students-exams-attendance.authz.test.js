@@ -8,6 +8,7 @@ const Level = require("../models/levelModel");
 const Course = require("../models/courseModel");
 const Examination = require("../models/examinationModel");
 const Attendance = require("../models/attendanceModel");
+const Session = require("../models/sessionModel");
 const { createSchool, createUser, staffToken, studentToken } = require("./helpers");
 
 const base = "/api/frebbys/v1";
@@ -21,7 +22,7 @@ describe("students, results and attendance authorization (finding C-6, teacher s
   let adminA, classTeacher, courseTeacher, outsider, adminB;
   let adminTok, classTok, courseTok, outsiderTok, adminBTok;
   let levelA, levelB, termA, studentA, studentA2, studentB, studentTokA;
-  let subject1, subject2, examA, examA2, examB;
+  let subject1, subject2, examA, examA2, examB, sessionA;
 
   beforeAll(async () => {
     schoolA = await createSchool();
@@ -50,6 +51,9 @@ describe("students, results and attendance authorization (finding C-6, teacher s
     studentA2 = await make(Student, { indexnumber: idx("c"), school: schoolA._id, level: levelA._id, firstname: "Cy", phonenumber: "0240000003" });
     studentB = await make(Student, { indexnumber: idx("b"), school: schoolB._id, level: levelB._id, firstname: "Bob", phonenumber: "0240000002" });
     studentTokA = studentToken(studentA._id, schoolA);
+    // The class register lists its students (attendance entries must belong to it)
+    await Level.updateOne({ _id: levelA._id }, { $set: { students: [studentA._id, studentA2._id] } });
+    sessionA = await make(Session, { school: schoolA._id });
 
     subject1 = oid();
     subject2 = oid();
@@ -162,7 +166,7 @@ describe("students, results and attendance authorization (finding C-6, teacher s
     });
 
     it("lets the class teacher, a course teacher and an administrator of the school in", async () => {
-      expect((await as(request(app).get(`${base}/attendances/${levelA._id}?date=${day}`), classTok)).status).toBe(200);
+      expect((await as(request(app).get(`${base}/attendances/${levelA._id}?date=${day}&term=${termA._id}&session=${sessionA._id}`), classTok)).status).toBe(200);
       expect((await as(request(app).get(`${base}/attendances/history/${levelA._id}`), courseTok)).status).toBe(200);
       expect((await as(request(app).get(`${base}/attendances/history/${levelA._id}`), adminTok)).status).toBe(200);
     });
@@ -212,7 +216,7 @@ describe("students, results and attendance authorization (finding C-6, teacher s
       expect((await as(request(app).put(`${base}/attendances`), outsiderTok).send({ id: String(reg._id), status: [{ x: 1 }] })).status).toBe(403);
 
       const res = await as(request(app).put(`${base}/attendances`), classTok).send({
-        id: String(reg._id), status: [{ _id: "s", status: "Present" }], level: String(levelB._id),
+        id: String(reg._id), status: [{ _id: String(studentA._id), status: "Present" }], level: String(levelB._id),
       });
       expect(res.status).toBe(201);
       const after = await Attendance.findById(reg._id);
@@ -281,7 +285,7 @@ describe("students, results and attendance authorization (finding C-6, teacher s
       });
       const res = await as(request(app).post(`${base}/examinations/update`), courseTok).send({
         session: { examsId: String(fresh._id) },
-        scores: [{ _id: String(subject1), subject: "Maths", totalScore: 55 }],
+        scores: [{ _id: String(subject1), subject: "Maths", classScore: 25, examsScore: 30 }],
       });
       expect(res.status).toBe(201);
       const after = await Examination.findById(fresh._id);
@@ -304,9 +308,9 @@ describe("students, results and attendance authorization (finding C-6, teacher s
       expect((await as(request(app).post(`${base}/examinations/bulk`), outsiderTok).send({ level: String(levelA._id), results: [] })).status).toBe(403);
 
       expect((await as(request(app).put(`${base}/examinations/comments`), courseTok).send({ _id: String(examA._id), comments: "x" })).status).toBe(403);
-      const ok = await as(request(app).put(`${base}/examinations/comments`), classTok).send({ _id: String(examA._id), comments: "Well done" });
+      const ok = await as(request(app).put(`${base}/examinations/comments`), classTok).send({ _id: String(examA._id), comments: { teachersComments: "Well done" } });
       expect(ok.status).toBe(201);
-      expect((await Examination.findById(examA._id)).comments).toBe("Well done");
+      expect((await Examination.findById(examA._id)).comments.teachersComments).toBe("Well done");
     });
 
     it("needs the whole level (class teacher or administrator) for report cards", async () => {

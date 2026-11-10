@@ -42,6 +42,19 @@ const {
   canGradeSubjects,
 } = require("../middlewares/access");
 const { isValidObjectId } = require("mongoose");
+const Term = require("../models/termModel");
+const { termInSchool } = require("../middlewares/tenant");
+const { ConflictError } = require("../common/errors");
+const { logger } = require("../common/logger");
+const {
+  scorePreferences,
+  cleanScore,
+  cleanScores,
+  mergeBy,
+  overallOf,
+  nextComments,
+  cleanComments,
+} = require("../common/scores");
 
 // Results are tenant-scoped through the level (Examination has no `school`, audit
 // D-1) and, for teachers, limited to levels they are the class teacher of or teach a
@@ -346,11 +359,7 @@ router.get(
 
       const generatedResults = studentRecords.map(async (report) => {
         //GET student position
-        const position = await getMyPosition(
-          termId,
-          levelId,
-          studentRecords?._id
-        );
+        const position = await getMyPosition(termId, levelId, report?._id);
         //GENERATE STUDENT RESULTS
         const generatedResult = await studentReportDetails(
           report,
@@ -396,12 +405,14 @@ router.get(
             };
           }
         } catch (error) {
-          return res.status(404).json(error.message);
+          // One bad report must not answer the request twice; skip it and keep going.
+          logger.error("report template failed", { err: error });
+          return null;
         }
       });
 
       //WAIT FOR ALL TEMPLATES TO FINISH LOADING
-      const generatedTemplates = await Promise.all(allTemplates);
+      const generatedTemplates = _.compact(await Promise.all(allTemplates));
 
       //GENERATE REPORTS
       const generatedReports = generatedTemplates.map((template) => {
@@ -416,7 +427,7 @@ router.get(
         if (allReports) {
           const mailedReports = results.map(
             async ({ fullName, email, report_id }) => {
-              const mailResults = limit(() =>
+              const mailResults = await limit(() =>
                 sendReportMail({
                   school: {
                     name: school?.name,
@@ -445,7 +456,7 @@ router.get(
 
         const mailedReports = results.map(
           async ({ fullName, email, report_id }) => {
-            const mailResults = limit(() =>
+            const mailResults = await limit(() =>
               sendReportMail({
                 school: {
                   name: school?.name,
@@ -462,12 +473,12 @@ router.get(
           }
         );
 
-        await Promise.all([mailedReports, response]);
+        await Promise.all([...mailedReports, ...response]);
       }
 
       return res.status(200).json("ok");
     } catch (error) {
-      console.log(error);
+      logger.error("publishing reports failed", { err: error });
       return res.status(400).json("An unknown error has occured.");
     }
   })
@@ -866,13 +877,16 @@ router.post(
       student,
     });
 
-    //create new exams Details for the term
+    //create new exams Details for the term (createdBy is required; it was missing,
+    //so this create could not succeed)
     if (_.isEmpty(exists)) {
       await Examination.create({
         session,
         term,
         level,
         student,
+        school: req.user.school,
+        createdBy: req.user.id,
         scores: [],
         overallScore: 0,
       });
@@ -891,7 +905,7 @@ router.post(
         academicYear: session?.academicYear,
         term: term?.term,
         levelName: level?.levelName,
-        subjects: level.subjects,
+        subjects: level?.subjects,
       };
     });
 
@@ -906,8 +920,39 @@ router.post(
   })
 );
 
-//@POST
+// The term's score split (e.g. "30/70") bounds each component of a score.
+const termScorePreferences = async (termId) =>
+  scorePreferences(isValidObjectId(termId) ? await Term.findById(termId).select("exams") : null);
 
+/**
+ * Read-modify-write of an examination's scores with a version (__v) check: if another teacher
+ * saved the same record in between, the change is recomputed from the newer data
+ * instead of silently overwriting it (lost update).
+ */
+const saveWithRetry = async (examId, build) => {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const current = await Examination.findById(examId);
+    if (!current) return null;
+    const changes = build(current);
+    // __v is bumped on every save, so two saves in the same millisecond still conflict.
+    const saved = await Examination.findOneAndUpdate(
+      { _id: current._id, __v: current.__v },
+      { $set: changes, $inc: { __v: 1 } },
+      { new: true }
+    );
+    if (saved) return saved;
+  }
+  throw new ConflictError("These results are being edited by someone else. Please try again.");
+};
+
+const logScores = (message, req, examId, scores) =>
+  logger.info(message, {
+    examination: String(examId),
+    subjects: scores.map((s) => s.subject),
+    by: String(req.user.id),
+  });
+
+//@POST scores for one student
 router.post(
   "/",
   requireStaff,
@@ -916,40 +961,29 @@ router.post(
     const newExamsScore = req.body;
 
     // A course teacher may only enter scores for their own subjects.
-    const submitted = (newExamsScore.scores || []).map((score) => score?._id);
+    const submitted = (Array.isArray(newExamsScore.scores) ? newExamsScore.scores : []).map((score) => score?._id);
     if (!canGradeSubjects(req.levelAccess, submitted)) return deny(res);
 
-    // Find if student exam details exists
-    const examsInfo = await Examination.findById(newExamsScore.examsId);
-
-    // Merge scores with  with same subjects
-    const newScores = _.values(
-      _.merge(
-        _.keyBy([...examsInfo.scores, ...newExamsScore.scores], "subject")
-      )
+    const examsInfo = await Examination.findById(newExamsScore.examsId).select("term");
+    const { scores, error } = cleanScores(
+      newExamsScore.scores,
+      await termScorePreferences(examsInfo?.term)
     );
+    if (error) return res.status(400).json(error);
 
-    const overallScore = _.sumBy(newScores, "totalScore");
-    const comments = generateRemarks(overallScore);
+    // Merge scores with the same subject; totals and the overall score are computed here.
+    const updated = await saveWithRetry(newExamsScore.examsId, (current) => {
+      const merged = mergeBy(current.scores, scores, "subject");
+      const overallScore = overallOf(merged);
+      return { scores: merged, overallScore, comments: nextComments(current.comments, overallScore) };
+    });
 
-    const updatedScores = await Examination.findByIdAndUpdate(
-      examsInfo._id,
-      {
-        $set: {
-          scores: newScores,
-          overallScore,
-          comments,
-        },
-      },
-      {
-        upsert: true,
-        new: true,
-      }
-    );
-    res.status(201).json(updatedScores);
+    logScores("scores saved", req, newExamsScore.examsId, scores);
+    res.status(201).json(updated);
   })
 );
 
+//@POST scores for many students of a class (one row per student and subject)
 router.post(
   "/bulk",
   requireStaff,
@@ -957,161 +991,127 @@ router.post(
   asyncHandler(async (req, res) => {
     const { session, term, level, results } = req.body;
 
-    if (!canGradeSubjects(req.levelAccess, _.uniq((results || []).map((r) => r?._id)))) {
+    if (!Array.isArray(results) || results.length === 0 || results.length > 5000) {
+      return res.status(400).json("Provide between 1 and 5000 result rows.");
+    }
+    if (!canGradeSubjects(req.levelAccess, _.uniq(results.map((r) => r?._id)))) {
       return deny(res);
     }
+    if (!(await termInSchool(req, term)) || !isValidObjectId(session)) return deny(res);
 
-    //Extract student index numbers from a specific level
-    const selectedLevel = await Level.findById(level)
+    // Validate every row before anything is written.
+    const prefs = await termScorePreferences(term);
+    const rows = [];
+    for (let i = 0; i < results.length; i++) {
+      const { score, error } = cleanScore(results[i], prefs);
+      if (error) return res.status(400).json(`Row ${i + 1}: ${error}`);
+      rows.push({ index: String(results[i]?.indexnumber ?? "").trim().toLowerCase(), score });
+    }
+
+    //Students of this class, matched by index number (case does not matter)
+    const selectedLevel = await Level.findOne({ _id: level, school: req.user.school })
       .populate("students", "indexnumber")
       .select("students");
+    const studentByIndex = new Map(
+      (selectedLevel?.students || []).filter(Boolean).map((s) => [String(s.indexnumber).toLowerCase(), s._id])
+    );
 
-    const r = selectedLevel.students?.map(async (student) => {
-      if (_.isEmpty(student)) return;
-      const exams = await Examination.findOne({
-        session,
-        term,
-        level,
-        student: new ObjectId(student?._id),
-      })
-        .populate("student", "indexnumber")
-        .select(["student", "scores"]);
+    const exams = await Examination.find({
+      session,
+      term,
+      level,
+      student: { $in: [...studentByIndex.values()] },
+    }).select("student");
+    const examByStudent = new Map(exams.map((e) => [String(e.student), e._id]));
 
-      const result = results?.find(
-        ({ indexnumber }) => indexnumber === exams?.student?.indexnumber
-      );
+    // Group rows per student; rows for unknown students are skipped, not written as blanks
+    const perExam = new Map();
+    let skipped = 0;
+    for (const { index, score } of rows) {
+      const examId = examByStudent.get(String(studentByIndex.get(index)));
+      if (!examId) {
+        skipped++;
+        continue;
+      }
+      perExam.set(String(examId), [...(perExam.get(String(examId)) || []), score]);
+    }
 
-      const scores = [
-        {
-          _id: result?._id,
-          subject: result?.subject,
-          classScore: result?.classScore,
-          examsScore: result?.examsScore,
-          totalScore: result?.totalScore,
-          grade: result?.grade,
-          remarks: result?.remarks,
-        },
-      ];
+    const limit = pLimit(5);
+    await Promise.all(
+      [...perExam.entries()].map(([examId, scores]) =>
+        limit(() =>
+          saveWithRetry(examId, (current) => {
+            const merged = mergeBy(current.scores, scores, "subject");
+            const overallScore = overallOf(merged);
+            return { scores: merged, overallScore, comments: nextComments(current.comments, overallScore) };
+          })
+        )
+      )
+    );
 
-      const newScores = _.values(
-        _.merge(_.keyBy([...exams.scores, ...scores], "subject"))
-      );
-
-      const overallScore = _.sumBy(newScores, "totalScore");
-      const comments = generateRemarks(overallScore);
-      const updatedScores = await Examination.findByIdAndUpdate(
-        exams._id,
-        {
-          $set: {
-            scores: newScores,
-            overallScore,
-            comments,
-          },
-        },
-        {
-          upsert: true,
-          new: true,
-        }
-      );
-
-      return updatedScores;
-    });
-
-    await Promise.all(r);
-
+    logger.info("bulk scores saved", { level, students: perExam.size, skipped, by: String(req.user.id) });
     return res.status(200).json("Results uploaded!");
   })
 );
 
+//@POST replace a student's scores (omitted subjects are removed, as before)
 router.post(
   "/update",
   requireStaff,
   resolveUpdateTarget,
   requireExamAccess((req) => req.body?.session?.examsId),
   asyncHandler(async (req, res) => {
-    const { session, scores } = req.body;
+    const { session } = req.body;
 
     // A course teacher may only change their own subjects; scores for the other
     // subjects stay exactly as they are (the route treats omitted scores as deleted).
     const access = req.levelAccess;
-    if (!canGradeSubjects(access, (scores || []).map((score) => score?._id))) {
+    if (!canGradeSubjects(access, (Array.isArray(req.body.scores) ? req.body.scores : []).map((score) => score?._id))) {
       return deny(res);
     }
 
-    let examsInfo = {};
-
-    if (session.examsId) {
-      // Find if student exam details exists
-      examsInfo = await Examination.findById(session.examsId);
-    } else {
-      // Find if student exam details exists
-      examsInfo = await Examination.findOne({
-        session: new ObjectId(session.sessionId),
-        term: new ObjectId(session.termId),
-        student: new ObjectId(session.studentId),
-      });
-    }
-
-    // Merge scores with  with same subjects
-    const newScores = _.merge(
-      _.keyBy([...examsInfo?.scores, ...scores], "_id")
+    const examsInfo = await Examination.findById(session.examsId).select("term");
+    const { scores, error } = cleanScores(
+      req.body.scores,
+      await termScorePreferences(examsInfo?.term),
+      { requireId: true }
     );
+    if (error) return res.status(400).json(error);
 
-    const latestScores = _.values(newScores);
+    const updated = await saveWithRetry(session.examsId, (current) => {
+      const latest = mergeBy(current.scores, scores, "_id");
 
-    //Remove all deleted Scores
-    let filteredScores = _.intersectionBy(latestScores, scores, "_id");
-    if (!access.full) {
-      const untouched = (examsInfo?.scores || []).filter(
-        (score) => !access.subjectIds.has(String(score?._id))
-      );
-      filteredScores = [...untouched, ...filteredScores];
-    }
-
-    const overallScore = _.sumBy(filteredScores, (score) =>
-      Number(score?.totalScore)
-    );
-    const comments = generateRemarks(overallScore);
-
-    const t = await Examination.findByIdAndUpdate(
-      examsInfo._id,
-      {
-        $set: {
-          scores: filteredScores,
-          overallScore,
-          comments,
-        },
-      },
-      {
-        upsert: true,
-        new: true,
+      //Remove all deleted Scores
+      let filtered = _.intersectionBy(latest, scores, "_id");
+      if (!access.full) {
+        const untouched = (current.scores || []).filter(
+          (score) => !access.subjectIds.has(String(score?._id))
+        );
+        filtered = [...untouched, ...filtered];
       }
-    );
+      const overallScore = overallOf(filtered);
+      return { scores: filtered, overallScore, comments: nextComments(current.comments, overallScore) };
+    });
+    if (!updated) return res.status(404).json("Exams record not found.");
 
+    logScores("scores replaced", req, session.examsId, scores);
     res.status(201).json("Exams Scores updated!!!");
   })
 );
 
-//@POST
-
+//@PUT hand-written comments (no longer overwritten by automatic ones afterwards)
 router.put(
   "/comments",
   requireStaff,
   requireExamAccess((req) => req.body?._id, { full: true }),
   asyncHandler(async (req, res) => {
-    const newExamsComments = req.body;
+    const comments = cleanComments(req.body.comments);
+    if (!comments) return res.status(400).json("Error saving remarks.Try again later!!!");
 
     const updatedScores = await Examination.findByIdAndUpdate(
-      newExamsComments._id,
-      {
-        $set: {
-          comments: newExamsComments.comments,
-        },
-      },
-      {
-        upsert: true,
-        new: true,
-      }
+      req.body._id,
+      { $set: { comments } },
+      { new: true }
     );
     if (_.isEmpty(updatedScores)) {
       return res.status(400).json("Error saving remarks.Try again later!!!");

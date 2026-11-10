@@ -16,7 +16,7 @@ const generateRemarks = (totalScore) => {
     headteachersComments =
       EXCELLENT[Math.floor(Math.random() * EXCELLENT.length)];
   } else if (totalScore >= 700) {
-    teachersComments = EXCELLENT[Math.floor(Math.random() * VERYGOOD.length)];
+    teachersComments = EXCELLENT[Math.floor(Math.random() * EXCELLENT.length)];
     headteachersComments =
       VERYGOOD[Math.floor(Math.random() * VERYGOOD.length)];
   } else if (totalScore >= 600) {
