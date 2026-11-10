@@ -352,13 +352,32 @@ Branch `refactor/stage-7-people-lifecycle` (from the Stage 6 branch). **Not exec
 |---|---|---|
 | Create student (`POST /students`) | details validated before anything is written or uploaded; index number checked globally (case and spaces ignored); the student, login, exam record, fee record and parents are created together and removed again if any step fails; the class list is updated last with `$addToSet`; missing `parent` list no longer crashes; parent fields allow-listed and `school` forced to the caller's | same payload and success body (the new id) |
 | Import (`POST /students/many`, type `file`) | rows allow-listed and validated (required fields, date, phone, email, max 1000 rows); repeats inside the file and index numbers used in ANY school are refused with the existing `isDuplicateError` body; all-or-nothing with rollback; password hashing no longer blocks the server (async, in chunks) | error text for a bad row is new: "Row N: ..." |
-| Existing students into a class | no duplicate exam/fee records if run twice; class list uses `$addToSet`; exam and fee records now carry `school` (they were missing it) | the old duplicate check wrongly rejected existing students that sent an index number; now only applied to file imports |
+| Existing students into a class | no duplicate exam/fee records if run twice; class list uses `$addToSet`; exam and fee records now carry `school` (it was dropped because those models had no such field; added in Stage 8) | the old duplicate check wrongly rejected existing students that sent an index number; now only applied to file imports |
 | Student edit (`PUT /students`) | the login contact sync is limited to the same school | |
 | Default passwords | new students and teachers get `mustChangePassword: true`; the student login response includes `mustChangePassword`; cleared when the student resets their password or a staff member changes their own; set when an administrator resets a staff password. **Informational only: nothing is blocked** | decision still open: the portal could show a "change your password" prompt, or the API could be made to enforce it later |
 | Bulk teachers | all-or-nothing instead of leaving some accounts created when one fails | |
 | Gender setter | no longer crashes when gender is null | |
 
 **Not changed on purpose:** moving a student between classes in different terms (class lists are per term, so removing old entries would erase history); validators on `PUT /students` (legacy phone numbers may not match the model pattern, so edits would start failing).
+
+## 5m. Stage 8 — fees and payments (prepared 2026-11-10)
+
+Branch `refactor/stage-8-fees-ledger` (from the Stage 7 branch). **Not executed** (`node --check` only; the pure money helper was run directly). New suites: `tests/fees-ledger.test.js`, `tests/unit/money.test.js`; `tests/schools-messages-fees.authz.test.js` updated (fees now need a real session). **No stored data is changed**: amounts stay plain numbers; only calculations and validation changed.
+
+| Area | Change | Compatibility / confirm |
+|---|---|---|
+| Arrears (H-12a) | `POST /current-fees/student`: earlier terms' arrears were summed from fields of an array, so they were always 0. They are now computed per earlier term (that term's fee for that class, less what was paid, never below 0) | **numbers on screen will change**: students with unpaid earlier terms now show them in `previous`, `totalFees` and `totalOutstanding`. Check a few real students against your records |
+| Missing fee record (H-12b) | creating the record on first use threw (`create(...).select`). Now an upsert, so it works and two requests make one record | no unique index yet (D-2), so a true simultaneous first call could still make two |
+| Wrong term (H-12c) | current and previous fees were looked up by class only; now by class **and term** | |
+| Divide by zero (H-12d) | percentage is 0 when no fee is set (was NaN/null) | |
+| Rounding | every fee, paid, arrears and summary total is added in whole pesewas (`common/money.js`) so totals never show 0.30000000000000004 | storage unchanged (still plain numbers); moving to integer storage would need a data migration and is not done |
+| Recording a payment | `paid` must be a positive amount with at most 2 decimals (numbers or numeric text, stored as a number); extra short plain fields (method, note) are kept; receipt id, time and issuer are always set by the server; max 500 payments per record; each payment is logged (who, receipt, amount) | invalid amounts now return 400 instead of being stored |
+| Editing payments (`PUT /current-fees`) | payment list validated (0 or more, 2 decimals); the change is logged with the total before and after | still an administrator-only free edit. A proper "correction entry" model (append-only) is a possible later change |
+| Deleting | a fee record with payments cannot be deleted (409); a fee structure with payments recorded against it cannot be deleted (409) | the delete buttons will show an error for those |
+| Fee structures | items validated (amount 0 or more, 2 decimals, max 50); term and session must belong to the school; updates check ownership first; list endpoints no longer crash on a missing class or a bad id | |
+| Schema | `school` added to `CurrentFee` and `Examination` (optional, indexed). It was being sent on creation but silently dropped because the field did not exist; older records still lack it and are scoped through their term | a backfill script can be added after the audit |
+
+**Not changed on purpose:** the `/day` and `/summary` report formulas other than rounding; paginating `GET /current-fees`; refunds and receipts; integer-minor-unit storage.
 
 ## 6. Known risks to the refactoring itself
 

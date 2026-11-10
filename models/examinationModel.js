@@ -4,6 +4,13 @@ const Level = require("./levelModel");
 const generateCustomGrade = require("../config/generateCustomGrade");
 const ExaminationSchema = new mongoose.Schema(
   {
+    // Added in Stage 7/8 so records can be scoped to a school directly. Older records
+    // do not have it; ownership is still derived from the term for those.
+    school: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: "School",
+      index: true,
+    },
     session: {
       type: mongoose.SchemaTypes.ObjectId,
       ref: "Session",

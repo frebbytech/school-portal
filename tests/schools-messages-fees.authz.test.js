@@ -9,6 +9,7 @@ const app = require("../app");
 const School = require("../models/schoolModel");
 const Student = require("../models/studentModel");
 const Term = require("../models/termModel");
+const Session = require("../models/sessionModel");
 const Level = require("../models/levelModel");
 const Message = require("../models/messageModel");
 const Fee = require("../models/feeModel");
@@ -158,7 +159,7 @@ describe("schools, messages and fees authorization (finding C-6)", () => {
     });
 
     it("creates a fee in the caller's school only for a level of that school", async () => {
-      const session = String(oid());
+      const session = String((await make(Session, { school: schoolA._id }))._id);
       const foreign = await as(request(app).post(`${base}/fees`), adminTok).send({
         session, term: String(termA._id), level: String(levelB._id), amount: [{ name: "T", amount: 1 }],
       });
