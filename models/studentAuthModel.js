@@ -19,6 +19,9 @@ const StudentAuthSchema = new mongoose.Schema(
     email: { type: String },
     phonenumber: { type: String, required: true },
     password: { type: String, required: true, default: "" },
+    // True while the password is the system-generated default (phone / index number).
+    // Informational: the portal can prompt for a change; cleared on password reset.
+    mustChangePassword: { type: Boolean, default: false },
     // SHA-256 hash of the 6-digit reset code (never the code itself)
     resetToken: String,
     resetTokenExpiry: Date,

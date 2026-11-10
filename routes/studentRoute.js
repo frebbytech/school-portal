@@ -25,6 +25,7 @@ const {
 } = require("../middlewares/authorize");
 const { requireStudentAccess } = require("../middlewares/access");
 const { levelInSchool, termInSchool } = require("../middlewares/tenant");
+const { createRollback } = require("../common/rollback");
 
 // Students are read by any staff member of their school and managed (created,
 // edited, deactivated) by administrators only. A student may read only their own
@@ -45,6 +46,37 @@ const PERSONAL_FIELDS = [
   "nationality",
 ];
 const FORBIDDEN = "You do not have permission to perform this action.";
+
+const STUDENT_ROW_FIELDS = [...PERSONAL_FIELDS, "indexnumber", "medical", "academic"];
+const PARENT_FIELDS = [
+  "profile", "firstname", "surname", "relationship", "gender",
+  "email", "phonenumber", "address", "residence", "nationality",
+];
+const MAX_IMPORT_ROWS = 1000;
+const MAX_PARENTS_PER_STUDENT = 5;
+const DEFAULT_PHOTO =
+  "https://firebasestorage.googleapis.com/v0/b/fir-system-54b99.appspot.com/o/download.png?alt=media&token=c3f23cd6-8973-4681-9900-98dbadc93d2a";
+
+const normalizeIndex = (value) => String(value ?? "").trim().toLowerCase();
+
+// Returns a message for the first problem with a student's details, or null. Checked
+// before any write so a bad row never leaves a half-created student behind.
+const validateStudentRow = (row) => {
+  const isText = (v) => typeof v === "string" && v.trim().length > 0;
+  if (!isText(row.indexnumber)) return "Index number is required.";
+  if (!isText(row.firstname) || !isText(row.surname)) return "First name and surname are required.";
+  if (!row.dateofbirth || Number.isNaN(new Date(row.dateofbirth).getTime())) {
+    return "A valid date of birth is required.";
+  }
+  if (!isText(row.gender)) return "Gender is required.";
+  if (row.phonenumber && !/^\d{10,15}$/.test(String(row.phonenumber).trim())) {
+    return "Phone number must be 10 to 15 digits.";
+  }
+  if (row.email && !/^\S+@\S+\.\S+$/.test(String(row.email).trim())) {
+    return "Invalid email format.";
+  }
+  return null;
+};
 
 const upload = createImageUpload("students");
 
@@ -370,7 +402,7 @@ router.post(
     } catch (error) {
       return res.status(400).json("Invalid student details");
     }
-    const { session, personal, medical, academic, parent } = studentDetails;
+    const { session, personal, medical, academic, parent } = studentDetails || {};
 
     // The class and term must belong to the caller's school.
     if (
@@ -380,104 +412,103 @@ router.post(
       return res.status(403).json(FORBIDDEN);
     }
 
-    const doesStudentExists = await Student.findOne({
-      indexnumber: personal?.indexnumber,
-    }).select("indexnumber");
+    // Validate everything before anything is written (or any photo uploaded).
+    const row = pickFields(personal || {}, STUDENT_ROW_FIELDS);
+    const rowError = validateStudentRow(row);
+    if (rowError) return res.status(400).json(rowError);
 
-    if (!_.isEmpty(doesStudentExists)) {
+    const parents = Array.isArray(parent) ? parent : [];
+    if (parents.length > MAX_PARENTS_PER_STUDENT) {
+      return res.status(400).json("Too many parents/guardians supplied.");
+    }
+
+    // Index numbers are unique across every school.
+    if (await Student.exists({ indexnumber: normalizeIndex(row.indexnumber) })) {
       return res.status(400).json("Index Number already exist!");
     }
 
-    let studentPhoto =
-      "https://firebasestorage.googleapis.com/v0/b/fir-system-54b99.appspot.com/o/download.png?alt=media&token=c3f23cd6-8973-4681-9900-98dbadc93d2a";
+    let studentPhoto = DEFAULT_PHOTO;
     if (req.file) {
-      const filename = req.file?.filename;
-      studentPhoto = await uploadFile(filename, "students/");
+      studentPhoto = await uploadFile(req.file?.filename, "students/");
     }
 
-    //Add new Student
-    const student = await Student.create({
-      profile: studentPhoto,
-      indexnumber: personal?.indexnumber,
-      firstname: personal?.firstname,
-      surname: personal?.surname,
-      othername: personal?.othername,
-      dateofbirth: personal?.dateofbirth,
-      gender: personal?.gender,
-      email: personal?.email,
-      phonenumber: personal?.phonenumber,
-      address: personal?.address,
-      residence: personal?.residence,
-      nationality: personal?.nationality,
-      medical,
-      academic,
-      school: req.user.school,
-      createdBy: req.user.id,
-      level: academic?.level?._id,
-    });
+    const created = createRollback();
+    try {
+      const student = created.track(
+        Student,
+        await Student.create({
+          ...row,
+          profile: studentPhoto,
+          medical,
+          academic,
+          school: req.user.school,
+          createdBy: req.user.id,
+          level: academic?.level?._id,
+        })
+      );
 
-    if (_.isEmpty(student)) {
-      return res.status(404).json("Error adding student info.Try again later");
+      created.track(
+        StudentAuth,
+        await new StudentAuth({
+          _id: student._id,
+          id: student._id,
+          indexnumber: student.indexnumber,
+          email: row.email,
+          phonenumber: row.phonenumber,
+          password: await bcrypt.hash(row.phonenumber || row.indexnumber, 10),
+          mustChangePassword: true,
+          school: req.user.school,
+        }).save()
+      );
+
+      const stud = {
+        session: session?.sessionId,
+        term: session?.termId,
+        level: academic.level._id,
+        student: student._id,
+        school: req.user.school,
+        createdBy: req.user.id,
+      };
+      created.track(Examination, await Examination.create(stud));
+      created.track(CurrentFee, await CurrentFee.create(stud));
+
+      if (parents.length) {
+        created.track(
+          Parent,
+          await Parent.insertMany(
+            parents.map((par) => ({
+              ...pickFields(par || {}, PARENT_FIELDS),
+              student: student._id,
+              school: req.user.school,
+            }))
+          )
+        );
+      }
+
+      // Last step, so there is nothing to un-push if an earlier step failed.
+      await Level.findOneAndUpdate(
+        { _id: academic.level._id, school: req.user.school },
+        { $addToSet: { students: student._id } }
+      );
+
+      res.status(200).json(student._id);
+    } catch (error) {
+      await created.undo();
+      throw error;
     }
-    const hashedPassword = await bcrypt.hash(
-      personal?.phonenumber || personal?.indexnumber,
-      10
-    );
-
-    //Save student auth
-    const studentAuth = new StudentAuth({
-      _id: student._id,
-      id: student._id,
-      indexnumber: personal?.indexnumber,
-      email: personal?.email,
-      phonenumber: personal?.phonenumber,
-      password: hashedPassword,
-      school: req.user.school,
-    });
-    const savedStudentAuth = await studentAuth.save();
-
-    if (_.isEmpty(savedStudentAuth)) {
-      return res.status(404).json("Error adding student info.Try again later");
-    }
-
-    //Add Student to current class
-    const level = await Level.findOneAndUpdate(
-      { _id: academic.level?._id, school: req.user.school },
-      { $push: { students: student?._id } },
-      { new: true }
-    );
-
-    const stud = {
-      session: session?.sessionId,
-      term: session?.termId,
-      level: level?._id,
-      student: student._id,
-      school: req.user.school,
-      createdBy: req.user.id,
-    };
-    //create exams details for student
-    await Examination.create(stud);
-    await CurrentFee.create(stud);
-
-    const modifiedParents = parent.map((par) => ({
-      ...par,
-      student: student._id,
-      school: req.user.school,
-    }));
-
-    await Parent.insertMany(modifiedParents);
-
-    res.status(200).json(student?._id);
   })
 );
 
-//@PUT students
+//@POST many students: new students from a file, or existing students added to a class
 router.post(
   "/many",
   adminOnly,
   asyncHandler(async (req, res) => {
-    const { session, students, type } = req.body;
+    const { session, students, type } = req.body || {};
 
+    if (!Array.isArray(students) || students.length === 0 || students.length > MAX_IMPORT_ROWS) {
+      return res.status(400).json(`Provide between 1 and ${MAX_IMPORT_ROWS} students.`);
+    }
     if (
       !(await levelInSchool(req, session?.levelId)) ||
       !(await termInSchool(req, session?.termId))
@@ -485,99 +516,112 @@ router.post(
       return res.status(403).json(FORBIDDEN);
     }
 
-    const indexNumbers = _.compact(_.map(students, "indexnumber"));
-    const existingStudents = await Student.find({
-      school: req.user.school,
-      indexnumber: {
-        $in: indexNumbers,
-      },
-    }).select("indexnumber");
+    const isFile = type === "file";
+    let studentIds;
+    let rows = [];
 
-    if (!_.isEmpty(existingStudents)) {
-      return res.status(400).json({
-        isDuplicateError: true,
+    if (isFile) {
+      rows = students.map((s) => pickFields(s || {}, STUDENT_ROW_FIELDS));
+      for (let i = 0; i < rows.length; i++) {
+        const problem = validateStudentRow(rows[i]);
+        if (problem) return res.status(400).json(`Row ${i + 1}: ${problem}`);
+      }
 
-        message: `ID of some students already exist.Please check and try again.`,
-        data: _.map(existingStudents, "indexnumber"),
-      });
-    }
-
-    let studentIds = _.map(students, "_id");
-
-    // Existing students being added to a class must belong to this school.
-    if (type !== "file") {
-      const owned = await Student.countDocuments({
-        _id: { $in: _.compact(studentIds) },
-        school: req.user.school,
-      });
+      const indexNumbers = rows.map((r) => normalizeIndex(r.indexnumber));
+      const repeated = indexNumbers.filter((n, i) => indexNumbers.indexOf(n) !== i);
+      // Index numbers are unique across every school, so the check is global.
+      const existing = await Student.find({ indexnumber: { $in: indexNumbers } }).select("indexnumber");
+      if (existing.length || repeated.length) {
+        return res.status(400).json({
+          isDuplicateError: true,
+          message: `ID of some students already exist.Please check and try again.`,
+          data: _.uniq([..._.map(existing, "indexnumber"), ...repeated]),
+        });
+      }
+      studentIds = rows.map(() => new ObjectId());
+    } else {
+      // Existing students being added to a class must belong to this school.
+      studentIds = _.uniq(_.compact(_.map(students, "_id")).map(String));
+      const owned = studentIds.every((id) => mongoose.isValidObjectId(id))
+        ? await Student.countDocuments({ _id: { $in: studentIds }, school: req.user.school })
+        : -1;
       if (studentIds.length === 0 || owned !== studentIds.length) {
         return res.status(403).json(FORBIDDEN);
       }
     }
 
-    if (type === "file") {
-      const modifiedStudents = students?.map((student) => {
-        return {
-          ...student,
+    const created = createRollback();
+    try {
+      if (isFile) {
+        // Ids are assigned up front and registered before the writes, so a failure
+        // part-way through inserts is still fully cleaned up.
+        created.trackIds(Student, studentIds);
+        created.trackIds(StudentAuth, studentIds);
+        const docs = rows.map((row, i) => ({
+          ...row,
+          _id: studentIds[i],
           school: req.user.school,
           createdBy: req.user.id,
           level: session.levelId,
-        };
-      });
-      const newStudents = await Student.create(modifiedStudents);
+        }));
+        await Student.insertMany(docs);
 
-      const studentAuths = newStudents.map((student) => {
-        const hashedPassword = bcrypt.hashSync(
-          student?.phonenumber || student?.indexnumber,
-          10
-        );
-        return {
-          _id: student._id,
-          id: student._id,
-          indexnumber: student?.indexnumber,
-          email: student?.email,
-          phonenumber: student?.phonenumber,
-          password: hashedPassword,
-          school: req.user.school,
-          level: session.levelId,
-        };
-      });
-
-      await StudentAuth.insertMany(studentAuths);
-
-      if (_.isEmpty(newStudents)) {
-        return res
-          .status(404)
-          .json("Error adding student info.Try again later.");
+        const auths = [];
+        for (const chunk of _.chunk(docs, 25)) {
+          auths.push(
+            ...(await Promise.all(
+              chunk.map(async (s) => ({
+                _id: s._id,
+                id: s._id,
+                indexnumber: normalizeIndex(s.indexnumber),
+                email: s.email,
+                phonenumber: s.phonenumber,
+                password: await bcrypt.hash(s.phonenumber || normalizeIndex(s.indexnumber), 10),
+                mustChangePassword: true,
+                school: req.user.school,
+                level: session.levelId,
+              }))
+            ))
+          );
+        }
+        await StudentAuth.insertMany(auths);
       }
 
-      studentIds = _.map(newStudents, "_id");
-    }
-
-    //Add Students to current class
-    await Level.findOneAndUpdate(
-      { _id: session.levelId, school: req.user.school },
-      {
-        $push: { students: studentIds },
-      },
-      { new: true }
-    );
-
-    //Create Exams and fees details for each inserted Student
-    const studentDetails = studentIds.map((student) => {
-      return {
-        session: session.sessionId,
+      // Existing students may already have this term's records; never duplicate them.
+      const already = await Examination.find({
         term: session.termId,
         level: session.levelId,
-        student: student,
-        createdBy: req.user.id,
-      };
-    });
+        student: { $in: studentIds },
+      }).select("student");
+      const skip = new Set(already.map((e) => String(e.student)));
+      const details = studentIds
+        .filter((id) => !skip.has(String(id)))
+        .map((student) => ({
+          session: session.sessionId,
+          term: session.termId,
+          level: session.levelId,
+          student,
+          school: req.user.school,
+          createdBy: req.user.id,
+        }));
 
-    await Examination.insertMany(studentDetails);
-    await CurrentFee.insertMany(studentDetails);
+      if (details.length) {
+        const exams = await Examination.insertMany(details);
+        created.track(Examination, exams);
+        created.track(CurrentFee, await CurrentFee.insertMany(details));
+      }
 
-    res.status(200).json("Student Information Saved!!!");
+      // Last step, so there is nothing to un-push if an earlier step failed.
+      await Level.findOneAndUpdate(
+        { _id: session.levelId, school: req.user.school },
+        { $addToSet: { students: { $each: studentIds } } }
+      );
+
+      res.status(200).json("Student Information Saved!!!");
+    } catch (error) {
+      await created.undo();
+      throw error;
+    }
   })
 );
 
@@ -638,7 +682,7 @@ router.put(
 
       if (updatedStudent) {
         await StudentAuth.findOneAndUpdate(
-          { indexnumber: updatedStudent?.indexnumber },
+          { indexnumber: updatedStudent?.indexnumber, school: req.user.school },
           {
             email: updatedStudent?.email,
             phonenumber: updatedStudent?.phonenumber,

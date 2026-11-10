@@ -258,6 +258,7 @@ router.post("/login", studentLoginLimiter, async (req, res) => {
   res.json({
     accessToken,
     data: authUser,
+    mustChangePassword: student.mustChangePassword === true,
   });
 });
 
@@ -448,6 +449,7 @@ router.post("/reset-password", resetLimiter, async (req, res) => {
   }
 
   student.password = await bcrypt.hash(newPassword, 10);
+  student.mustChangePassword = false;
   clearResetState(student);
 
   await student.save();

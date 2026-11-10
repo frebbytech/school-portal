@@ -344,6 +344,22 @@ Branch `refactor/stage-6-term-lifecycle` (from `refactor/data-audit`, so Stage 5
 
 **Not changed on purpose:** `POST /levels/generate` (no client calls it; its algorithm is incoherent and it is guarded admin-only), term/level moving of existing students between terms, and the "teacher can read every student" question. Transactions are not used because they need a replica set; the rollback helper works on any MongoDB.
 
+## 5l. Stage 7 — students, parents and teachers (prepared 2026-11-10)
+
+Branch `refactor/stage-7-people-lifecycle` (from the Stage 6 branch). **Not executed** (only `node --check`). New suite: `tests/people-lifecycle.test.js`. Parent and teacher routers were already hardened in Stage 4d (admin-only writes, deactivate not delete); this stage covers the multi-step creation paths.
+
+| Area | Change | Compatibility / confirm |
+|---|---|---|
+| Create student (`POST /students`) | details validated before anything is written or uploaded; index number checked globally (case and spaces ignored); the student, login, exam record, fee record and parents are created together and removed again if any step fails; the class list is updated last with `$addToSet`; missing `parent` list no longer crashes; parent fields allow-listed and `school` forced to the caller's | same payload and success body (the new id) |
+| Import (`POST /students/many`, type `file`) | rows allow-listed and validated (required fields, date, phone, email, max 1000 rows); repeats inside the file and index numbers used in ANY school are refused with the existing `isDuplicateError` body; all-or-nothing with rollback; password hashing no longer blocks the server (async, in chunks) | error text for a bad row is new: "Row N: ..." |
+| Existing students into a class | no duplicate exam/fee records if run twice; class list uses `$addToSet`; exam and fee records now carry `school` (they were missing it) | the old duplicate check wrongly rejected existing students that sent an index number; now only applied to file imports |
+| Student edit (`PUT /students`) | the login contact sync is limited to the same school | |
+| Default passwords | new students and teachers get `mustChangePassword: true`; the student login response includes `mustChangePassword`; cleared when the student resets their password or a staff member changes their own; set when an administrator resets a staff password. **Informational only: nothing is blocked** | decision still open: the portal could show a "change your password" prompt, or the API could be made to enforce it later |
+| Bulk teachers | all-or-nothing instead of leaving some accounts created when one fails | |
+| Gender setter | no longer crashes when gender is null | |
+
+**Not changed on purpose:** moving a student between classes in different terms (class lists are per term, so removing old entries would erase history); validators on `PUT /students` (legacy phone numbers may not match the model pattern, so edits would start failing).
+
 ## 6. Known risks to the refactoring itself
 
 - Behaviour that "looks wrong" may be relied on by a UI (create-on-read attendance, 404-for-bad-credentials, 403-on-expiry, bare-string bodies). Mitigation: contract tests + legacy-quirks table; change one quirk per release.

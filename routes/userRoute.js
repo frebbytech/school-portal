@@ -479,6 +479,7 @@ router.put(
 
     const updatedUser = await User.findByIdAndUpdate(id, {
       password: hashedPassword,
+      mustChangePassword: false,
     });
 
     if (_.isEmpty(updatedUser)) {
@@ -559,6 +560,7 @@ router.patch(
 
     const updatedUser = await User.findByIdAndUpdate(id, {
       password: hashedPassword,
+      mustChangePassword: true,
     });
 
     if (_.isEmpty(updatedUser)) {

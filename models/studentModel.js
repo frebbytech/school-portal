@@ -51,7 +51,7 @@ const StudentSchema = new mongoose.Schema(
       lowercase: true,
       enum: ["male", "female", "other"],
       set: (value) => {
-        const lower = value.toLowerCase();
+        const lower = String(value ?? "").toLowerCase();
         return ["male", "female"].includes(lower) ? lower : "other";
       },
       required: true,

@@ -89,6 +89,9 @@ const UserSchema = new mongoose.Schema(
       required: true,
       minlength: 6, // Enforce password security
     },
+    // True while the password is a system-generated default or was set by an
+    // administrator. Informational; cleared when the user changes it themselves.
+    mustChangePassword: { type: Boolean, default: false },
     active: {
       type: Boolean,
       default: true,

@@ -161,6 +161,7 @@ router.post(
       fullname: fullnameOf(newTeacher),
       role: "teacher",
       password: hashedPassword,
+      mustChangePassword: true,
       createdBy: principal.id,
     };
     delete user.active;
@@ -215,13 +216,20 @@ router.post(
         fullname: fullnameOf(teacher),
         role: "teacher",
         password: await bcrypt.hash(teacher.phonenumber, 10),
+        mustChangePassword: true,
         createdBy: principal.id,
       };
       delete user.active;
       return User.create(user);
     });
 
-    const allTeachers = await Promise.all(newTeachers);
+    // All or nothing: if any account fails to save, remove the ones that did.
+    const settled = await Promise.allSettled(newTeachers);
+    const allTeachers = settled.filter((r) => r.status === "fulfilled").map((r) => r.value);
+    if (allTeachers.length !== settled.length) {
+      await User.deleteMany({ _id: { $in: allTeachers.map((t) => t._id) } });
+      return res.status(400).json("Error adding teachers info.Nothing was saved; check the data and try again.");
+    }
     if (_.isEmpty(allTeachers)) {
       return res
         .status(404)
