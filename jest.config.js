@@ -5,5 +5,6 @@ module.exports = {
   globalSetup: "<rootDir>/tests/setup/global-setup.js",
   globalTeardown: "<rootDir>/tests/setup/global-teardown.js",
   setupFiles: ["<rootDir>/tests/setup/env.js"],
+  setupFilesAfterEnv: ["<rootDir>/tests/setup/after-env.js"],
   testTimeout: 30000,
 };

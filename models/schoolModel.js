@@ -60,5 +60,5 @@ const SchoolSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-SchoolSchema.index({ code: 1 });
+// `code` is already indexed (unique) on the field above; a second index here was a duplicate.
 module.exports = db.model("School", SchoolSchema);

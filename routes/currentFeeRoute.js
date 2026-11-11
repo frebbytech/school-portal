@@ -37,6 +37,7 @@ const {
 const { isValidObjectId } = require("mongoose");
 const { sumAmounts, subtract, percentPaid, parseMoney } = require("../common/money");
 const { logger } = require("../common/logger");
+const { withPagination } = require("../common/pagination");
 
 const MAX_PAYMENTS_PER_RECORD = 500;
 const RESERVED_PAYMENT_KEYS = ["_id", "id", "createdAt", "issuerID", "issuerName"];
@@ -107,7 +108,13 @@ router.get(
   requireStaff,
   asyncHandler(async (req, res) => {
     const termIds = await Term.find({ school: req.user.school }).distinct("_id");
-    const currentFees = await CurrentFee.find({ term: { $in: termIds } });
+    const filter = { term: { $in: termIds } };
+    const currentFees = await withPagination(
+      req,
+      res,
+      CurrentFee.find(filter).sort({ _id: 1 }),
+      () => CurrentFee.countDocuments(filter)
+    );
     res.status(200).json(currentFees);
   })
 );

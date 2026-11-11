@@ -19,7 +19,7 @@ const GradeSchema = new mongoose.Schema(
     name: {
       type: String,
       unique: true,
-      default: `Grade-System-${randomUUID()}`,
+      default: () => `Grade-System-${randomUUID()}`,
     },
     ratings: Array,
     createdBy: {

@@ -22,6 +22,8 @@ const {
   accessibleLevelIds,
 } = require("../middlewares/access");
 const Student = require("../models/studentModel");
+const { isValidObjectId } = require("mongoose");
+const { withPagination } = require("../common/pagination");
 const { termInSchool, sessionInSchool } = require("../middlewares/tenant");
 
 // Attendance has no `school` field (audit D-1): ownership comes from its level.
@@ -36,7 +38,13 @@ router.get(
   requireStaff,
   asyncHandler(async (req, res) => {
     const levels = await accessibleLevelIds(req);
-    const attendance = await Attendance.find({ active: true, level: { $in: levels } });
+    const filter = { active: true, level: { $in: levels } };
+    const attendance = await withPagination(
+      req,
+      res,
+      Attendance.find(filter).sort({ _id: 1 }),
+      () => Attendance.countDocuments(filter)
+    );
     if (_.isEmpty(attendance)) {
       return res.status(200).json([]);
     }
@@ -105,6 +113,8 @@ router.get(
     const { id } = req.params;
     const { session, term } = req.query;
     // //console.log(id, date);
+    if (!isValidObjectId(session) || !isValidObjectId(term)) return res.status(200).json([]);
+
     const attendance = await Attendance.find({
       session,
       term,
@@ -112,36 +122,25 @@ router.get(
       active: true,
     });
 
-    // console.log(attendance);
-    const modifiedAttendance = attendance.map(
-      async ({ _id, status, date, createdBy }) => {
-        const user = await User.findById(createdBy).select([
-          "firstname",
-          "lastname",
-        ]);
+    // One lookup for every creator (it was one query per register)
+    const creators = await User.find({
+      _id: { $in: _.uniq(attendance.map((a) => String(a.createdBy)).filter(isValidObjectId)) },
+    }).select(["firstname", "lastname"]);
+    const creatorById = new Map(creators.map((u) => [String(u._id), u]));
 
-        const present = _.filter(
-          status,
-          ({ status }) => status === "Present"
-        ).length;
-        const absent = _.filter(
-          status,
-          ({ status }) => status === "Absent"
-        ).length;
-        return {
-          _id,
-          date,
-          present,
-          absent,
-          createdBy: {
-            id: user?._id,
-            name: user?.fullname,
-          },
-        };
-      }
-    );
-
-    const attendances = await Promise.all(modifiedAttendance);
+    const attendances = attendance.map(({ _id, status, date, createdBy }) => {
+      const user = creatorById.get(String(createdBy));
+      return {
+        _id,
+        date,
+        present: _.filter(status, ({ status }) => status === "Present").length,
+        absent: _.filter(status, ({ status }) => status === "Absent").length,
+        createdBy: {
+          id: user?._id,
+          name: user?.fullname,
+        },
+      };
+    });
     const attendanceHistory = _.orderBy(attendances, "date", "desc");
 
     res.status(200).json(attendanceHistory);

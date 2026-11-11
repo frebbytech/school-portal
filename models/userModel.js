@@ -29,8 +29,7 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true, // Ensures uniqueness
-      index: true, // Optimized for lookups
+      unique: true, // Ensures uniqueness (and indexes the field)
     },
     dateofbirth: {
       type: String,
@@ -53,7 +52,6 @@ const UserSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
       match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, // Basic email validation
-      index: true, // Optimized for queries
     },
     role: {
       type: String,

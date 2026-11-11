@@ -407,6 +407,27 @@ Branch `refactor/stage-9-exams-attendance` (from the Stage 8 branch). **Not exec
 
 **Not changed on purpose:** the aggregate-grade rule (`generateTotalGrade` uses fixed mark thresholds, which is a school rule, not a bug); publish/lock states for results (a "published" flag with edit locking needs a product decision); the unique index on registers and exam records (D-2: wait for the audit); the per-register user lookup in attendance history (Stage 10).
 
+## 5o. Stage 10 — cleanup, performance and documentation (prepared 2026-11-11)
+
+Branch `refactor/stage-10-cleanup` (from the Stage 9 branch). **Not executed** (`node --check` only; the API reference generator was run). New suite: `tests/cleanup.test.js`, `tests/unit/api-reference.test.js`.
+
+| Area | Change | Notes |
+|---|---|---|
+| "Duplicate schema index" warning | the school `code` index was declared twice (unique on the field and again as a plain index) and `User.username`/`email` declared both `unique` and `index`; the extras are removed. A test now fails if any model declares an index twice | no index is dropped from existing databases, and the unique index on `code` is unchanged |
+| Grading system names | the default name was computed once when the app started, so every new grading system got the same name (and the unique `name` index rejected the second one). It is now computed per document | |
+| Jest "open handle" warning | the database connection is closed after each test file (`tests/setup/after-env.js`) | |
+| Attendance history | one query for all the people who took registers instead of one query per register; bad `session`/`term` now return an empty list instead of an error | same response shape |
+| Pagination | `GET /attendances` and `GET /current-fees` accept optional `?page=&limit=` (same behaviour as the other lists: without them nothing changes) | order is by creation, as before |
+| Documentation | `docs/api-reference.md` (generated from the code, 198 endpoints with their guards; `node scripts/generate-api-reference.js`, and a test fails when it is out of date), `docs/database.md`, `docs/deployment-and-migration.md` | |
+
+**Still open after Stage 10 (for you to decide or schedule):**
+1. Run `scripts/data-audit.js` against production data (read-only) and review the report: it decides the unique-index migrations (one register per class and day, one exam record and fee record per student per term) and any cleanup of old payments or duplicate registers.
+2. Backfill `school` on older exam and fee records (optional, after the audit).
+3. Any staff role can still read all students of its school; student login and refresh fail when a school has no current term; `/levels/generate` is unused and untouched; legacy models `CurrentLevel`, `CurrentLevelDetail`, `OverAllScore` appear unused (confirm before removing).
+4. A "published" state with edit locking for results, and append-only correction entries for payments, need product decisions.
+5. The admin and student web apps have only had the `/platform` screen added; the UI refactor is a separate phase. Check in the UI: creating a term with classes, entering scores on a non-50/50 split, payment recording, arrears display.
+6. Client-visible behaviour changes are collected in section 5 of this file and in `docs/legacy-quirks.md`.
+
 ## 6. Known risks to the refactoring itself
 
 - Behaviour that "looks wrong" may be relied on by a UI (create-on-read attendance, 404-for-bad-credentials, 403-on-expiry, bare-string bodies). Mitigation: contract tests + legacy-quirks table; change one quirk per release.
