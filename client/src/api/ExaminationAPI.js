@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students
@@ -13,7 +14,7 @@ export const getAllExams = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -27,7 +28,7 @@ export const getExam = async (examsId) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -42,7 +43,7 @@ export const getExamsDetails = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 //Get all level exams details
@@ -56,7 +57,7 @@ export const getSubjectScore = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -71,7 +72,7 @@ export const generateReports = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -92,7 +93,7 @@ export const publishReports = async ({ onProgress, value, ...session }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -112,7 +113,7 @@ export const publishReport = async ({ id, value, onProgress }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -127,7 +128,7 @@ export const postExamsRemarks = async (comments) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 //Add new Exams
@@ -141,7 +142,7 @@ export const postExams = async (newExam) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -156,7 +157,7 @@ export const postBulkExams = async (newExam) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -171,7 +172,7 @@ export const updateExams = async (updatedScores) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -185,7 +186,7 @@ export const putExams = async (updatedExam) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -201,6 +202,6 @@ export const deleteExams = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };

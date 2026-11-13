@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students
@@ -155,6 +156,6 @@ export const putBulkData = async ({
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };

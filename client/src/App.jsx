@@ -18,17 +18,20 @@ import Error from "./pages/Error";
 Chart.register(...registerables);
 Chart.register(ChartDataLabels);
 
-function App() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      mutations: {
-        networkMode: "offlineFirst",
-      },
-      queries: {
-        networkMode: "offlineFirst",
-      },
+// Created once for the whole app. Creating it inside App() made a new, empty cache every
+// time App re-rendered.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    mutations: {
+      networkMode: "offlineFirst",
     },
-  });
+    queries: {
+      networkMode: "offlineFirst",
+    },
+  },
+});
+
+function App() {
   const { reset } = useQueryErrorResetBoundary();
 
   return (

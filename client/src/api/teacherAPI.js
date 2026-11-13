@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Teachers
@@ -10,7 +11,7 @@ export const getAllTeachers = async () => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -23,7 +24,7 @@ export const getTeacher = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const getAllCourseAssignedToTeacher = async () => {
@@ -35,7 +36,7 @@ export const getAllCourseAssignedToTeacher = async () => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -66,7 +67,7 @@ export const postTeacher = async (teacher) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -88,7 +89,7 @@ export const updateTeacherProfileImage = async ({ _id, profile }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
     // throw new Error(error.response.data || 'Error Updating profile');
   }
 };
@@ -103,7 +104,7 @@ export const putTeacher = async (updatedTeacher) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -116,6 +117,6 @@ export const deleteTeacher = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };

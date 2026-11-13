@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students
@@ -6,9 +7,6 @@ export const getAllLevels = async (session, term) => {
     const res = await api({
       method: "GET",
       url: `/levels/session`,
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("@user")}`,
-      },
       params: {
         session,
         term,
@@ -18,7 +16,7 @@ export const getAllLevels = async (session, term) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -34,7 +32,7 @@ export const getPreviousLevels = async (session, term, student) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -48,7 +46,7 @@ export const getLevel = async (id) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -110,7 +108,7 @@ export const getTodaysBirth = async () => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 

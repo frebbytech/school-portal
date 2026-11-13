@@ -24,7 +24,7 @@
 |---|---|---|---|
 | U1 | A failed request with no server response (offline, server down, timeout) crashes with `TypeError` instead of showing a message | `throw error.response.data` in 63 places in `client/src/api` (only 4 use `error.response?.`) | Users on weak connections see a broken page, not "check your connection" |
 | U2 | The query cache is thrown away whenever `App` re-renders | `new QueryClient(...)` is created inside the `App` component (`App.jsx`) | Lost caching, repeated requests, flicker |
-| U3 | The access token lives in four places: Axios defaults (set in `UserProvider`), the header per call (`userAPI`, `platformAPI`), `localStorage["@user"]` (`levelAPI`), and a refresh timer | `grep Authorization` | A route that reads the wrong copy sends no or a stale token; tokens in `localStorage` are readable by any script |
+| U3 | The access token is copied into several places: React state, the app's Axios instance defaults, the global `axios` defaults (all set in `UserProvider` / the student `AuthProvider`), plus per-call headers in `userAPI` and `platformAPI`. `levelAPI` also sent `Bearer ` + `localStorage["@user"]`, which holds only `{_id, id, profile}`, never the token; the request interceptor overwrote it, so it was harmless but wrong | `grep Authorization` | Several copies can disagree. There is also **no automatic retry after a 401**: the token is renewed by a timer one minute before it expires, so a laptop that sleeps past expiry gets errors until the page is reloaded |
 | U4 | Two form libraries, two date libraries, plus unused packages | counts above; `react-dates`, `react-date-range`, `@mui/styles` have no importers | Inconsistent behaviour, larger bundle, harder onboarding |
 | U5 | One 1,558-line file holds every route, menu entry and permission check | `Root.jsx` | Every new screen touches it; hard to test; permission rules are scattered |
 | U6 | No tests at all on the front end | 0 test files | Nothing protects the screens from the contract changes below |
@@ -84,7 +84,7 @@ Recommended order: U0, U1, U2 first (they are invisible to users and make everyt
 | 166 routes and 456 files is large | The route table (U2) and kit (U3) turn the rest into repetition; areas are done in risk order and can stop at any point with the app still working |
 | Visual drift between admin and student apps | One shared kit; decision on how to share it below |
 | Behaviour users rely on changes by accident | Characterisation tests before each area is rewritten; same routes and labels unless stated |
-| Tokens in `localStorage` today | U1 moves them to memory with the refresh cookie as the persistence; users stay signed in across reloads through the cookie (needs a quick check of the cookie settings on your hosting, see `docs/deployment-and-migration.md`) |
+| Token handling | The token is already kept in memory (not `localStorage`) and the refresh cookie restores the session on reload. U1b adds one shared "renew once and retry on 401" step; it needs a check of the cookie settings on your hosting (admin app, student app and API are on different hosts today, which makes the cookie `SameSite`/`Secure` settings matter; see `docs/deployment-and-migration.md`) |
 
 ## 6. Decisions I need from you
 
@@ -95,3 +95,52 @@ Recommended order: U0, U1, U2 first (they are invisible to users and make everyt
 5. **Test tools.** OK to add Vitest, React Testing Library, MSW and Playwright as dev dependencies?
 6. **Hosting.** `vercel.json` is present: are both apps on Vercel with the API elsewhere? This matters for the cookie and token change in U1.
 7. **Screenshots.** Can you send screenshots of the 5 to 8 screens you use most (or a short screen recording)? Without them I design from the code alone.
+
+## 7. Decisions (answered 2026-11-13)
+
+| Question | Answer | What it changes |
+|---|---|---|
+| Look and feel | Keep today's navy and peach and tidy it | U3 is a tidy-up of spacing, type, empty states and components, not a redesign |
+| Priority screen | **Examination** | The Examination area becomes the pilot for the design kit (U3) and the first area in U5 |
+| Devices | Admins and teachers on desktop; students on phones and tablets | Admin app: desktop-first, no phone redesign; student portal: mobile-first (U6/U7) |
+| Shared code folder | Yes | A shared package used by both apps, added with U3 (changes `npm install` and deployment; instructions will come with that stage) |
+| Test tools | Yes | Added in U0 |
+| Hosting | Admin app, student app and API on different hosts now, one VPS later | Cookie and CORS settings must work for both layouts; checked in U1b |
+| Screenshots | Provided (8 screens) | See section 8 |
+
+## 8. Review of the screenshots (admin app, school "Nana Educational Complex")
+
+Things I can see, with what I do not yet know marked as such.
+
+| Screen | Observation | Plan |
+|---|---|---|
+| Every page | The navy sidebar stops at the height of the menu, leaving a white block beside long pages | Layout fix in U2/U3 (sidebar fixed to the full viewport height) |
+| Dashboard | Heading reads "Fall 2025" while the current session is 2026/2026 Term 1. The text is not in the front-end code, so it probably comes from stored session or term data: needs checking | Investigate with you in U5 (Sessions) |
+| Dashboard, Student home | Empty charts show an axis from 0 to 1 instead of "No attendance recorded yet" | Shared empty-state component (U3) |
+| Student home | 100 students, 48 male + 40 female (88: the 12 with gender "Other" appear in no card or chart), a "Students for 2026/2026" chart showing 150 for Term 1, and 50 + 50 in the level chart. These numbers disagree with each other: cause not yet known (counts come from several server endpoints) | Audit the dashboard endpoints and make one source of truth (U5, students) |
+| New Student | Date of birth is pre-filled with today's date, so a missing date goes unnoticed; once a field is filled its label is no longer visible | Empty DOB with a required rule; floating labels (U4/U5) |
+| Levels | Clean; the "Action" column is empty | Fill or remove (U5) |
+| **Examination (Day Care)** | "Failed Students 49" counts students who simply have no scores yet (49 of 50 have 0 of 7 subjects entered), and the pass/fail numbers are computed on the server. "Highest score 504" has no scale (7 subjects x 100 = 700 possible). The page address and the breadcrumb show the raw level id (`691780392684d5c5b9fa28e6`) instead of "Day Care". "Result Entry Progress 2%" is shown in red while nobody has started | Pilot screen (see section 9) |
+| Attendance | Breadcrumb shows the raw level id; each row has its own Save button as well as Save Attendance (two ways to save, easy to lose unsaved rows); only Present/Absent | U5 attendance |
+| Teacher profile | Fine; the "Manage Students" heading is used for what the admin menu calls Students | Consistent naming in the route table (U2) |
+
+## 9. The Examination area as the pilot
+
+Goal: the first screens rebuilt on the tidied design, with the server rules visible, so you can judge the new look on the screen your staff use most. Scope: the exam home (list of levels), a level's exam page, score entry (single student and whole subject), import, report cards. Planned changes, in order:
+
+1. Foundations first (U0 and U1, done below): test tooling and the API error handling, because score entry saves many requests and must show clear messages when one fails.
+2. The level exam page: pass/fail only for students whose results are complete ("Not yet entered" as its own count), a scale next to the highest and lowest scores, a readable breadcrumb and page title, progress that is not red at 2%.
+3. Score entry: the two fields capped to the term's split (the page shows "50/50"), the total shown but computed by the server, unsaved-change warning, keyboard entry (Tab and Enter move down the column), server messages beside the row that failed, import with a row-by-row error list.
+4. Remarks: hand-written comments kept, "automatic" shown until edited.
+5. Report cards: unchanged content; layout checked for printing.
+
+Backend changes this needs (small, listed here so they are not a surprise): the exam details endpoint should return a "results complete" count and compute pass/fail only over complete students; I will add this with tests and the front end will fall back to the current numbers until it is deployed.
+
+## 10. Progress
+
+| Stage | Branch | Status |
+|---|---|---|
+| U0 tooling | `ui/u0-tooling` | Written. Not run: needs `npm install` and `npm run check` on your machine |
+| U1 API errors | `ui/u1-api-client` | Written (error normaliser in 85 places, QueryClient created once, junk header removed). Not run. Token renewal on 401 (U1b) not started |
+| U2 route table | | Not started |
+| U3 kit + Examination pilot | | Not started |

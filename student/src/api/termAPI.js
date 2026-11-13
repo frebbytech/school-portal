@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students
@@ -13,7 +14,7 @@ export const getAllTerms = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -30,7 +31,7 @@ export const getAllSessions = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -43,7 +44,7 @@ export const getTerm = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -56,6 +57,6 @@ export const getValidTerm = async ({ academicYear, term }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };

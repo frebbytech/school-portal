@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students details
@@ -12,7 +13,7 @@ export const getAllStudentsDetails = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -26,7 +27,7 @@ export const getAllStudents = async () => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 //Get all Students
@@ -39,7 +40,7 @@ export const getAllStudentID = async () => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -56,7 +57,7 @@ export const getAllStudentsByCurrentLevel = async (currentLevelId) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -69,7 +70,7 @@ export const getStudent = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -82,7 +83,7 @@ export const getStudentByIndexNumber = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -98,7 +99,7 @@ export const getParentByStudentId = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 

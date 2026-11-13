@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students
@@ -10,7 +11,7 @@ export const getAllTerms = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -23,7 +24,7 @@ export const getTerm = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -36,7 +37,7 @@ export const getValidTerm = async ({ academicYear, term }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -50,7 +51,7 @@ export const postTerm = async (newTerm) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -64,7 +65,7 @@ export const putTerm = async (updatedSession) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const updateTermDetails = async (updatedSession) => {
@@ -77,7 +78,7 @@ export const updateTermDetails = async (updatedSession) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -94,7 +95,7 @@ export const disableSessionAccount = async ({ _id, active }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const deleteManyTerms = async (terms) => {
@@ -107,7 +108,7 @@ export const deleteManyTerms = async (terms) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const switchTerm = async ({ id, status }) => {
@@ -132,6 +133,6 @@ export const deleteTerm = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };

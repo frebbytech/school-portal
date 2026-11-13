@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from './customAxios';
 
 
@@ -17,7 +18,7 @@ export const getAllFees = async (session) => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -34,7 +35,7 @@ export const getFee = async (id) => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -48,7 +49,7 @@ export const getAllFeesByCurrentLevel = async (session) => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const getFeeForCurrentLevel = async (session, level) => {
@@ -64,7 +65,7 @@ export const getFeeForCurrentLevel = async (session, level) => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -79,7 +80,7 @@ export const postFee = async (newFee) => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -94,7 +95,7 @@ export const putFee = async (updatedFee) => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -108,6 +109,6 @@ export const deleteFee = async (id) => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };

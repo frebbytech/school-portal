@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import axios from "axios";
 import api from "./customAxios";
 
@@ -11,7 +12,7 @@ export const getAllUsers = async () => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -25,7 +26,7 @@ export const getUserAuth = async (userInfo) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 

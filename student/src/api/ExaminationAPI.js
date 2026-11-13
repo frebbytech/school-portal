@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get Exams by exams id
@@ -10,7 +11,7 @@ export const getExam = async (examsId) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -25,7 +26,7 @@ export const getExamsDetails = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 //Get all level exams details
@@ -38,7 +39,7 @@ export const getExamsDashboardAnalytics = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -59,7 +60,7 @@ export const getExamsDashboardAnalytics = async (id) => {
 
 //     return res.data;
 //   } catch (error) {
-//     throw error.response.data;
+//     throw normalizeApiError(error);
 //   }
 // };
 
@@ -79,7 +80,7 @@ export const getExamsDashboardAnalytics = async (id) => {
 
 //     return res.data;
 //   } catch (error) {
-//     throw error.response.data;
+//     throw normalizeApiError(error);
 //   }
 // };
 
@@ -93,6 +94,6 @@ export const getAcademicDashboardInfo = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };

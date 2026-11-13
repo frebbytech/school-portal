@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from './customAxios';
 
 
@@ -8,9 +9,6 @@ export const getAllLevels = async (session, term) => {
     const res = await api({
       method: 'GET',
       url: `/levels/session`,
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("@user")}`
-      },
       params: {
         session,
         term,
@@ -20,7 +18,7 @@ export const getAllLevels = async (session, term) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -35,7 +33,7 @@ export const getPreviousLevels = async (session, term, student) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const getLevel = async (id) => {
@@ -49,7 +47,7 @@ export const getLevel = async (id) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -64,7 +62,7 @@ export const postLevel = async (newLevel) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const postLevels = async (newLevel) => {
@@ -78,7 +76,7 @@ export const postLevels = async (newLevel) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -93,7 +91,7 @@ export const generateNewCurrentLevelDetailsFromLevels = async (data) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -108,7 +106,7 @@ export const putLevel = async (updatedLevel) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -123,7 +121,7 @@ export const assignGradeToLevel = async (updatedLevel) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -138,7 +136,7 @@ export const deleteManyLevels = async (levels) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const deleteLevel = async ({ id, sessionId, termId }) => {
@@ -156,7 +154,7 @@ export const deleteLevel = async ({ id, sessionId, termId }) => {
     return res.data;
   } catch (error) {
     //console.log(error.response.data);
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -240,7 +238,7 @@ export const getTodaysBirth = async () => {
     return res.data;
   } catch (error) {
 
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 

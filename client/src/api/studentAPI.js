@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students details
@@ -12,7 +13,7 @@ export const getAllStudentsDetails = async (session) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -26,7 +27,7 @@ export const getAllStudentsDetails = async (session) => {
 
 //     return res.data;
 //   } catch (error) {
-//     throw error.response.data;
+//     throw normalizeApiError(error);
 //   }
 // };
 
@@ -41,7 +42,7 @@ export const getStudent = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const getStudentInfo = async (id) => {
@@ -53,7 +54,7 @@ export const getStudentInfo = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -66,7 +67,7 @@ export const getStudentByIndexNumber = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -79,7 +80,7 @@ export const getParentByStudentId = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -124,7 +125,7 @@ export const postStudent = async ({ student, parent }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -147,7 +148,7 @@ export const postNewStudent = async ({ photo, details }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -161,7 +162,7 @@ export const checkExistingStudentID = async (data) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const postManyStudents = async (data) => {
@@ -174,7 +175,7 @@ export const postManyStudents = async (data) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -188,7 +189,7 @@ export const putStudent = async (updatedStudent) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -201,7 +202,7 @@ export const deleteStudent = async (id) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -218,6 +219,6 @@ export const disableStudentAccount = async ({ id, active }) => {
 
     return res.data;
   } catch (error) {
-    throw error.response.data;
+    throw normalizeApiError(error);
   }
 };
