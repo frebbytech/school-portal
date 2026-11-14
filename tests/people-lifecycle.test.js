@@ -232,7 +232,7 @@ describe("people lifecycle (Stage 7)", () => {
     it("new teachers are flagged to change the default password, and changing it clears the flag", async () => {
       const username = uniq("tch");
       const res = await as(
-        request(app).post(`${base}/teachers`).send({ username, firstname: "Kojo", lastname: "Ade", phonenumber: "0241112222" }),
+        request(app).post(`${base}/teachers`).send({ username, firstname: "Kojo", lastname: "Ade", phonenumber: "0241112222", email: `${username}@example.com` }),
         adminTok
       );
       expect(res.status).toBe(201);

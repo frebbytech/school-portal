@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8").replace(/\r\n/g, "\n");
 
 // router variable -> file, then mount path from app.use("/api/...", variable)
 const files = {};
@@ -66,7 +66,7 @@ const labelFor = (text) => {
 
 const rows = [];
 for (const { prefix, file, tokenRequired } of mounts) {
-  const source = fs.readFileSync(path.join(root, "routes", `${file}.js`), "utf8");
+  const source = fs.readFileSync(path.join(root, "routes", `${file}.js`), "utf8").replace(/\r\n/g, "\n");
 
   // Guards applied to the whole router with router.use(...)
   const routerWide = [];
@@ -111,7 +111,8 @@ out += `\n_${rows.length} endpoints._\n`;
 
 const target = path.join(root, "docs", "api-reference.md");
 if (process.argv.includes("--check")) {
-  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
+  // Ignore line endings: a Windows checkout may convert the file to CRLF.
+  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8").replace(/\r\n/g, "\n") : "";
   if (current !== out) {
     console.error("docs/api-reference.md is out of date; run node scripts/generate-api-reference.js");
     process.exit(1);

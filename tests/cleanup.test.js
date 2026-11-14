@@ -23,7 +23,9 @@ describe("cleanup and performance (Stage 10)", () => {
   describe("schemas", () => {
     // Load every model so they are all registered on the connection.
     const dir = path.join(__dirname, "..", "models");
-    fs.readdirSync(dir).filter((f) => f.endsWith(".js")).forEach((f) => require(path.join(dir, f)));
+    // academicModel.js is an unreferenced, byte-identical copy of medicalModel.js (it registers
+    // the same "Medical" model), so loading both would throw; it is skipped here.
+    fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "academicModel.js").forEach((f) => require(path.join(dir, f)));
 
     it("declares no index twice (the 'Duplicate schema index' warning)", () => {
       const problems = [];

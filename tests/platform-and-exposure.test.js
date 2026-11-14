@@ -50,8 +50,12 @@ describe("platform administrator and closed exposures (Stage 4e)", () => {
     it("rejects a wrong password, school accounts and malformed input with the same answer", async () => {
       const wrong = await request(app).post(`${base}/platform/login`).send({ username: platform.username, password: "nope-nope-nope" });
       const school = await request(app).post(`${base}/platform/login`).send({ username: adminA.username, password: "password123" });
+      for (const res of [wrong, school]) expect(res.status).toBe(404);
+      // Operator payloads never reach the route: the input guard rejects them first.
       const malformed = await request(app).post(`${base}/platform/login`).send({ username: { $ne: "" }, password: { $ne: "" } });
-      for (const res of [wrong, school, malformed]) expect(res.status).toBe(404);
+      expect(malformed.status).toBe(400);
+      const notStrings = await request(app).post(`${base}/platform/login`).send({ username: 5, password: ["x"] });
+      expect(notStrings.status).toBe(404);
     });
 
     it("cannot be used through the school login", async () => {

@@ -101,14 +101,19 @@ describe("fees ledger (Stage 8)", () => {
     });
 
     it("stores a numeric amount even when sent as text, and sets receipt fields itself", async () => {
-      const res = await pay({ paid: "25.50", method: "cash", id: "forged", createdAt: "2000-01-01", issuerName: "forged", $where: "x" });
+      const res = await pay({ paid: "25.50", method: "cash", id: "forged", createdAt: "2000-01-01", issuerName: "forged" });
       expect(res.status).toBe(200);
       expect(res.body.paid).toBe(25.5);
       expect(res.body.method).toBe("cash");
       expect(res.body.id).not.toBe("forged");
       expect(new Date(res.body.createdAt).getFullYear()).not.toBe(2000);
       expect(res.body.issuerID).toBe(String(admin._id));
-      expect(res.body.$where).toBeUndefined();
+    });
+
+    it("rejects operator keys such as $where and records nothing", async () => {
+      const before = (await CurrentFee.findById(record2._id)).payment.length;
+      expect((await pay({ paid: 1, $where: "x" })).status).toBe(400);
+      expect((await CurrentFee.findById(record2._id)).payment).toHaveLength(before);
     });
 
     it("keeps both payments when two arrive at the same time and sums them exactly", async () => {
