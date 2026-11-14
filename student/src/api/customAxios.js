@@ -1,4 +1,5 @@
 import axios from "axios";
+import { installAuthRetry } from "./authRetry";
 
 const BASE_URL = import.meta.env.VITE_BASE_URL;
 
@@ -74,5 +75,7 @@ api.defaults.withCredentials = true;
 //     return Promise.reject(error);
 //   }
 // );
+
+installAuthRetry(api);
 
 export default api;

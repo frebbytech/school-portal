@@ -1,4 +1,5 @@
 import axios from "axios";
+import { installAuthRetry } from "./authRetry";
 
 const BASE_URL = import.meta.env.VITE_BASE_URL;
 const api = axios.create({
@@ -8,5 +9,7 @@ const api = axios.create({
 
 axios.defaults.withCredentials = true;
 api.defaults.withCredentials = true;
+
+installAuthRetry(api);
 
 export default api;

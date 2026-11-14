@@ -11,6 +11,7 @@ import {
 
 import { createContext, useState, useContext, useRef, useEffect } from "react";
 import axios from "axios";
+import { refreshOnce, registerRefreshHandler } from "@/api/authRetry";
 import GlobalSpinner from "@/components/spinners/GlobalSpinner";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
@@ -27,6 +28,14 @@ export const AuthProvider = ({ children }) => {
   );
   const [loading, setLoading] = useState(true);
   const refreshTimeoutRef = useRef(null);
+
+  // Lets the API client renew the token and retry when a request meets an expired session
+  // (for example after a phone sat in the background past the token's expiry).
+  const refreshRef = useRef(null);
+  useEffect(() => {
+    registerRefreshHandler(() => refreshRef.current?.());
+    return () => registerRefreshHandler(null);
+  }, []);
 
   // Only runs once on mount
   useEffect(() => {
@@ -71,14 +80,13 @@ export const AuthProvider = ({ children }) => {
     }
     if (delay > 0) {
       refreshTimeoutRef.current = setTimeout(() => {
-        refreshAccessToken();
+        refreshOnce();
       }, delay);
     }
   };
 
   const refreshAccessToken = async () => {
     try {
-      setLoading(true);
       const res = await api.post(
         "/student-auth/refresh",
         {},
@@ -103,14 +111,17 @@ export const AuthProvider = ({ children }) => {
 
         setAccessToken(token);
         scheduleRefresh(token);
+        return token;
       }
+      return null;
     } catch (err) {
       console.error("Error refreshing access token:", err);
       handleAuthError();
-    } finally {
-      setLoading(false);
+      return null;
     }
   };
+
+  refreshRef.current = refreshAccessToken;
 
   const handleAuthError = () => {
     deleteUser();

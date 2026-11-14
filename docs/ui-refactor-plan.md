@@ -141,6 +141,13 @@ Backend changes this needs (small, listed here so they are not a surprise): the 
 | Stage | Branch | Status |
 |---|---|---|
 | U0 tooling | `ui/u0-tooling` | Written. Not run: needs `npm install` and `npm run check` on your machine |
-| U1 API errors | `ui/u1-api-client` | Written (error normaliser in 85 places, QueryClient created once, junk header removed). Not run. Token renewal on 401 (U1b) not started |
+| U1 API errors | `ui/u1-api-client` | Written (error normaliser in 85 places, QueryClient created once, junk header removed). Not run. Token renewal is U1b |
+| U1b token renewal | `ui/u1b-token-renewal` | Written. Not run. Both apps renew the token once and retry when a request meets an expired session; concurrent failures share one renewal. The API answers an expired access token with **403** "Session has expired…" (and uses 403 for "no permission"), so the retry matches on that message as well as on 401 |
 | U2 route table | | Not started |
 | U3 kit + Examination pilot | | Not started |
+
+### Cookie and CORS findings for hosting (U1b)
+
+- The sign-in cookies (`refresh_token`) are set with `Secure`, `SameSite=None` and, in production, a **hard-coded** `domain: "school-portal-aivn.onrender.com"` (`routes/userRoute.js` login, `routes/studentAuthRoute.js` login). On any other host the browser rejects the cookie, so token renewal and reload-restores-session stop working. It works for separate hosts only while the API stays on that Render address.
+- Moving everything to one VPS (apps and API on one domain or subdomains of it) needs: the domain taken from an environment variable (for example `COOKIE_DOMAIN`, empty = host-only), `SameSite=Lax` when the apps share the site, and `CORS_ORIGINS` listing each app origin. This is a small backend change; it is not made yet.
+- The admin cookie path is `/api/frebbys/v1/users/verify` and the student cookie path `/api/frebbys/v1/student-auth/refresh`; a reverse proxy must keep those paths unchanged.

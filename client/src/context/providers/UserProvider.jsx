@@ -15,6 +15,7 @@ import useLocalStorage from "@/hooks/useLocalStorage";
 import { getTerm } from "@/api/termAPI";
 import api from "@/api/customAxios";
 import axios from "axios";
+import { refreshOnce, registerRefreshHandler } from "@/api/authRetry";
 import GlobalSpinner from "@/components/spinners/GlobalSpinner";
 import PropTypes from "prop-types";
 
@@ -33,6 +34,14 @@ const UserProvider = ({ children }) => {
 
   const navigate = useNavigate();
   const [user, setUser] = useState(getUser());
+
+  // Lets the API client renew the token and retry when a request meets an expired session
+  // (for example after the laptop slept past the token's expiry).
+  const refreshRef = useRef(null);
+  useEffect(() => {
+    registerRefreshHandler(() => refreshRef.current?.());
+    return () => registerRefreshHandler(null);
+  }, []);
 
   useEffect(() => {
     const tryInitialRefresh = async () => {
@@ -92,7 +101,7 @@ const UserProvider = ({ children }) => {
 
     if (delay > 0) {
       refreshTimeoutRef.current = setTimeout(() => {
-        refreshAccessToken();
+        refreshOnce();
       }, delay);
     }
   };
@@ -116,6 +125,7 @@ const UserProvider = ({ children }) => {
       const user = parseJwt(token);
       setUser(user);
       saveUser({ _id: user?.id, id: user?.id });
+      return token;
     } catch (e) {
       setAccessToken(null);
       setUser(null);
@@ -137,6 +147,8 @@ const UserProvider = ({ children }) => {
       });
     }
   };
+
+  refreshRef.current = refreshAccessToken;
 
   const initState = {
     isPending: true,
