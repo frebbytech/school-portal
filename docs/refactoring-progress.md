@@ -428,6 +428,11 @@ Branch `refactor/stage-10-cleanup` (from the Stage 9 branch). **Not executed** (
 5. The admin and student web apps have only had the `/platform` screen added; the UI refactor is a separate phase. Check in the UI: creating a term with classes, entering scores on a non-50/50 split, payment recording, arrears display.
 6. Client-visible behaviour changes are collected in section 5 of this file and in `docs/legacy-quirks.md`.
 
+### 5p. Pilot support changes (cookies and exam summary)
+
+- **Cookies:** `common/cookies.js` reads `COOKIE_DOMAIN`, `COOKIE_SAMESITE`, `COOKIE_SECURE`. The hard-coded `school-portal-aivn.onrender.com` Domain is gone from both login cookies, both logout clears and the session cookie in `app.js`. Defaults give a host-only, Secure, SameSite=None cookie, which is what the old setting produced when the API ran on that host. See `docs/deployment-and-migration.md`. Tests: `tests/unit/cookies.test.js` (not run by me, same assertions run in plain Node).
+- **Exam details (`GET /examinations/details?level=`):** `common/examSummary.js` now computes the numbers. Contract change, same field names: `passStudents` / `failStudents` count only students whose results are complete for every subject (before, students with nothing entered counted as failed); `highestMarks` / `lowestMarks` / `averageMarks` use only students with at least one result; the pass mark stays half the maximum. New fields: `enteredStudents`, `completeStudents`, `incompleteStudents`, `passMark`, `maxScore`. NaN is no longer possible for a level without subjects. Tests: `tests/unit/examSummary.test.js`, `tests/exam-summary.test.js` (not run).
+
 ## 6. Known risks to the refactoring itself
 
 - Behaviour that "looks wrong" may be relied on by a UI (create-on-read attendance, 404-for-bad-credentials, 403-on-expiry, bare-string bodies). Mitigation: contract tests + legacy-quirks table; change one quirk per release.

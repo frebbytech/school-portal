@@ -46,6 +46,7 @@ const Term = require("../models/termModel");
 const { termInSchool } = require("../middlewares/tenant");
 const { ConflictError } = require("../common/errors");
 const { logger } = require("../common/logger");
+const { summarizeExams, percent } = require("../common/examSummary");
 const {
   scorePreferences,
   cleanScore,
@@ -146,59 +147,21 @@ router.get(
 
     if (_.isEmpty(students)) {
       return res.status(200).json({
-        noOfStudents: 0,
-        highestMarks: 0,
-        lowestMarks: 0,
-        averageMarks: 0,
-        passStudents: 0,
-        failStudents: 0,
+        ...summarizeExams([], 0),
+        resultsCompleted: 0,
         students: [],
       });
     }
 
-    const examsDetails = {
-      noOfStudents: students.length ?? 0,
-      highestMarks: _.maxBy(students, "overallScore").overallScore ?? 0,
-      lowestMarks: _.minBy(students, "overallScore").overallScore ?? 0,
-      averageMarks: Math.round(
-        _.sumBy(students, "overallScore") / students.length ?? 0
-      ),
-    };
-
-    //FIND Numnber of subjects
+    // Pass and fail are decided only for students whose results are complete (see
+    // common/examSummary.js); students with nothing entered are no longer counted as failed.
     const noOfSubjects = students[0]?.level?.subjects?.length ?? 0;
-    //Calculate cumulative marks
-    let passMark = (noOfSubjects * 100) / 2;
-
-    const studentsAboveAverage = [];
-    const studentsBelowAverage = [];
-
-    students.forEach(({ overallScore }) => {
-      if (overallScore >= passMark) {
-        studentsAboveAverage.push(overallScore);
-      } else {
-        studentsBelowAverage.push(overallScore);
-      }
-    });
-    examsDetails.passStudents = studentsAboveAverage.length ?? 0;
-    examsDetails.failStudents = studentsBelowAverage.length ?? 0;
-
-    //is Results complete
-    const totalTargetResults = Number(noOfSubjects) * students?.length;
-    const completedResults = _.sumBy(
-      students,
-      (student) => student?.scores?.length
+    const summary = summarizeExams(
+      students.map(({ overallScore, scores }) => ({ overallScore, scoresCount: scores?.length || 0 })),
+      noOfSubjects
     );
-    const resultsComplete = parseInt(
-      Number(completedResults / totalTargetResults) * 100
-    );
-
-    //is Results complete
-    const totalOverallScore = _.sumBy(students, "overallScore") ?? 0;
-    const totalExpectedScore = Number(noOfSubjects) * students?.length * 100;
-    const scorePercentage = parseInt(
-      Number(totalOverallScore / totalExpectedScore) * 100
-    );
+    const { resultsCompleted, ...examsDetails } = summary;
+    const resultsComplete = resultsCompleted;
 
     const selectedStudents = students.map(
       ({ _id, student, level, scores, overallScore }) => {
@@ -215,9 +178,7 @@ router.get(
           entry: {
             completed: scores?.length || 0,
             total: level?.subjects?.length || 0,
-            percent: parseInt(
-              Number(scores?.length / level?.subjects?.length) * 100
-            ),
+            percent: percent(scores?.length || 0, level?.subjects?.length || 0),
           },
         };
       }
@@ -227,7 +188,6 @@ router.get(
       ...examsDetails,
       students: selectedStudents,
       resultsCompleted: resultsComplete,
-      scorePercentage,
     });
   })
 );
