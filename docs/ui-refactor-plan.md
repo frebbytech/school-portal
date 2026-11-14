@@ -143,7 +143,7 @@ Backend changes this needs (small, listed here so they are not a surprise): the 
 | U0 tooling | `ui/u0-tooling` | Written. Not run: needs `npm install` and `npm run check` on your machine |
 | U1 API errors | `ui/u1-api-client` | Written (error normaliser in 85 places, QueryClient created once, junk header removed). Not run. Token renewal is U1b |
 | U1b token renewal | `ui/u1b-token-renewal` | Written. Not run. Both apps renew the token once and retry when a request meets an expired session; concurrent failures share one renewal. The API answers an expired access token with **403** "Session has expired…" (and uses 403 for "no permission"), so the retry matches on that message as well as on 401 |
-| U2 route table | | Not started |
+| U2 route table | `ui/u2-route-table` | Written. Not run. `Root.jsx` went from 1,558 lines (about 850 of them an old commented-out copy) to 71. Screens now live in `client/src/routes/routeTable.jsx` (one list: path, who may open it, which school module it needs); `access.js` filters it; `renderRoutes.jsx` builds the routes. Checked by script against the old file: the same paths for administrators and for teachers. Also fixes the screen list being cached on role only (school modules loaded later could be missing) and a crash when school information was missing |
 | U3 kit + Examination pilot | | Not started |
 
 ### Cookie and CORS findings for hosting (U1b)
