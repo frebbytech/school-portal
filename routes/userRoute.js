@@ -21,6 +21,9 @@ const User = require("../models/userModel");
 const Teacher = require("../models/teacherModel");
 const School = require("../models/schoolModel");
 const { isValidObjectId } = require("mongoose");
+const { refreshCookieOptions, clearCookieOptions } = require("../common/cookies");
+
+const USER_REFRESH_PATH = "/api/frebbys/v1/users/verify";
 const { uploadFile } = require("../config/uploadFile");
 
 const upload = createImageUpload("users");
@@ -240,17 +243,7 @@ router.post(
       }
     );
 
-    res.cookie("refresh_token", refresh_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none", // Cross-site allowed
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/api/frebbys/v1/users/verify",
-      domain:
-        process.env.NODE_ENV === "production"
-          ? "school-portal-aivn.onrender.com" // Leading dot for subdomains
-          : undefined, // Localhost works without domain
-    });
+    res.cookie("refresh_token", refresh_token, refreshCookieOptions(USER_REFRESH_PATH));
 
     res.status(200).json({
       token,
@@ -528,16 +521,7 @@ router.put(
   asyncHandler(async (req, res) => {
     // res.clearCookie("refresh_token");
     req.user = null;
-    res.clearCookie("refresh_token", {
-      domain:
-        process.env.NODE_ENV === "production"
-          ? "school-portal-aivn.onrender.com" // Leading dot for subdomains
-          : undefined, // Localhost works without domain
-      path: "/api/frebbys/v1/users/verify",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
-    });
+    res.clearCookie("refresh_token", clearCookieOptions(USER_REFRESH_PATH));
 
     return res.sendStatus(204);
   })

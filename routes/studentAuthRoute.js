@@ -15,6 +15,9 @@ const { studentLoginLimiter } = require("../middlewares/rateLimiters");
 const { verifyJWT } = require("../middlewares/verifyJWT");
 const { getPrincipal, requireMember } = require("../middlewares/authorize");
 const { isValidObjectId } = require("mongoose");
+const { refreshCookieOptions, clearCookieOptions } = require("../common/cookies");
+
+const STUDENT_REFRESH_PATH = "/api/frebbys/v1/student-auth/refresh";
 
 // Helper functions
 const generateAccessToken = (user) => {
@@ -242,18 +245,7 @@ router.post("/login", studentLoginLimiter, async (req, res) => {
   req.user = data;
 
   // Send refresh token in HTTP-only cookie
-  res.cookie("refresh_token", refreshToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none", // Cross-site allowed
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: "/api/frebbys/v1/student-auth/refresh", // Ensure path matches refresh route
-    // Set domain for subdomains if needed
-    domain:
-      process.env.NODE_ENV === "production"
-        ? "school-portal-aivn.onrender.com" // Leading dot for subdomains
-        : undefined, // Localhost works without domain
-  });
+  res.cookie("refresh_token", refreshToken, refreshCookieOptions(STUDENT_REFRESH_PATH));
 
   res.json({
     accessToken,
@@ -362,16 +354,7 @@ router.post("/logout", (req, res) => {
   req.user = null;
   // Must use the cookie's real name and the attributes it was set with, otherwise
   // the browser keeps it (finding H-2).
-  res.clearCookie("refresh_token", {
-    path: "/api/frebbys/v1/student-auth/refresh",
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain:
-      process.env.NODE_ENV === "production"
-        ? "school-portal-aivn.onrender.com"
-        : undefined,
-  });
+  res.clearCookie("refresh_token", clearCookieOptions(STUDENT_REFRESH_PATH));
   res.sendStatus(204);
 });
 

@@ -70,6 +70,18 @@ function validateEnv(env = process.env) {
     else seen.set(env[name], name);
   }
 
+  // Cookie settings (see common/cookies.js): wrong values are replaced by safe defaults,
+  // but the person who set them should know.
+  if (isSet(env, "COOKIE_SAMESITE") && !["none", "lax", "strict"].includes(env.COOKIE_SAMESITE.trim().toLowerCase())) {
+    warnings.push('COOKIE_SAMESITE must be "none", "lax" or "strict"; "none" is used');
+  }
+  if (isSet(env, "COOKIE_DOMAIN") && /[\/:\s]/.test(env.COOKIE_DOMAIN.trim())) {
+    warnings.push("COOKIE_DOMAIN must be a bare domain such as example.com (no https://, port or slash)");
+  }
+  if (isSet(env, "COOKIE_SECURE") && env.COOKIE_SECURE.trim().toLowerCase() === "false" && (!isSet(env, "COOKIE_SAMESITE") || env.COOKIE_SAMESITE.trim().toLowerCase() === "none")) {
+    warnings.push('COOKIE_SECURE=false is ignored while COOKIE_SAMESITE is "none" (browsers require Secure)');
+  }
+
   if (production) {
     for (const [name, effect] of RECOMMENDED) {
       if (!isSet(env, name)) warnings.push(`${name} is not set: ${effect}`);

@@ -48,3 +48,26 @@ All documented in `.env.example`. Never commit real values. In production the se
 ## Running the tests locally
 
 `nvm use` (Node 22), `npm ci`, `npm test`. The first run downloads a MongoDB binary for the in-memory server (needs internet). The suite runs in one process (`--runInBand`).
+
+## Sign-in cookie settings (COOKIE_DOMAIN, COOKIE_SAMESITE, COOKIE_SECURE)
+
+Until now the sign-in cookies, and the session cookie in `app.js`, carried a hard-coded
+`Domain=school-portal-aivn.onrender.com` in production, so the app could only be signed in
+from that one API host. They now read three optional variables (`common/cookies.js`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `COOKIE_DOMAIN` | empty | Empty = the cookie belongs to the API host only (same effect as before on Render). Set a bare domain such as `example.com` only to share the cookie across subdomains. No `https://`, port or slash. |
+| `COOKIE_SAMESITE` | `none` | `none` = admin app, student app and API may be on different sites (today's behaviour). `lax` or `strict` = everything on one site, e.g. `admin.example.com`, `student.example.com`, `api.example.com`. |
+| `COOKIE_SECURE` | `true` | HTTPS only. `false` is for plain-http testing and is ignored when SameSite is `none`. |
+
+**Separate hosts (today, e.g. Vercel + Render):** change nothing; defaults reproduce the old behaviour.
+
+**One VPS, one domain:** serve everything over HTTPS, set `COOKIE_SAMESITE=lax`, leave
+`COOKIE_DOMAIN` empty (or set it to the parent domain), and list each app origin in
+`CORS_WHITELIST`. The reverse proxy must keep the paths `/api/frebbys/v1/users/verify` and
+`/api/frebbys/v1/student-auth/refresh` unchanged, since the cookies are scoped to them.
+
+**Effect on people already signed in:** the browser treats the new cookie as the same cookie
+and replaces it at the next sign-in; nobody needs to do anything. If a staff member sees
+"Session expired" right after the change, signing in again fixes it.

@@ -39,6 +39,7 @@ const userRoute = require("./routes/userRoute");
 const attendanceRoute = require("./routes/attendanceRoute");
 const { verifyJWT } = require("./middlewares/verifyJWT");
 const { requestId } = require("./middlewares/requestId");
+const { cookieSettings } = require("./common/cookies");
 const { errorHandler } = require("./middlewares/errorHandler");
 const { createGlobalLimiter } = require("./middlewares/rateLimiters");
 
@@ -132,22 +133,18 @@ const sessionConfig = {
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  // Domain, SameSite and Secure come from COOKIE_DOMAIN / COOKIE_SAMESITE / COOKIE_SECURE
+  // (see common/cookies.js) so any hosting layout works.
   cookie: {
-    domain:
-      process.env.NODE_ENV === "production"
-        ? "school-portal-aivn.onrender.com" // Leading dot for subdomains
-        : undefined, // Localhost works without domain
+    ...cookieSettings(),
     path: "/api/frebbys/v1/users/verify",
-    secure: true,
     httpOnly: true,
-    sameSite: "none", // Cross-site allowed
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   },
 };
 
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1); // Trust first proxy
-  sessionConfig.cookie.sameSite = "none";
 }
 
 app.use(session(sessionConfig));
