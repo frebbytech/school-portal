@@ -3,7 +3,7 @@ import Avatar from '@mui/material/Avatar';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import PropTypes from 'prop-types';
-function ExamsHomeCard({ title, value, icon, color }) {
+function ExamsHomeCard({ title, value, icon, color, hint }) {
   return (
     <Stack
       direction='row'
@@ -31,13 +31,19 @@ function ExamsHomeCard({ title, value, icon, color }) {
       <Stack spacing={1}>
         <Typography variant='body2'>{title}</Typography>
         <Typography variant='h5'>{value}</Typography>
+        {hint ? (
+          <Typography variant='caption' color='text.secondary'>
+            {hint}
+          </Typography>
+        ) : null}
       </Stack>
     </Stack>
   );
 }
 ExamsHomeCard.propTypes = {
   title: PropTypes.string,
-  value: PropTypes.number,
+  value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  hint: PropTypes.string,
   icon: PropTypes.node,
   color: PropTypes.string,
 };

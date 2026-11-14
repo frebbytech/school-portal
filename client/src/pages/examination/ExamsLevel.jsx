@@ -14,18 +14,11 @@ import {
   CircularProgress,
   Card,
   CardContent,
-  Badge,
   LinearProgress,
   Grid2,
   IconButton,
   Tooltip,
 } from "@mui/material";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
-import HighlightOffOutlinedIcon from "@mui/icons-material/HighlightOffOutlined";
-import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
-import DoNotDisturbOnTotalSilenceOutlinedIcon from "@mui/icons-material/DoNotDisturbOnTotalSilenceOutlined";
-import BookmarksOutlinedIcon from "@mui/icons-material/BookmarksOutlined";
 import {
   BookSharp,
   NoteOutlined,
@@ -38,7 +31,6 @@ import {
 } from "@mui/icons-material";
 import CustomizedMaterialTable from "@/components/tables/CustomizedMaterialTable";
 import { STUDENTS_EXAMS_COLUMN } from "@/mockup/columns/studentColumns";
-import ExamsHomeCard from "@/components/cards/ExamsHomeCard";
 import { getExamsDetails } from "@/api/ExaminationAPI";
 import student_icon from "@/assets/images/header/student_ico.svg";
 import { EMPTY_IMAGES } from "@/config/images";
@@ -52,6 +44,7 @@ import SubjectPopover from "../level/SubjectPopOver";
 import useLevelById from "@/components/hooks/useLevelById";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import AssignLevelGrade from "../subject/AssignLevelGrade";
+import ExamSummary from "./ExamSummary";
 
 const ExamsLevel = ({ type }) => {
   const theme = useTheme();
@@ -110,8 +103,6 @@ const ExamsLevel = ({ type }) => {
       render: () => <ChevronRight sx={{ width: 30, height: 30 }} />,
     },
   ];
-
-  const iconStyle = { width: 28, height: 28 };
 
   const handleImportResults = () => {
     navigate(`/${type}/${levelId}/upload`, {
@@ -205,52 +196,7 @@ const ExamsLevel = ({ type }) => {
         Exams Summary
       </Typography>
       <Divider />
-      <Box
-        sx={{
-          width: "100%",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))",
-          gap: 2,
-          py: 2,
-        }}
-      >
-        <ExamsHomeCard
-          title="Students"
-          value={examDetails.data?.noOfStudents}
-          icon={<PersonOutlineOutlinedIcon sx={iconStyle} />}
-          color="info"
-        />
-        <ExamsHomeCard
-          title="Highest Score"
-          value={examDetails.data?.highestMarks}
-          icon={<BookmarksOutlinedIcon sx={iconStyle} />}
-          color="success"
-        />
-        {/* <ExamsHomeCard
-          title='Average Marks'
-          value={examDetails.data?.averageMarks}
-          icon={<FunctionsOutlinedIcon sx={iconStyle} />}
-          color='info'
-        /> */}
-        <ExamsHomeCard
-          title="Lowest Score"
-          value={examDetails.data?.lowestMarks}
-          icon={<DoNotDisturbOnTotalSilenceOutlinedIcon sx={iconStyle} />}
-          color="warning"
-        />
-        <ExamsHomeCard
-          title="Pass Students"
-          value={examDetails.data?.passStudents}
-          icon={<CheckCircleOutlinedIcon sx={iconStyle} />}
-          color="success"
-        />
-        <ExamsHomeCard
-          title="Failed Students"
-          value={examDetails.data?.failStudents}
-          icon={<HighlightOffOutlinedIcon sx={iconStyle} />}
-          color="error"
-        />
-      </Box>
+      <ExamSummary data={examDetails.data} />
 
       {/* Dashboard hero  */}
       <Card sx={{ margin: "auto", padding: 2, mb: 3 }}>
@@ -328,19 +274,13 @@ const ExamsLevel = ({ type }) => {
               </Box>
               <Box textAlign={{ xs: "center", md: "left" }}>
                 <Typography variant="h6" fontWeight="bold">
-                  {level ?? "Students"}
-                  <Badge
-                    color="success"
-                    variant="dot"
-                    overlap="circular"
-                    sx={{ marginLeft: 1 }}
-                  >
-                    <CheckCircleIcon color="success" />
-                  </Badge>
+                  {level ?? levelName ?? "Students"}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  9052900 | LEVEL CODE
-                </Typography>
+                {typeof examDetails?.data?.completeStudents === "number" && (
+                  <Typography variant="body2" color="text.secondary">
+                    {examDetails.data.completeStudents} of {examDetails.data.noOfStudents} students have complete results
+                  </Typography>
+                )}
               </Box>
             </Box>
             <IconButton
@@ -371,11 +311,7 @@ const ExamsLevel = ({ type }) => {
             <LinearProgress
               variant="determinate"
               value={examDetails?.data?.resultsCompleted || 0}
-              color={
-                gradeColor(examDetails?.data?.resultsCompleted).bg?.split(
-                  "."
-                )[0]
-              }
+              color="primary"
               sx={{
                 height: 8,
                 borderRadius: 1,

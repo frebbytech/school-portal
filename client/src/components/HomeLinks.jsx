@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Breadcrumbs, Link, Typography } from "@mui/material";
 import { Link as RouterLink, useLocation } from "react-router-dom";
+import { breadcrumbLabel } from "./breadcrumbLabel";
 
 export default function HomeLinks() {
   const location = useLocation();
@@ -36,7 +37,7 @@ export default function HomeLinks() {
               color="text.primary"
               sx={{ textTransform: "capitalize", fontSize: "14px" }}
             >
-              {decodeURIComponent(value)}
+              {breadcrumbLabel(value)}
             </Typography>
           ) : (
             <Link
@@ -45,7 +46,7 @@ export default function HomeLinks() {
               to={to}
               style={{ textTransform: "capitalize", fontSize: "14px" }}
             >
-              {value}
+              {breadcrumbLabel(value)}
             </Link>
           );
         })}
