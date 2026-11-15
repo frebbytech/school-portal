@@ -2,19 +2,14 @@ import React, { useState, useEffect } from "react";
 import { SchoolRounded } from "@mui/icons-material";
 import Button from "@mui/material/Button";
 import {
-  Alert,
   Avatar,
   Box,
   Container,
   Stack,
-  TextField,
   Typography,
-  CircularProgress,
 } from "@mui/material";
 
-import { Formik } from "formik";
-import { useMutation } from "@tanstack/react-query";
-import { loginUserValidationSchema } from "../config/validationSchema";
+import LoginForm from "@/components/forms/LoginForm";
 import { getUserAuth } from "../api/userAPI";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import FindSchool from "./FindSchool";
@@ -31,10 +26,6 @@ const Login = () => {
     authenticateUser,
     switchAccount,
   } = useAuth();
-  const initialValues = {
-    username: "",
-    password: "",
-  };
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -43,26 +34,12 @@ const Login = () => {
     }
   }, [state]);
 
-  const { mutateAsync, isPending } = useMutation({
-    mutationFn: getUserAuth,
-  });
-  const onSubmit = (values) => {
+  // Throws the API's error so LoginForm can show it above the fields.
+  const onLogin = async (values) => {
     setMsg("");
-    mutateAsync(
-      {
-        ...values,
-        code: schoolInformation?._id,
-      },
-      {
-        onSuccess: (data) => {
-          authenticateUser(data?.token, data?.school);
-          navigate("/school-session", { replace: true });
-        },
-        onError: (error) => {
-          setMsg(error);
-        },
-      }
-    );
+    const data = await getUserAuth({ ...values, code: schoolInformation?._id });
+    authenticateUser(data?.token, data?.school);
+    navigate("/school-session", { replace: true });
   };
 
   if (user?.id) {
@@ -181,57 +158,7 @@ const Login = () => {
             >
               Login into your account
             </Typography>
-            <Formik
-              initialValues={initialValues}
-              onSubmit={onSubmit}
-              validationSchema={loginUserValidationSchema}
-            >
-              {({ values, errors, touched, handleChange, handleSubmit }) => {
-                return (
-                  <Stack spacing={2} py={2} width="100%">
-                    {msg && (
-                      <Alert variant="filled" severity="error">
-                        {msg}
-                      </Alert>
-                    )}
-                    <TextField
-                      fullWidth
-                      placeholder="Username here"
-                      label="Username"
-                      autoComplete="no"
-                      value={values.username}
-                      onChange={handleChange("username")}
-                      error={Boolean(touched.username && errors.username)}
-                      helperText={touched.username && errors.username}
-                    />
-                    <TextField
-                      fullWidth
-                      type="password"
-                      placeholder="Password here"
-                      label="Password"
-                      autoComplete="no"
-                      value={values.password}
-                      onChange={handleChange("password")}
-                      error={Boolean(touched.password && errors.password)}
-                      helperText={touched.password && errors.password}
-                      margin="dense"
-                    />
-
-                    <Button
-                      loading={isPending}
-                      fullWidth
-                      loadingPosition="start"
-                      startIcon={<CircularProgress size={20} />}
-                      loadingIndicator={<CircularProgress size={20} />}
-                      variant="contained"
-                      onClick={handleSubmit}
-                    >
-                      {isPending ? "PLEASE WAIT.." : "LOG INTO ACCOUNT"}
-                    </Button>
-                  </Stack>
-                );
-              }}
-            </Formik>
+            <LoginForm onLogin={onLogin} notice={msg} />
           </Container>
         </Box>
         <Button

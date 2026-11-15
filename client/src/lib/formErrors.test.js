@@ -28,3 +28,16 @@ describe("formErrors", () => {
     expect(setError).toHaveBeenCalledWith("root.server", { type: "server", message: "Boom" });
   });
 });
+
+import { thrownMessage } from "@/lib/formErrors";
+describe("thrownMessage", () => {
+  it("handles strings, objects and nothing", () => {
+    expect(thrownMessage("Wrong password")).toBe("Wrong password");
+    expect(thrownMessage({ message: "Offline", code: "NETWORK_ERROR" })).toBe("Offline");
+    expect(thrownMessage(undefined)).toMatch(/Something went wrong/);
+    expect(thrownMessage({})).toMatch(/Something went wrong/);
+  });
+  it("serverMessage accepts thrown values too", () => {
+    expect(serverMessage({ message: "Offline" })).toBe("Offline");
+  });
+});

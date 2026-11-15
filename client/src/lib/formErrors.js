@@ -9,7 +9,15 @@
 // Anything not matched is put on "root.server" so the form can show it once at
 // the top, instead of a toast that disappears.
 
+// What the API functions throw (see api/apiError.js): a bare string, or { message, ... }.
+export const thrownMessage = (value, fallback = "Something went wrong. Please try again.") => {
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value?.message === "string" && value.message.trim()) return value.message;
+  return fallback;
+};
+
 export const serverMessage = (error, fallback = "Something went wrong. Please try again.") => {
+  if (!error?.response && !error?.request && error) return thrownMessage(error, fallback);
   const data = error?.response?.data;
   if (typeof data === "string" && data.trim()) return data;
   if (typeof data?.message === "string" && data.message.trim()) return data.message;
