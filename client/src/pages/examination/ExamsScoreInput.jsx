@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useRef, useState } from "react";
 import {
   Stack,
   Button,
@@ -22,6 +22,8 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { UserContext } from "@/context/providers/UserProvider";
 import useLevelById from "@/components/hooks/useLevelById";
 import ExamsScoreTable from "@/components/tables/ExamsScoreTable";
+import useUnsavedChangesWarning from "@/components/hooks/useUnsavedChangesWarning";
+import { parseScorePreference, totalOf } from "./scoreRules";
 
 const ExamsScoreInput = ({ setTab, scores }) => {
   const { session } = useContext(UserContext);
@@ -36,15 +38,25 @@ const ExamsScoreInput = ({ setTab, scores }) => {
   const { gradeSystem, subjects } = useLevelById(levelId);
 
   //Score preference
-  const scorePreference = session?.exams?.scorePreference?.split("/");
-  const classScorePreference = scorePreference?.[0] ?? 50;
-  const examsScorePreference = scorePreference?.[1] ?? 50;
+  const { classMax: classScorePreference, examsMax: examsScorePreference } = parseScorePreference(
+    session?.exams?.scorePreference
+  );
+
+  // Warn before the tab is closed while scores are listed but not saved.
+  const [saved, setSaved] = useState(false);
+  const hasUnsaved = !saved && !_.isEqual(scoreList, scores || []);
+  useUnsavedChangesWarning(hasUnsaved);
+
+  // After adding a score the cursor returns to the subject box, so a whole student can be
+  // entered from the keyboard: subject, Tab, class score, Tab, exams score, Enter.
+  const subjectInput = useRef(null);
 
   //React Hook Form setup
   const {
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isValid, isDirty },
   } = useForm({
     mode: "onChange",
@@ -76,10 +88,13 @@ const ExamsScoreInput = ({ setTab, scores }) => {
     setScoreList(Object.values(merged));
 
     reset();
+    subjectInput.current?.focus();
   };
 
+  const [watchedClass, watchedExams] = watch(["classScore", "examsScore"]);
+
   //SAVE RESULTS
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: updateExams,
   });
 
@@ -94,15 +109,21 @@ const ExamsScoreInput = ({ setTab, scores }) => {
       scores: scoreList,
     };
 
-    mutateAsync(data, {
+    setMsgs({ severity: "", text: "" });
+    mutate(data, {
       onSettled: () => {
         queryClient.invalidateQueries(["exams-by-id", searchParams.get("eid")]);
       },
       onSuccess: (data) => {
+        setSaved(true);
         schoolSessionDispatch(alertSuccess(data));
         setTab("1");
       },
       onError: (error) => {
+        // Shown here, next to the list, as well as in the pop-up: the message names the
+        // score that was refused and nothing was saved, so the list is still there to fix.
+        const text = typeof error === "string" ? error : error?.message || "The results could not be saved.";
+        setMsgs({ severity: "error", text: `${text} Nothing was saved; your list is still here.` });
         schoolSessionDispatch(alertError(error));
       },
     });
@@ -148,11 +169,10 @@ const ExamsScoreInput = ({ setTab, scores }) => {
             <Button onClick={handleClose}>Cancel</Button>
             <Button
               variant="contained"
-              disabled={scoreList.length === 0}
+              disabled={scoreList.length === 0 || isPending}
               onClick={handleSaveResults}
-              loading={isPending}
             >
-              Save Results
+              {isPending ? "Saving..." : "Save Results"}
             </Button>
           </Stack>
         </Stack>
@@ -160,7 +180,7 @@ const ExamsScoreInput = ({ setTab, scores }) => {
         <Grid2 container spacing={2} sx={{ minHeight: "60svh" }}>
           {/* LEFT PANEL (INPUT FORM) */}
           <Grid2 size={{ xs: 12, md: 5 }}>
-            <Stack spacing={2}>
+            <Stack spacing={2} component="form" noValidate onSubmit={handleSubmit(onSubmit)}>
               <Typography
                 variant="h6"
                 color="primary.main"
@@ -185,6 +205,7 @@ const ExamsScoreInput = ({ setTab, scores }) => {
                       <TextField
                         {...params}
                         label="Subject"
+                        inputRef={subjectInput}
                         size="small"
                         error={!!errors.subject}
                         helperText={errors.subject?.message}
@@ -194,6 +215,10 @@ const ExamsScoreInput = ({ setTab, scores }) => {
                 )}
               />
 
+              <Typography variant="body2" color="text.secondary">
+                This term: class score out of {classScorePreference}, exams score out of {examsScorePreference}.
+              </Typography>
+
               {/* CLASS SCORE */}
               <Controller
                 name="classScore"
@@ -202,7 +227,7 @@ const ExamsScoreInput = ({ setTab, scores }) => {
                   <TextField
                     {...field}
                     type="number"
-                    label="Class Score"
+                    label={`Class Score (0-${classScorePreference})`}
                     size="small"
                     error={!!errors.classScore}
                     helperText={errors.classScore?.message}
@@ -218,7 +243,7 @@ const ExamsScoreInput = ({ setTab, scores }) => {
                   <TextField
                     {...field}
                     type="number"
-                    label="Exams Score"
+                    label={`Exams Score (0-${examsScorePreference})`}
                     size="small"
                     error={!!errors.examsScore}
                     helperText={errors.examsScore?.message}
@@ -226,10 +251,14 @@ const ExamsScoreInput = ({ setTab, scores }) => {
                 )}
               />
 
+              <Typography variant="body2" color="text.secondary" aria-live="polite">
+                Total: {totalOf(watchedClass, watchedExams)} / 100 (the server works out the final total)
+              </Typography>
+
               <Button
+                type="submit"
                 variant="contained"
                 disabled={!isValid || !isDirty}
-                onClick={handleSubmit(onSubmit)}
               >
                 Add Score
               </Button>
@@ -264,269 +293,3 @@ const ExamsScoreInput = ({ setTab, scores }) => {
 };
 
 export default ExamsScoreInput;
-
-// import React, { useContext, useState } from "react";
-// import {
-//   Stack,
-//   Button,
-//   TextField,
-//   Autocomplete,
-//   Alert,
-//   Grid2,
-//   Typography,
-//   Box,
-// } from "@mui/material";
-// import _ from "lodash";
-// import { Formik } from "formik";
-// import { useMutation, useQueryClient } from "@tanstack/react-query";
-// import { updateExams } from "@/api/ExaminationAPI";
-// import { examsScoreValidationSchema } from "@/config/validationSchema";
-// import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
-// import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
-// import { generateCustomGrade } from "@/config/generateCustomGrade";
-// import { useParams, useSearchParams } from "react-router-dom";
-// import { UserContext } from "@/context/providers/UserProvider";
-// import useLevelById from "@/components/hooks/useLevelById";
-// import ExamsScoreTable from "@/components/tables/ExamsScoreTable";
-
-// const ExamsScoreInput = ({ setTab, scores }) => {
-//   const { session } = useContext(UserContext);
-//   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
-//   const { levelId } = useParams();
-//   const queryClient = useQueryClient();
-//   const [searchParams] = useSearchParams();
-
-//   const [msgs, setMsgs] = useState({
-//     severity: "",
-//     text: "",
-//   });
-
-//   const [scoreList, setScoreList] = useState(scores || []);
-//   const { gradeSystem, subjects } = useLevelById(levelId);
-
-//   const scorePreference = session?.exams?.scorePreference?.split("/");
-//   const classScorePreference = !_.isUndefined(scorePreference)
-//     ? scorePreference[0]
-//     : 50;
-//   const examsScorePreference = !_.isUndefined(scorePreference)
-//     ? scorePreference[1]
-//     : 50;
-
-//   const initialValues = {
-//     subject: {
-//       _id: "",
-//       name: "",
-//     },
-//     classScore: 0,
-//     examsScore: 0,
-//   };
-
-//   const onSubmit = (values, option) => {
-//     const total = Number(values.classScore) + Number(values.examsScore);
-
-//     const summary = generateCustomGrade(total, gradeSystem?.ratings);
-
-//     const score = {
-//       _id: values?.subject?._id,
-//       subject: values?.subject?.name,
-//       classScore: values.classScore,
-//       examsScore: values.examsScore,
-//       ...summary,
-//     };
-
-//     const filteredScoreList = _.merge(_.keyBy([...scoreList, score], "_id"));
-//     setScoreList(_.values(filteredScoreList));
-
-//     option.resetForm();
-//   };
-
-//   const { mutateAsync, isPending } = useMutation({
-//     mutationFn: updateExams,
-//   });
-
-//   //Handle Save Results
-//   const handleSaveResults = () => {
-//     const data = {
-//       session: {
-//         levelId,
-//         studentId: searchParams.get("sid"),
-//         sessionId: session.sessionId,
-//         termId: session.termId,
-//       },
-//       scores: scoreList,
-//     };
-
-//     mutateAsync(data, {
-//       onSettled: () => {
-//         queryClient.invalidateQueries(["exams-by-id", searchParams.get("eid")]);
-//       },
-//       onSuccess: (data) => {
-//         schoolSessionDispatch(alertSuccess(data));
-//         setTab("1");
-//       },
-//       onError: (error) => {
-//         schoolSessionDispatch(alertError(error));
-//       },
-//     });
-//   };
-
-//   //CLOSE FORM
-//   const handleClose = () =>
-//     schoolSessionDispatch({
-//       type: "openAddExamsScore",
-//       payload: {
-//         open: false,
-//         data: {},
-//       },
-//     });
-
-//   return (
-//     <Formik
-//       initialValues={initialValues}
-//       validationSchema={examsScoreValidationSchema(
-//         classScorePreference,
-//         examsScorePreference
-//       )}
-//       onSubmit={onSubmit}
-//     >
-//       {({
-//         values,
-//         errors,
-//         isValid,
-//         dirty,
-//         handleChange,
-//         handleSubmit,
-//         setFieldValue,
-//       }) => {
-//         return (
-//           <>
-//             {msgs.text && (
-//               <Alert
-//                 sx={{
-//                   marginY: 1,
-//                 }}
-//                 severity={msgs.severity}
-//                 onClose={() =>
-//                   setMsgs({
-//                     text: "",
-//                   })
-//                 }
-//               >
-//                 {msgs.text}
-//               </Alert>
-//             )}
-//             <Box sx={{ bgcolor: "#fff", borderRadius: "12px", p: 2 }}>
-//               <Stack
-//                 spacing={2}
-//                 direction={{ xs: "column", md: "row" }}
-//                 justifyContent={{ xs: "flex-start", md: "flex-end" }}
-//                 pb={2}
-//               >
-//                 <Typography
-//                   variant="h6"
-//                   color="primary.main"
-//                   p={1}
-//                   sx={{ fontWeight: "bold", width: "100%" }}
-//                 >
-//                   Results Entry
-//                 </Typography>
-//                 <Stack direction="row">
-//                   <Button onClick={handleClose}>Cancel</Button>
-//                   <Button
-//                     variant="contained"
-//                     disabled={scoreList.length === 0}
-//                     onClick={handleSaveResults}
-//                     loading={isPending}
-//                   >
-//                     Save Results
-//                   </Button>
-//                 </Stack>
-//               </Stack>
-//               <Grid2 container spacing={2} sx={{ minHeight: "60svh" }}>
-//                 <Grid2 size={{ xs: 12, md: 5 }}>
-//                   <Stack spacing={2}>
-//                     <Typography
-//                       variant="h6"
-//                       color="primary.main"
-//                       bgcolor="lightgray"
-//                       p={1}
-//                       sx={{ fontWeight: "bold", width: "100%" }}
-//                     >
-//                       Add Subject Score
-//                     </Typography>
-
-//                     <Autocomplete
-//                       // freeSolo
-//                       options={subjects}
-//                       loadingText="Loading Subjects.Please Wait..."
-//                       getOptionLabel={(option) => option?.name || ""}
-//                       value={values.subject}
-//                       onChange={(e, value) => setFieldValue("subject", value)}
-//                       renderInput={(params) => (
-//                         <TextField
-//                           {...params}
-//                           label="Subject"
-//                           size="small"
-//                           error={Boolean(errors.subject)}
-//                           helperText={errors.subject}
-//                         />
-//                       )}
-//                     />
-//                     <TextField
-//                       type="number"
-//                       label="Class Score"
-//                       size="small"
-//                       value={values.classScore}
-//                       onChange={handleChange("classScore")}
-//                       error={Boolean(errors.classScore)}
-//                       helperText={errors.classScore}
-//                     />
-//                     <TextField
-//                       type="number"
-//                       label="Exams Score"
-//                       size="small"
-//                       value={values.examsScore}
-//                       onChange={handleChange("examsScore")}
-//                       error={Boolean(errors.examsScore)}
-//                       helperText={errors.examsScore}
-//                     />
-//                     <Button
-//                       variant="contained"
-//                       onClick={handleSubmit}
-//                       disabled={!isValid || !dirty}
-//                     >
-//                       Add Score
-//                     </Button>
-//                   </Stack>
-//                 </Grid2>
-//                 <Grid2 size={{ xs: 12, md: 7 }}>
-//                   <Typography
-//                     variant="h6"
-//                     color="primary.main"
-//                     bgcolor="lightgray"
-//                     p={1}
-//                     // mb={2}
-//                     sx={{ fontWeight: "bold", width: "100%" }}
-//                   >
-//                     Scores Preview
-//                   </Typography>
-
-//                   <Box
-//                     sx={{
-//                       maxWidth: { xs: 300, sm: "100%" },
-//                       overflowX: "auto",
-//                     }}
-//                   >
-//                     <ExamsScoreTable data={scoreList} setData={setScoreList} />
-//                   </Box>
-//                 </Grid2>
-//               </Grid2>
-//             </Box>
-//           </>
-//         );
-//       }}
-//     </Formik>
-//   );
-// };
-
-// export default ExamsScoreInput;

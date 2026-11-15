@@ -114,6 +114,7 @@ describe("exam scores and attendance correctness (Stage 9)", () => {
         { _id: maths, subject: "Maths", indexnumber: "nobody", classScore: 1, examsScore: 1 },
       ]);
       expect(res.status).toBe(200);
+      expect(res.body).toMatch(/1 row was skipped/);
       const saved = await reload(exam2._id);
       expect(saved.scores.find((s) => s.subject === "Maths").totalScore).toBe(70);
       expect(saved.scores.every((s) => s.subject)).toBe(true);

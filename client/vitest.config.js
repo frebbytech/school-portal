@@ -1,4 +1,5 @@
 import { defineConfig, mergeConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import viteConfig from "./vite.config.js";
 
 // Tests run in a simulated browser (jsdom). The real API is never contacted: requests are
@@ -6,6 +7,8 @@ import viteConfig from "./vite.config.js";
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    // An absolute path, so "@/..." imports resolve the same way under the test runner.
+    resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
     test: {
       environment: "jsdom",
       globals: true,

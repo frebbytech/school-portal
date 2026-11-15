@@ -32,6 +32,8 @@ import Back from "@/components/Back";
 import CustomTitle from "@/components/custom/CustomTitle";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import useLevelById from "@/components/hooks/useLevelById";
+import ImportProblems from "./ImportProblems";
+import { checkImportRows, parseScorePreference } from "./scoreRules";
 
 const LevelExamScoreInput = () => {
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
@@ -45,101 +47,66 @@ const LevelExamScoreInput = () => {
   const [isPending, setIsLoading] = useState(false);
   const [fieldError, setFieldError] = useState("");
   const [mainError, setMainError] = useState("");
+  const [problems, setProblems] = useState([]);
   const [subject, setSubject] = useState({ _id: "", name: "" });
 
   const { levelLoading, levelName, subjects, gradeSystem, students } =
     useLevelById(levelId);
 
-  const scorePreference = session?.exams?.scorePreference?.split("/");
-  const classScorePreference = !_.isUndefined(scorePreference)
-    ? scorePreference[0]
-    : 50;
-  const examsScorePreference = !_.isUndefined(scorePreference)
-    ? scorePreference[1]
-    : 50;
+  const { classMax, examsMax } = parseScorePreference(session?.exams?.scorePreference);
 
   //LOAD Results from file excel,csv
   async function handleLoadFile(e) {
     setMainError("");
     setData([]);
     setFieldError("");
+    setProblems([]);
     const file = e.target.files[0];
-
-    if (subject?._id === "") {
+    if (!subject?._id) {
       setFieldError("Please select a Subject!");
-
       return;
     }
-    setMainError(false);
+    if (!file) return;
+
     setIsLoading(true);
-
-    if (file) {
-      try {
-        //Get existing students ids
-        const studentsIndexs = _.map(students, "indexnumber");
-     
-        const results = await readXLSX(file, "camel-case");
-        
-        const filteredResults = results.filter(
-          (result) =>
-            studentsIndexs.includes(result["index number"]) ||
-            studentsIndexs.includes(result["indexnumber"])
-        );
-
-        if (filteredResults.length !== 0) {
-          const modifiedResults = results.map((item) => {
-            const classScore = Number(
-              item["class score"] || item["classscore"] || 0
-            );
-            const examsScore = Number(
-              item["exams score"] || item["examsscore"] || 0
-            );
-
-            if (
-              classScore > classScorePreference ||
-              examsScore > examsScorePreference
-            ) {
-              setMainError(
-                `It seems there is some inconsistencies in your results.
-                Class score show be from 0 - ${classScorePreference}*.
-                 Exams score show be from 0 - ${examsScorePreference}*.`
-              );
-              setIsLoading(false);
-              setData([]);
-              throw `It seems there is some inconsistencies in your results.
-              Class score show be from 0 - ${classScorePreference}*.
-               Exams score show be from 0 - ${examsScorePreference}*.`;
-            }
-
-            return {
-              indexnumber: _.toString(
-                item["index number"] || item["indexnumber"]
-              ),
-              student: item["student"],
-              _id: subject?._id,
-              subject: subject?.name,
-              classScore,
-              examsScore,
-              ...generateCustomGrade(
-                Number(+classScore + +examsScore),
-                gradeSystem?.ratings
-              ),
-            };
-          });
-
-          setData(modifiedResults);
-        } else {
-          setMainError(`No student in ${levelName} was found!`);
-        }
-      } catch (error) {
-        setMainError(error);
-      } finally {
-        setIsLoading(false);
+    try {
+      const results = await readXLSX(file);
+      if (results.length === 0) {
+        setMainError("The file has no rows to import.");
+        return;
       }
+      // Every row is checked before anything is sent; rows that cannot be imported are
+      // listed with the reason instead of failing the whole file with one message.
+      const { valid, problems: found } = checkImportRows(results, {
+        studentIndexNumbers: _.map(students, "indexnumber"),
+        classMax,
+        examsMax,
+      });
+      setProblems(found);
+      if (valid.length === 0) {
+        setMainError(`No row can be imported into ${levelName}. See the list below.`);
+        return;
+      }
+      setData(
+        valid.map((row) => ({
+          ...row,
+          _id: subject._id,
+          subject: subject.name,
+          ...generateCustomGrade(row.classScore + row.examsScore, gradeSystem?.ratings),
+        }))
+      );
+    } catch (error) {
+      setMainError(
+        typeof error === "string"
+          ? error
+          : "The file could not be read. Use an Excel or CSV file with the columns Index Number, Student, Class Score and Exams Score."
+      );
+    } finally {
+      setIsLoading(false);
     }
   }
 
-  const { mutateAsync } = useMutation({
+  const { mutate } = useMutation({
     mutationFn: postBulkExams,
   });
 
@@ -148,7 +115,9 @@ const LevelExamScoreInput = () => {
 
     Swal.fire({
       title: "Importing results",
-      text: `Do you want to import results in ${subject?.name}?`,
+      text:
+        `Import ${data.length} result${data.length === 1 ? "" : "s"} in ${subject?.name}?` +
+        (problems.length ? ` ${problems.length} row${problems.length === 1 ? "" : "s"} with problems will be left out.` : ""),
       showCancelButton: true,
       backdrop: false,
     }).then(({ isConfirmed }) => {
@@ -161,7 +130,7 @@ const LevelExamScoreInput = () => {
           results: data,
         };
 
-        mutateAsync(students, {
+        mutate(students, {
           onSettled: () => {
             queryClient.invalidateQueries(["all-results"]);
             queryClient.invalidateQueries([
@@ -213,15 +182,15 @@ const LevelExamScoreInput = () => {
       field: "subject",
     },
     {
-      title: "Class Score(50%)",
+      title: `Class Score (0-${classMax})`,
       field: "classScore",
     },
     {
-      title: "Exams Score(50%)",
+      title: `Exams Score (0-${examsMax})`,
       field: "examsScore",
     },
     {
-      title: "Total Score(100%)",
+      title: "Total Score (0-100)",
       field: "totalScore",
     },
     {
@@ -333,6 +302,7 @@ const LevelExamScoreInput = () => {
         {mainError && (
           <FormHelperText sx={{ color: "red" }}>{mainError}</FormHelperText>
         )}
+        <ImportProblems problems={problems} />
       </Stack>
 
       <Box>

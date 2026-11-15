@@ -1010,7 +1010,15 @@ router.post(
     );
 
     logger.info("bulk scores saved", { level, students: perExam.size, skipped, by: String(req.user.id) });
-    return res.status(200).json("Results uploaded!");
+    // Still a plain string, as before; the skipped rows are now mentioned so the person
+    // importing knows some rows were not saved.
+    return res
+      .status(200)
+      .json(
+        skipped > 0
+          ? `Results uploaded! ${skipped} row${skipped === 1 ? " was" : "s were"} skipped because the student is not in this class or has no exam record.`
+          : "Results uploaded!"
+      );
   })
 );
 
