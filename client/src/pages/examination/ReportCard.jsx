@@ -3,13 +3,14 @@ import React, { use, useRef, useState } from "react";
 import { Stack, Button } from "@mui/material";
 
 import AddRemarks from "@/components/modals/AddRemarks";
-import _ from "lodash";
 import { PrintRounded } from "@mui/icons-material";
 import { UserContext } from "@/context/providers/UserProvider";
 import { useReactToPrint } from "react-to-print";
 import TerminalReport2 from "@/components/reportcards/report-card-2";
 import TerminalReport1 from "@/components/reportcards/report-card-1";
 import useLevelById from "@/components/hooks/useLevelById";
+import { parseScorePreference } from "./scoreRules";
+import { REPORT_CARD_PAGE_STYLE } from "./reportCardPrint";
 
 function ReportCard({ student, style }) {
   const componentRef = useRef();
@@ -18,17 +19,14 @@ function ReportCard({ student, style }) {
 
   const [openRemarks, setOpenRemarks] = useState(false);
 
-  const scorePreference = session?.exams?.scorePreference?.split("/");
-  const classScorePreference = !_.isUndefined(scorePreference)
-    ? scorePreference[0]
-    : 50;
-  const examsScorePreference = !_.isUndefined(scorePreference)
-    ? scorePreference[1]
-    : 50;
+  const { classMax: classScorePreference, examsMax: examsScorePreference } = parseScorePreference(
+    session?.exams?.scorePreference
+  );
 
   const reactToPrintFn = useReactToPrint({
     documentTitle: `${student?.fullName}-${student?.level}`,
     contentRef: componentRef,
+    pageStyle: REPORT_CARD_PAGE_STYLE,
   });
 
   return (
@@ -40,9 +38,8 @@ function ReportCard({ student, style }) {
         sx={{
           ...style,
           width: "8.3in",
-          height: "11.7in",
+          minHeight: "11.7in",
           margin: "0 auto",
-          overflow: "hidden",
           padding: "16px",
           border: "1px solid lightgray",
           position: "relative",
@@ -89,14 +86,14 @@ function ReportCard({ student, style }) {
             student={student}
             classScore={classScorePreference}
             examsScore={examsScorePreference}
-            ratings={gradeSystem.ratings}
+            ratings={gradeSystem?.ratings}
           />
         ) : (
           <TerminalReport1
             student={student}
             classScore={classScorePreference}
             examsScore={examsScorePreference}
-            ratings={gradeSystem.ratings}
+            ratings={gradeSystem?.ratings}
           />
         )}
       </Stack>

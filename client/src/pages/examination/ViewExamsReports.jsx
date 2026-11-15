@@ -38,6 +38,7 @@ import ViewListIcon from "@mui/icons-material/ViewList";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import CustomTitle from "@/components/custom/CustomTitle";
 import ReportCard from "./ReportCard";
+import { REPORT_CARD_PAGE_STYLE } from "./reportCardPrint";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import { StudentContext } from "@/context/providers/StudentProvider";
 import PublishResultOption from "@/components/modals/PublishResultOption";
@@ -152,6 +153,7 @@ const ViewExamsReports = () => {
   const reactToPrintFn = useReactToPrint({
     documentTitle: "Student Report",
     contentRef: componentRef,
+    pageStyle: REPORT_CARD_PAGE_STYLE,
   });
 
   // ✅ Optimized search with debounce
