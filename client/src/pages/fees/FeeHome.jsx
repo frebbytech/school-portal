@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import MonthlyFeePaymentChart from "@/components/charts/MonthlyFeePaymentChart";
 import WeeklyFeePaymentChart from "@/components/charts/WeeklyFeePaymentChart";
 import { Refresh } from "@mui/icons-material";
+import QueryError from "@/components/QueryError";
 const FeeHome = () => {
   const {
     session: { sessionId, termId, from, to },
@@ -53,11 +54,14 @@ const FeeHome = () => {
         img={teacher_icon}
         color="primary.main"
         right={
-          <IconButton onClick={feeSummary.refetch}>
+          <IconButton aria-label="Refresh" onClick={() => feeSummary.refetch()}>
             <Refresh sx={{ width: 36, height: 36 }} />
           </IconButton>
         }
       />
+      {feeSummary.isError && (
+        <QueryError what="the fees summary (the figures below are not real)" error={feeSummary.error} onRetry={feeSummary.refetch} />
+      )}
 
       <Box
         sx={{

@@ -2,6 +2,7 @@ import { Dialog, DialogContent, List, Stack, Typography } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import React, { useContext } from "react";
 import { getAllCurrentFeesByLevel } from "@/api/currentFeeAPI";
+import QueryError from "@/components/QueryError";
 import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
 import { currencyFormatter } from "@/config/currencyFormatter";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
@@ -37,8 +38,9 @@ function ViewLevelFeeInfo() {
     >
       <CustomDialogTitle title="School Fees Details" onClose={handleClose} />
       <DialogContent>
-        {levelFeeSummary?.isPending && <Typography>Loading.....</Typography>}
-        {levelFeeSummary?.data !== undefined && (
+        {levelFeeSummary?.isPending && levelFeeSummary.fetchStatus !== "idle" && <Typography>Loading.....</Typography>}
+        {levelFeeSummary?.isError && <QueryError what="this class's fees" error={levelFeeSummary.error} onRetry={levelFeeSummary.refetch} />}
+        {levelFeeSummary?.isSuccess && (
           <Stack rowGap={2}>
             <ViewLevelFeeInfoItem
               title="Level"

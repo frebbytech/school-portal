@@ -3,6 +3,7 @@ import { Avatar, Box, Button } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { getStudentFeeHistory } from "@/api/currentFeeAPI";
+import QueryError from "@/components/QueryError";
 import CustomizedMaterialTable from "@/components/tables/CustomizedMaterialTable";
 import { useReactToPrint } from "react-to-print";
 import { STUDENT_FEES_HISTORY } from "@/mockup/columns/sessionColumns";
@@ -41,6 +42,10 @@ const StudentFeesHistory = () => {
     documentTitle: student?.fullName,
     contentRef: componentRef,
   });
+
+  if (studentFee.isError) {
+    return <QueryError what="this student's payments" error={studentFee.error} onRetry={studentFee.refetch} />;
+  }
 
   if (levelLoading || studentFee.isPending) {
     return <DataSkeleton />;

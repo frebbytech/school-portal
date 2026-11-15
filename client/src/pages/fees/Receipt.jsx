@@ -17,7 +17,8 @@ import {
 import { UserContext } from "@/context/providers/UserProvider";
 import dayjs from "@/lib/dates";
 import { currencyFormatter } from "@/config/currencyFormatter";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { receiptFigures } from "./paymentRules";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import { PrintRounded } from "@mui/icons-material";
 
@@ -26,6 +27,9 @@ export default function Receipt() {
   const { school_info } = use(UserContext);
   const navigate = useNavigate();
   const { state } = useLocation();
+
+  const fee = state?.fee;
+  const figures = receiptFigures(fee);
 
   const reactToPrintFn = useReactToPrint({
     documentTitle: "Fee Receipt",
@@ -36,6 +40,24 @@ export default function Receipt() {
       });
     },
   });
+
+  // The receipt comes from the payment that was just made. After a reload (or a bookmark)
+  // there is nothing to show, and an empty receipt must not look like a real one.
+  if (!fee?.id) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 6, textAlign: "center" }}>
+        <Typography variant="h6" gutterBottom>
+          No receipt to show
+        </Typography>
+        <Typography color="text.secondary" paragraph>
+          A receipt opens right after a payment is recorded. Past payments are listed under Payment History.
+        </Typography>
+        <Button variant="contained" onClick={() => navigate("/fee/history")}>
+          Payment History
+        </Button>
+      </Container>
+    );
+  }
 
   return (
     <Container
@@ -109,7 +131,7 @@ export default function Receipt() {
               Invoice Date:
             </Typography>
             <Typography fontSize={12}>
-              {dayjs(state?.fee?.createdAt).format("LLL")}
+              {dayjs(fee?.createdAt).isValid() ? dayjs(fee.createdAt).format("LLL") : ""}
             </Typography>
           </Box>
         </Box>
@@ -156,9 +178,9 @@ export default function Receipt() {
               <TableCell>{`01`}</TableCell>
               <TableCell>Fees</TableCell>
               <TableCell align="right">
-                {currencyFormatter(state?.fee?.paid || 0)}
+                {currencyFormatter(figures.paidNow)}
               </TableCell>
-              <TableCell align="right">{currencyFormatter(0)}</TableCell>
+              <TableCell align="right">{currencyFormatter(figures.outstanding)}</TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -176,50 +198,32 @@ export default function Receipt() {
               <Box display="flex" gap={2} justifyContent="flex-end">
                 <Typography fontSize={12}>Total Fees :</Typography>
                 <Typography fontSize={12} align="right">
-                  {currencyFormatter(state?.fee?.fee || 0)}
+                  {currencyFormatter(figures.termFee)}
                 </Typography>
               </Box>
               <Box display="flex" gap={2} justifyContent="flex-end">
                 <Typography fontSize={12}>Arreas :</Typography>
                 <Typography fontSize={12} align="right">
-                  {currencyFormatter(state?.fee?.arreas || 0)}
+                  {currencyFormatter(figures.arrears)}
                 </Typography>
               </Box>
               <Divider sx={{ mb: 2 }} />
               <Box display="flex" gap={2} justifyContent="flex-end">
-                <Typography fontSize={12}>Amount Paid :</Typography>
+                <Typography fontSize={12}>Paid This Term :</Typography>
                 <Typography fontSize={12} align="right">
-                  {currencyFormatter(
-                    state?.fee?.feePaid + state?.fee?.paid || 0
-                  )}
+                  {currencyFormatter(figures.totalPaid)}
                 </Typography>
               </Box>
               <Divider sx={{ mb: 2 }} />
               <Box display="flex" gap={2} justifyContent="flex-end">
                 <Typography fontSize={12}>Outstanding :</Typography>
                 <Typography fontSize={12} align="right">
-                  {currencyFormatter(state?.fee?.outstanding || 0)}
+                  {currencyFormatter(figures.outstanding)}
                 </Typography>
               </Box>
             </Box>
           </Grid>
         </Grid>
-
-        {/* Terms */}
-        <Box mt={4}>
-          <Typography fontSize={12} fontWeight="bold" color="primary">
-            Terms & Conditions:
-          </Typography>
-          <Typography
-            fontSize={12}
-            variant="body2"
-            fontStyle="italic"
-            color="gray"
-          >
-            Lorem Ipsum is simply dummy text of the printing and typesetting
-            industry. Lorem Ipsum has been the...
-          </Typography>
-        </Box>
 
         <div
           style={{
@@ -241,20 +245,9 @@ export default function Receipt() {
         </div>
       </Paper>
 
-      <Link
-        style={{
-          color: "#fff",
-          display: "block",
-          paddingBlock: "10px",
-          paddingInline: "20px",
-          backgroundColor: "var(--primary)",
-          borderRadius: "6px",
-          boxShadow: "0px 1px 2px rgba(0,0,0,0.1)",
-        }}
-        to={-1}
-      >
+      <Button variant="contained" onClick={() => navigate(-1)}>
         Go Back
-      </Link>
+      </Button>
     </Container>
   );
 }

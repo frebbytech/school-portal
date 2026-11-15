@@ -17,7 +17,10 @@ import Swal from "sweetalert2";
 import _ from "lodash";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentFeeForStudent, postCurrentFee } from "@/api/currentFeeAPI";
-import { currencyFormatter } from "@/config/currencyFormatter";
+import { currencyOrDash } from "@/config/currencyFormatter";
+import QueryError from "@/components/QueryError";
+import { thrownMessage } from "@/lib/formErrors";
+import { checkAmount, exceedsOutstanding, outstandingAfter, paymentBlocker } from "./paymentRules";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { UserContext } from "@/context/providers/UserProvider";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
@@ -48,9 +51,11 @@ const schema = yup.object().shape({
   }),
   paymentMethod: yup.string().required("Required*"),
   amount: yup
-    .number()
-    .min(0, "Amount cannot be negative")
-    .required("Amount is required"),
+    .string()
+    .test("amount", "Enter a valid amount", function (value) {
+      const result = checkAmount(value);
+      return result.ok || this.createError({ message: result.message });
+    }),
   payee: yup.object().shape({
     name: yup.string().required("Full Name is required"),
     phonenumber: yup
@@ -74,6 +79,7 @@ const FeeMakePayment = () => {
     control,
     watch,
     setValue,
+    trigger,
     handleSubmit,
     formState: { errors },
     setError,
@@ -90,14 +96,13 @@ const FeeMakePayment = () => {
         fullName: "",
         profile: "",
       },
-      amount: 0,
+      amount: "",
       paymentMethod: "Cash",
     },
   });
 
   const currentLevel = watch("level");
   const studentInfo = watch("student");
-  const watchAmount = watch("amount");
 
   ///Get Student fees info
   const studentFees = useQuery({
@@ -111,16 +116,15 @@ const FeeMakePayment = () => {
       }),
 
     enabled: !!studentInfo?._id && !!searchParams.get("level_id"),
-    initialData: {
-      current: {
-        fees: 0,
-        paid: 0,
-        remaining: 0,
-      },
-      previous: { fees: 0, paid: 0, remaining: 0 },
-      totalFees: 0,
-      totalOutstanding: 0,
-    },
+  });
+  // Undefined until the server has answered; never a stand-in set of zeros (zeros would
+  // look like "fully paid" if the request failed).
+  const feeInfo = studentFees.data;
+  const blocker = paymentBlocker({
+    studentId: studentInfo?._id,
+    fees: feeInfo,
+    loading: studentFees.isFetching,
+    failed: studentFees.isError,
   });
 
   const { students, levelLoading } = useLevelById(currentLevel?.levelId);
@@ -132,16 +136,10 @@ const FeeMakePayment = () => {
     return selectedFee?.fees || 0;
   }, [searchParams.get("level_id")]);
 
-  const handleOpenPayee = () => {
-    if (watchAmount <= 0) {
-      setError("amount", {
-        type: "custom",
-        message: "Amount should be more than zero",
-      });
-      return;
-    }
-
-    setShowPayeeDetails(true);
+  const handleOpenPayee = async () => {
+    if (blocker) return;
+    // Check the amount now, so the payer's details are only asked for a valid payment.
+    if (await trigger("amount")) setShowPayeeDetails(true);
   };
 
   //Add fees to database
@@ -150,55 +148,57 @@ const FeeMakePayment = () => {
   });
 
   function onSubmit(values) {
+    if (isPending || blocker) return;
+    const { amount } = checkAmount(values.amount);
+    const owed = Number(feeInfo?.totalOutstanding);
     const payment = {
-      _id: studentFees?.data?.current?._id,
+      _id: feeInfo?.current?._id,
       payment: {
-        paid: values.amount,
-        outstanding:
-          Number(studentFees?.data?.totalOutstanding) - Number(values.amount),
+        paid: amount,
+        outstanding: outstandingAfter(owed, amount),
         paymentMethod: values?.paymentMethod,
         payer: values.payee,
       },
     };
+    const over = exceedsOutstanding(amount, owed);
     Swal.fire({
-      title: "Making Payment",
-      text: "Do you want to proceed with the payment?",
+      title: "Record this payment?",
+      text:
+        `${currencyOrDash(amount)} from ${values.payee?.name || "the payer"} for ${studentInfo?.fullName}.` +
+        (over ? ` This is MORE than the ${currencyOrDash(owed)} still owed.` : ""),
+      icon: over ? "warning" : undefined,
       showCancelButton: true,
+      confirmButtonText: "Record payment",
       backdrop: false,
     }).then(({ isConfirmed }) => {
-      if (isConfirmed) {
-        mutateAsync(payment, {
-          onSettled: () => {
-            setValue("amount", "");
-            queryClient.invalidateQueries([
-              "student-fees",
-              studentInfo?._id,
-              searchParams.get("level_id"),
-            ]);
-          },
-          onSuccess: async (payment) => {
-            schoolSessionDispatch(alertSuccess("Payment Done!"));
-
-            const fee = {
-              ...payment,
-              fee: studentFees?.data?.current?.fees,
-              arreas: studentFees?.data?.previous?.remaining,
-              feePaid: studentFees?.data?.current?.paid,
-            };
-
-            navigate("/fee/receipt", {
-              state: {
-                fee,
+      if (!isConfirmed) return;
+      mutateAsync(payment, {
+        onSettled: () => {
+          queryClient.invalidateQueries({ queryKey: ["student-fees"] });
+          queryClient.invalidateQueries({ queryKey: ["current-fees-summary"] });
+          queryClient.invalidateQueries({ queryKey: ["fees-for-day"] });
+        },
+        onSuccess: (recorded) => {
+          schoolSessionDispatch(alertSuccess("Payment recorded"));
+          navigate("/fee/receipt", {
+            state: {
+              fee: {
+                ...recorded,
+                fee: feeInfo?.current?.fees,
+                arreas: feeInfo?.previous?.remaining,
+                feePaid: feeInfo?.current?.paid,
               },
-            });
-            setShowPayeeDetails(false);
-            reset();
-          },
-          onError: () => {
-            schoolSessionDispatch(alertError("An unknown error has occurred!"));
-          },
-        });
-      }
+            },
+          });
+          setShowPayeeDetails(false);
+          reset();
+        },
+        // The payment was NOT recorded: say why, and keep the form so nothing is retyped.
+        onError: (error) => {
+          setShowPayeeDetails(false);
+          schoolSessionDispatch(alertError(thrownMessage(error, "The payment was not recorded. Please try again.")));
+        },
+      });
     });
   }
 
@@ -275,7 +275,7 @@ const FeeMakePayment = () => {
               <TextField
                 {...params}
                 label="Select Level"
-                error={errors?.level}
+                error={Boolean(errors?.level)}
                 helperText={errors?.level?.levelId?.message}
               />
             )}
@@ -309,13 +309,16 @@ const FeeMakePayment = () => {
             <TextField
               {...params}
               placeholder="Search for student"
-              error={errors?.student}
+              error={Boolean(errors?.student)}
               helperText={errors?.student?._id?.message}
             />
           )}
         />
       </Stack>
 
+      {studentFees.isError && (
+        <QueryError what="this student's fees" error={studentFees.error} onRetry={studentFees.refetch} />
+      )}
       <Grid container spacing={4} p={2} bgcolor="#fff" borderRadius="12px">
         <Grid
           size={{
@@ -375,8 +378,8 @@ const FeeMakePayment = () => {
               <Input
                 control={control}
                 name="amount"
-                type="number"
-                inputMode="numeric"
+                type="text"
+                inputMode="decimal"
                 label="Amount to be paid"
                 size="small"
                 placeholder="Enter Amount here"
@@ -384,23 +387,20 @@ const FeeMakePayment = () => {
                   startAdornment: (
                     <InputAdornment position="start">GHS</InputAdornment>
                   ),
-                  endAdornment: (
-                    <InputAdornment position="end">p</InputAdornment>
-                  ),
                 }}
               />
 
+              {blocker && (
+                <Typography variant="caption" color="text.secondary">
+                  {blocker}
+                </Typography>
+              )}
               <Button
-                disabled={
-                  _.isEmpty(studentInfo?._id) ||
-                  studentFees?.data?.totalOutstanding === 0
-                }
+                disabled={Boolean(blocker) || isPending}
                 size="large"
                 variant="contained"
                 startIcon={<MonetizationOnRounded />}
-                loading={isPending}
                 onClick={handleOpenPayee}
-                // onClick={handleSubmit(onSubmit)}
               >
                 Proceed
               </Button>
@@ -419,7 +419,7 @@ const FeeMakePayment = () => {
             <Typography variant="h6">Fees Details</Typography>
           </div>
           <Divider />
-          {studentFees.isPending ? (
+          {studentFees.isFetching ? (
             <FeesDetailsSkeleton />
           ) : (
             <Paper elevation={1} sx={{ marginTop: 2 }}>
@@ -453,8 +453,8 @@ const FeeMakePayment = () => {
                 >
                   <Typography variant="body2">Fees For Term</Typography>
                   <Typography variant="body2">
-                    {currencyFormatter(
-                      studentFees?.data?.current?.fees || currentFees
+                    {currencyOrDash(
+                      studentFees?.data?.current?.fees ?? (studentInfo?._id ? undefined : currentFees)
                     )}
                   </Typography>
                 </Stack>
@@ -465,7 +465,7 @@ const FeeMakePayment = () => {
                 >
                   <Typography variant="body2">Arreas </Typography>
                   <Typography variant="body2">
-                    {currencyFormatter(studentFees?.data?.previous?.remaining)}
+                    {currencyOrDash(studentFees?.data?.previous?.remaining)}
                   </Typography>
                 </Stack>
                 <Divider flexItem />
@@ -476,7 +476,7 @@ const FeeMakePayment = () => {
                 >
                   <Typography fontWeight="bold">Total </Typography>
                   <Typography variant="body2">
-                    {currencyFormatter(studentFees?.data?.totalFees)}
+                    {currencyOrDash(studentFees?.data?.totalFees)}
                   </Typography>
                 </Stack>
                 <Stack
@@ -486,7 +486,7 @@ const FeeMakePayment = () => {
                 >
                   <Typography fontWeight="bold">Fees Paid </Typography>
                   <Typography variant="body2">
-                    {currencyFormatter(studentFees?.data?.current?.paid)}
+                    {currencyOrDash(studentFees?.data?.current?.paid)}
                   </Typography>
                 </Stack>
                 <Divider flexItem />
@@ -497,7 +497,7 @@ const FeeMakePayment = () => {
                 >
                   <Typography fontWeight="bold">Outstanding Fees </Typography>
                   <Typography variant="body2">
-                    {currencyFormatter(studentFees?.data?.totalOutstanding)}
+                    {currencyOrDash(studentFees?.data?.totalOutstanding)}
                   </Typography>
                 </Stack>
               </Stack>

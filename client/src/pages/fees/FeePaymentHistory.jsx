@@ -11,6 +11,7 @@ import { currencyFormatter } from "@/config/currencyFormatter";
 import { UserContext } from "@/context/providers/UserProvider";
 import fee_icon from "@/assets/images/header/fee_ico.svg";
 import CustomTitle from "@/components/custom/CustomTitle";
+import QueryError from "@/components/QueryError";
 
 function FeePaymentHistory() {
   const { session } = useContext(UserContext);
@@ -24,13 +25,13 @@ function FeePaymentHistory() {
         term: session?.termId,
         date: date.toDate(),
       }),
-    initialData: [],
     enabled: !!session?.sessionId && !!session?.termId && !!date,
   });
 
   const totalAmount = useMemo(() => {
-    if (fees?.data?.length === 0) return 0;
-    return _.sumBy(fees?.data, ({ payment }) => Number(payment?.paid));
+    if (!fees?.data?.length) return 0;
+    // Sum in pesewas so the total never shows rounding noise.
+    return _.sumBy(fees.data, ({ payment }) => Math.round(Number(payment?.paid) * 100) || 0) / 100;
   }, [fees?.data]);
 
   return (
@@ -56,7 +57,7 @@ function FeePaymentHistory() {
           <CustomDatePicker
             label="Date Of Payment"
             date={date}
-            setDate={setDate}
+            setDate={(d) => d && dayjs(d).isValid() && setDate(dayjs(d))}
             style={{
               width: 300,
             }}
@@ -70,6 +71,7 @@ function FeePaymentHistory() {
           </Stack>
         </Box>
 
+        {fees.isError && <QueryError what="these payments" error={fees.error} onRetry={fees.refetch} />}
         <CustomizedMaterialTable
           isPending={fees.isPending || fees.isLoading}
           icon={fee_icon}
@@ -77,7 +79,7 @@ function FeePaymentHistory() {
           addButtonImg={fee_icon}
           addButtonMessage="Payment not available"
           search
-          handleRefresh={fees.refetch}
+          handleRefresh={() => fees.refetch()}
           columns={[
             {
               title: "Paid On",
@@ -107,7 +109,7 @@ function FeePaymentHistory() {
               field: "payment.issuerName",
             },
           ]}
-          data={fees?.data}
+          data={fees?.data || []}
           actions={[]}
         />
       </>

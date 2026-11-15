@@ -76,7 +76,7 @@ const PayeeDetails = ({
             variant="contained"
             color="primary"
             onClick={handleMakePayment}
-            loading={isPending}
+            disabled={isPending}
           >
             {isPending ? "Please Wait" : "Make Payment"}
           </Button>

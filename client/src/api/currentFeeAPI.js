@@ -1,4 +1,7 @@
 import api from './customAxios';
+import { normalizeApiError } from './apiError';
+
+// Failures are thrown, never returned: a refused payment must reach onError, not onSuccess.
 
 //Get all Students
 export const getAllCurrentFees = async () => {
@@ -10,7 +13,7 @@ export const getAllCurrentFees = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -27,7 +30,7 @@ export const getAllCurrentFeesPaymentHistoryByDate = async (data) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -42,7 +45,7 @@ export const getAllCurrentFeesSummary = async (sessionInfo) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -57,7 +60,7 @@ export const getAllCurrentFeesByLevel = async (sessionInfo) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -74,7 +77,7 @@ export const getCurrentFee = async (session, level) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -88,7 +91,7 @@ export const getCurrentFeeForStudent = async (info) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -103,7 +106,7 @@ export const getStudentFeeHistory = async (studentId) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -117,7 +120,7 @@ export const postCurrentFee = async (newCurrentFee) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -131,7 +134,7 @@ export const putCurrentFee = async (updatedCurrentFee) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -144,6 +147,6 @@ export const deleteCurrentFee = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
