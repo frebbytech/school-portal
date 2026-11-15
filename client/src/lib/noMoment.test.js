@@ -12,7 +12,9 @@ const walk = (dir) =>
 
 describe("dates", () => {
   it("no screen imports moment; everything goes through lib/dates", () => {
-    const bad = walk(root).filter((f) =>
+    const bad = walk(root)
+      .filter((f) => !/noMoment\.test\.js$/.test(f)) // this file names the thing it forbids
+      .filter((f) =>
       /from\s+['"]moment|require\(['"]moment|AdapterMoment/.test(readFileSync(f, "utf8"))
     );
     expect(bad).toEqual([]);
