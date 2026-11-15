@@ -18,7 +18,7 @@ import { postTeacher } from "@/api/teacherAPI";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import CustomDatePicker from "@/components/inputs/CustomDatePicker";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { TOWNS } from "@/mockup/data/towns";
 import { NATIONALITY } from "@/mockup/data/nationality";
 import CustomImageChooser from "@/components/inputs/CustomImageChooser";
@@ -31,7 +31,7 @@ const TeacherAdd = ({ setTab }) => {
 
   //states
   const [profileImg, setProfieImg] = useState(null);
-  const [dob, setDob] = useState(moment());
+  const [dob, setDob] = useState(dayjs());
 
   const [initValues] = useState(teacherInitialValues);
 
@@ -40,7 +40,7 @@ const TeacherAdd = ({ setTab }) => {
     mutationFn: postTeacher,
   });
   const onSubmit = (values, options) => {
-    values.dateofbirth = moment(dob).format("L");
+    values.dateofbirth = dayjs(dob).format("L");
     mutateAsync(values, {
       onSuccess: (data) => {
         queryClient.invalidateQueries(["teachers"]);

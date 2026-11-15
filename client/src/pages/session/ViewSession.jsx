@@ -1,5 +1,5 @@
 import React from "react";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import {
   Stack,
   Typography,
@@ -253,7 +253,7 @@ const PreviewField = ({ label, value }) => {
       label={label}
       value={
         typeof value === "object"
-          ? moment(value)?.format("Do MMMM YYYY")
+          ? dayjs(value)?.format("Do MMMM YYYY")
           : value
       }
       InputProps={{ readOnly: true }}

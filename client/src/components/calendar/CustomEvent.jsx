@@ -8,7 +8,7 @@ import { Box, Tooltip } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { getAllEvents } from "../../api/eventAPI";
 import { useQuery } from "@tanstack/react-query";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { useMediaQuery, useTheme } from "@mui/material";
 import { Typography } from "@mui/material";
 import { use } from "react";
@@ -69,16 +69,16 @@ function CustomEvent() {
     {
       _id: "1",
       title: `Start of ${session?.term} (${session?.academicYear})`,
-      date: moment(new Date(session?.from)).format("YYYY-MM-DD"),
+      date: dayjs(new Date(session?.from)).format("YYYY-MM-DD"),
       color: theme?.palette?.error?.main,
     },
     {
       _id: "2",
       title: `MidTerm Examination Week`,
-      start: moment(new Date(session?.exams?.midTermExams?.from)).format(
+      start: dayjs(new Date(session?.exams?.midTermExams?.from)).format(
         "YYYY-MM-DD"
       ),
-      end: moment(new Date(session?.exams?.midTermExams?.to)).format(
+      end: dayjs(new Date(session?.exams?.midTermExams?.to)).format(
         "YYYY-MM-DD"
       ),
       color: theme?.palette?.info?.main,
@@ -86,10 +86,10 @@ function CustomEvent() {
     {
       _id: "3",
       title: `Revision Week`,
-      start: moment(new Date(session?.exams?.revisionWeek?.from)).format(
+      start: dayjs(new Date(session?.exams?.revisionWeek?.from)).format(
         "YYYY-MM-DD"
       ),
-      end: moment(new Date(session?.exams?.revisionWeek?.to)).format(
+      end: dayjs(new Date(session?.exams?.revisionWeek?.to)).format(
         "YYYY-MM-DD"
       ),
       color: theme?.palette?.warning?.main,
@@ -97,10 +97,10 @@ function CustomEvent() {
     {
       _id: "4",
       title: `Examination Week`,
-      start: moment(new Date(session?.exams?.finalExams?.from)).format(
+      start: dayjs(new Date(session?.exams?.finalExams?.from)).format(
         "YYYY-MM-DD"
       ),
-      end: moment(new Date(session?.exams?.finalExams?.to)).format(
+      end: dayjs(new Date(session?.exams?.finalExams?.to)).format(
         "YYYY-MM-DD"
       ),
       color: "teal",
@@ -108,13 +108,13 @@ function CustomEvent() {
     {
       _id: "5",
       title: `End of ${session?.term} (${session?.academicYear})`,
-      date: moment(new Date(session?.to)).format("YYYY-MM-DD"),
+      date: dayjs(new Date(session?.to)).format("YYYY-MM-DD"),
       color: theme?.palette?.success?.main,
     },
     {
       _id: "6",
       title: `Vacation Date for ${session?.term}`,
-      date: moment(new Date(session?.vacationDate)).format("YYYY-MM-DD"),
+      date: dayjs(new Date(session?.vacationDate)).format("YYYY-MM-DD"),
       color: theme?.palette?.success?.main,
     },
   ]);
@@ -143,7 +143,7 @@ function CustomEvent() {
         // select={handleDateSelect}
         selectMirror={true}
         dayMaxEvents={true}
-        initialDate={moment().format("YYYY-MM-DD")}
+        initialDate={dayjs().format("YYYY-MM-DD")}
         events={eventDetails}
         eventBackgroundColor="var(--primary)"
         eventBorderColor="white"
@@ -198,7 +198,7 @@ function CustomEvent() {
             <strong>{selectedEvent.title}</strong>
             <br />
             <strong>Date:</strong>{" "}
-            {moment(selectedEvent.start).format("MMMM Do, YYYY")}
+            {dayjs(selectedEvent.start).format("MMMM Do, YYYY")}
           </Typography>
         )}
       </Popover> */}

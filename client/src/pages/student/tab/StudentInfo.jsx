@@ -48,7 +48,7 @@ import useLocalStorage from "@/hooks/useLocalStorage";
 import { UserContext } from "@/context/providers/UserProvider";
 import FormStep from "@/components/FormStep";
 import { readXLSX } from "@/config/readXLSX";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { validateExcelHeaders } from "@/config/helper";
 import { DATA_HEADERS } from "@/mockup/columns/sessionColumns";
 
@@ -160,7 +160,7 @@ const StudentInfo = () => {
     //     ...rest,
     //     personal: {
     //       ...rest?.personal,
-    //       dateofbirth: moment(rest?.personal?.dateofbirth).toDate(),
+    //       dateofbirth: dayjs(rest?.personal?.dateofbirth).toDate(),
     //     },
     //     session: {
     //       sessionId: session?.sessionId,
@@ -177,7 +177,7 @@ const StudentInfo = () => {
           ...rest,
           personal: {
             ...rest?.personal,
-            dateofbirth: moment(rest?.personal?.dateofbirth).toDate(),
+            dateofbirth: dayjs(rest?.personal?.dateofbirth).toDate(),
           },
           session: {
             sessionId: session?.sessionId,

@@ -32,7 +32,7 @@ import listPlugin from "@fullcalendar/list";
 import "react-calendar/dist/Calendar.css";
 import "@/theme/Calendar.css";
 import { Add, CalendarMonth, Delete, Edit, ListAlt } from "@mui/icons-material";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   deleteHoliday,
@@ -316,7 +316,7 @@ const Holidays = () => {
                   >
                     <TableCell>{holiday.name}</TableCell>
                     <TableCell>
-                      {moment(new Date(holiday.date)).format(
+                      {dayjs(new Date(holiday.date)).format(
                         "dddd,Do MMMM YYYY"
                       )}
                     </TableCell>
@@ -359,7 +359,7 @@ const Holidays = () => {
               // select={handleDateSelect}
               selectMirror={true}
               dayMaxEvents={true}
-              initialDate={moment().format("YYYY-MM-DD")}
+              initialDate={dayjs().format("YYYY-MM-DD")}
               events={holidays?.data}
               // eventBackgroundColor="transparent"
               // eventBorderColor="white"

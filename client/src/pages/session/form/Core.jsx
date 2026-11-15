@@ -10,7 +10,7 @@ import DateInputPicker from "@/components/inputs/DateInputPicker";
 import SelectInput from "@/components/inputs/SelectInput";
 import { SCHOOL_TERMS } from "@/mockup/columns/sessionColumns";
 import CustomFormControl from "@/components/inputs/CustomFormControl";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import CustomRadioInput from "@/components/items/CustomRadioInput";
 import Input from "@/components/inputs/Input";
 
@@ -72,7 +72,7 @@ const Core = ({ watch, control }) => {
             border: "1px solid lightgray",
           }}
         >
-          {`${moment(sT || new Date()).year()}/${moment(
+          {`${dayjs(sT || new Date()).year()}/${dayjs(
             eT || new Date()
           ).year()}`}
         </FormLabel>

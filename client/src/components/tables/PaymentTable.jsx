@@ -9,7 +9,7 @@ import {
   Paper,
 } from "@mui/material";
 import { currencyFormatter } from "@/config/currencyFormatter";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 
 const PaymentTable = ({ payments = [] }) => {
   return (
@@ -28,8 +28,8 @@ const PaymentTable = ({ payments = [] }) => {
           {payments.map((payment, index) => (
             <TableRow key={index}>
               <TableCell>
-                    {moment(new Date(payment?.date || payment?.createdAt)).format(
-                                   "do MMM, yyyy"
+                    {dayjs(new Date(payment?.date || payment?.createdAt)).format(
+                                   "Do MMM, YYYY"
                                  )}
               </TableCell>
               <TableCell>{currencyFormatter(payment?.paid)}</TableCell>

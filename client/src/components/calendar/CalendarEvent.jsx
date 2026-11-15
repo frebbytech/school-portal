@@ -1,5 +1,5 @@
 import { Popover, Typography } from "@mui/material";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import React,{ useState } from "react";
 
 function CalendarEvent({ timeText, event }) {
@@ -53,7 +53,7 @@ function CalendarEvent({ timeText, event }) {
             <strong>{selectedEvent.title}</strong>
             <br />
             <strong>Date:</strong>{" "}
-            {moment(selectedEvent.start).format("MMMM Do, YYYY")}
+            {dayjs(selectedEvent.start).format("MMMM Do, YYYY")}
           </Typography>
         )}
       </Popover>

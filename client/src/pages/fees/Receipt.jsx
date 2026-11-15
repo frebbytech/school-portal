@@ -15,7 +15,7 @@ import {
   Button,
 } from "@mui/material";
 import { UserContext } from "@/context/providers/UserProvider";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { currencyFormatter } from "@/config/currencyFormatter";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
@@ -109,7 +109,7 @@ export default function Receipt() {
               Invoice Date:
             </Typography>
             <Typography fontSize={12}>
-              {moment(state?.fee?.createdAt).format("LLL")}
+              {dayjs(state?.fee?.createdAt).format("LLL")}
             </Typography>
           </Box>
         </Box>

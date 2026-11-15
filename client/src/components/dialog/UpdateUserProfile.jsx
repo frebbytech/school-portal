@@ -24,7 +24,7 @@ import { UserContext } from "@/context/providers/UserProvider";
 import { useSearchParams } from "react-router-dom";
 import LoadingSpinner from "../spinners/LoadingSpinner";
 import CustomDatePicker from "../inputs/CustomDatePicker";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 
 const UpdateUserProfile = () => {
   const { user, updateAccessToken } = useContext(UserContext);
@@ -39,7 +39,7 @@ const UpdateUserProfile = () => {
 
   useEffect(() => {
     setProfileImage(user?.profile);
-    setDob(moment(user?.dateofbirth));
+    setDob(dayjs(user?.dateofbirth));
   }, [user]);
 
   const { mutateAsync, isPending } = useMutation({
@@ -54,7 +54,7 @@ const UpdateUserProfile = () => {
 
     delete values.profile;
     delete values.confirmPassword;
-    values.dateofbirth = moment(dob).format("L");
+    values.dateofbirth = dayjs(dob).format("L");
     values._id = user?.id;
     mutateAsync(values, {
       onSettled: () => {

@@ -1,5 +1,5 @@
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
 function CustomDatePicker({
   label,
@@ -19,7 +19,7 @@ function CustomDatePicker({
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterMoment}>
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
       <DatePicker
         label={label}
         value={date}

@@ -21,7 +21,7 @@ import { PropTypes } from "prop-types";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteAttendance, getAttendanceHistory } from "@/api/attendanceAPI";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import Back from "@/components/Back";
 import CustomTitle from "@/components/custom/CustomTitle";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
@@ -135,12 +135,12 @@ function AttendanceHistory() {
                 attendanceHistory.data.map((attendance) => (
                   <TableRow key={attendance.date}>
                     <TableCell>
-                      {moment(new Date(attendance.date)).format(
+                      {dayjs(new Date(attendance.date)).format(
                         "Do MMMM, YYYY"
                       )}
                       <br />
                       <span style={{ color: "#1976d2", fontWeight: "bold" }}>
-                        {moment(new Date(attendance.date)).format("dddd")}
+                        {dayjs(new Date(attendance.date)).format("dddd")}
                       </span>
                     </TableCell>
                     <TableCell>{attendance.present}</TableCell>

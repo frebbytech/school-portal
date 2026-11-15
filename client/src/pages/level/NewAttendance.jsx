@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import {
   Box,
   Button,
@@ -51,7 +51,7 @@ function NewAttendance({ to }) {
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const { levelName } = useLevelById(id);
 
-  const [date, setDate] = useState(moment().format("YYYY-MM-DD"));
+  const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
   const [allStudents, setAllStudents] = useState([]);
 
   // Popover state
@@ -297,8 +297,8 @@ function NewAttendance({ to }) {
             <Box width={280}>
               <CustomDatePicker
                 label="Date of Attendance"
-                date={moment(date)}
-                setDate={(d) => setDate(moment(d).format("YYYY-MM-DD"))}
+                date={dayjs(date)}
+                setDate={(d) => setDate(dayjs(d).format("YYYY-MM-DD"))}
                 disableFuture
                 shouldDisableWeekends
               />

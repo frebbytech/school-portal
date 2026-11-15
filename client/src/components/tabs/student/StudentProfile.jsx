@@ -22,7 +22,7 @@ import StudentEdit from "@/pages/student/StudentEdit";
 import { disableStudentAccount, getStudentInfo } from "@/api/studentAPI";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import ViewParent from "@/pages/student/tab/ViewParent";
 import MedicalInformationEdit from "@/pages/student/MedicalInformationEdit";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -201,7 +201,7 @@ const StudentProfile = ({ levelName, student, parents }) => {
           <ProfileItem label="Name" text={student?.fullName} />
           <ProfileItem
             label="Date of Birth"
-            text={moment(new Date(student?.dateofbirth)).format(
+            text={dayjs(new Date(student?.dateofbirth)).format(
               "Do MMMM, YYYY."
             )}
           />

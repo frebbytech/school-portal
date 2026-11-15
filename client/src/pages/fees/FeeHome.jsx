@@ -7,7 +7,7 @@ import { getAllCurrentFeesSummary } from "@/api/currentFeeAPI";
 import { UserContext } from "@/context/providers/UserProvider";
 import { EMPTY_IMAGES } from "@/config/images";
 import teacher_icon from "@/assets/images/header/teacher_ico.svg";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import CustomTitle from "@/components/custom/CustomTitle";
 import { useNavigate } from "react-router-dom";
 import MonthlyFeePaymentChart from "@/components/charts/MonthlyFeePaymentChart";
@@ -99,8 +99,8 @@ const FeeHome = () => {
             type: "date",
             render: ({ date }) => (
               <ListItemText
-                primary={moment(date).format("ddd,LL")}
-                secondary={moment(date).format("hh:mm a")}
+                primary={dayjs(date).format("ddd,LL")}
+                secondary={dayjs(date).format("hh:mm a")}
                 slotProps={{
                   secondary: {
                     color: "secondary.main",

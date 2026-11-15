@@ -14,7 +14,7 @@ import { userEditValidationSchema } from "@/config/validationSchema";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { uploadProfileImage } from "@/api/sessionAPI";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import CustomDatePicker from "@/components/inputs/CustomDatePicker";
 import CustomImageChooser from "@/components/inputs/CustomImageChooser";
 import Back from "@/components/Back";
@@ -42,14 +42,14 @@ const UserEdit = () => {
   });
 
   useEffect(() => {
-    setDob(moment(user?.data?.dateofbirth));
+    setDob(dayjs(user?.data?.dateofbirth));
   }, [user?.data]);
 
   //PUT user
   const { mutateAsync, isPending } = useMutation({ mutationFn: putUser });
   const onSubmit = (values, options) => {
     delete values.profile;
-    values.dateofbirth = moment(dob).format("L");
+    values.dateofbirth = dayjs(dob).format("L");
     values.isOnlyUpdate = true;
 
     // console.log(values);

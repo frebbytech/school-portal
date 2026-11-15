@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import CustomizedMaterialTable from "@/components/tables/CustomizedMaterialTable";
 import { getAllCurrentFeesPaymentHistoryByDate } from "@/api/currentFeeAPI";
 import CustomDatePicker from "@/components/inputs/CustomDatePicker";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import _ from "lodash";
 import { currencyFormatter } from "@/config/currencyFormatter";
 import { UserContext } from "@/context/providers/UserProvider";
@@ -14,7 +14,7 @@ import CustomTitle from "@/components/custom/CustomTitle";
 
 function FeePaymentHistory() {
   const { session } = useContext(UserContext);
-  const [date, setDate] = useState(moment());
+  const [date, setDate] = useState(dayjs());
 
   const fees = useQuery({
     queryKey: ["fees-for-day", date],
@@ -82,7 +82,7 @@ function FeePaymentHistory() {
             {
               title: "Paid On",
               field: "payment.createdAt",
-              render: ({ payment }) => moment(payment?.createdAt).format("LLL"),
+              render: ({ payment }) => dayjs(payment?.createdAt).format("LLL"),
             },
             {
               title: "Student",

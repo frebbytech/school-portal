@@ -1,5 +1,5 @@
 import React, { useContext, useEffect } from "react";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import {
   Stack,
   Dialog,
@@ -52,10 +52,10 @@ const EditSession = () => {
   useEffect(() => {
     reset({
       id: searchParams.get("_id"),
-      from: moment(new Date(session?.data?.from)),
-      to: moment(new Date(session?.data?.to)),
-      vacationDate: moment(new Date(session?.data?.vacationDate)),
-      reOpeningDate: moment(new Date(session?.data?.reOpeningDate)),
+      from: dayjs(new Date(session?.data?.from)),
+      to: dayjs(new Date(session?.data?.to)),
+      vacationDate: dayjs(new Date(session?.data?.vacationDate)),
+      reOpeningDate: dayjs(new Date(session?.data?.reOpeningDate)),
       academicYear: session?.data?.academicYear,
       term: session?.data?.term,
       session: session?.data?.sessionId,

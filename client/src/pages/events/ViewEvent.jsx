@@ -12,7 +12,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import React from "react";
 import { EMPTY_IMAGES } from "../../config/images";
 import { getEvent } from "../../api/eventAPI";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import CustomTitle from "@/components/custom/CustomTitle";
 
 function ViewEvent() {
@@ -103,7 +103,7 @@ function ViewEvent() {
               {data?.createdBy?.fullname}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {moment(data?.createdAt).format("MMMM D, YYYY • h:mm A")}
+              {dayjs(data?.createdAt).format("MMMM D, YYYY • h:mm A")}
             </Typography>
           </Box>
         </Stack>

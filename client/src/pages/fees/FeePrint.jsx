@@ -11,7 +11,7 @@ import {
 import React, { useRef } from "react";
 import _ from "lodash";
 import { useReactToPrint } from "react-to-print";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import FeePrintItem from "./FeePrintItem";
 import { Navigate, useLocation } from "react-router-dom";
 
@@ -113,7 +113,7 @@ function FeePrint() {
             <Typography variant="caption">
               Date:{" "}
               {feePrintData?.payment
-                ? moment(feePrintData?.payment?.date).format("L")
+                ? dayjs(feePrintData?.payment?.date).format("L")
                 : ""}
             </Typography>
           </Stack>

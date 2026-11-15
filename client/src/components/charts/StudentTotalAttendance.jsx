@@ -5,7 +5,7 @@ import { Box } from "@mui/material";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardHeader from "@mui/material/CardHeader";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 
 function StudentTotalAttendance({ data }) {
   const [chartData, setChartData] = useState({
@@ -22,7 +22,7 @@ function StudentTotalAttendance({ data }) {
 
   useEffect(() => {
     const labels = data.map((entry) =>
-      moment(entry.date, "MM/DD/YYYY").format("dddd,(Do MMM)")
+      dayjs(entry.date, "MM/DD/YYYY").format("dddd,(Do MMM)")
     );
     const counts = data.map((entry) => entry.count);
 

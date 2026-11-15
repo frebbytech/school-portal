@@ -22,7 +22,7 @@ import {
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import dayjs from "dayjs";
+import dayjs from "@/lib/dates";
 import { AnimatePresence, motion } from "framer-motion";
 import CustomTitle from "@/components/custom/CustomTitle";
 import exams_icon from "../../assets/images/header/exams_ico.svg";

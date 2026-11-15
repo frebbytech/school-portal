@@ -1,4 +1,4 @@
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { object, number, mixed, string, array, ref } from "yup";
 
 const phoneRegex = /^(\+\d{1,3})?\(?\d{3}\)?\d{3}\d{4}$/;
@@ -26,7 +26,7 @@ export const sessionValidationSchema = object().shape({
       "End of Academic Year date must be after or the same as the start of Academic Year",
       function (value) {
         const { from } = this.parent;
-        return !from || !value || moment(value).isSameOrAfter(moment(from));
+        return !from || !value || dayjs(value).isSameOrAfter(dayjs(from));
       }
     ),
   term: string().trim().required("Required*"),
@@ -441,7 +441,7 @@ export const newSessionSchemas = [
           "End of Academic Year date must be after or the same as the start of Academic Year",
           function (value) {
             const { from } = this.parent;
-            return !from || !value || moment(value).isSameOrAfter(moment(from));
+            return !from || !value || dayjs(value).isSameOrAfter(dayjs(from));
           }
         ),
       term: string().trim().required("Required*"),
@@ -479,12 +479,12 @@ export const newSessionSchemas = [
 
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -502,7 +502,7 @@ export const newSessionSchemas = [
               function (value) {
                 const { from } = this.parent;
                 return (
-                  !from || !value || moment(value).isSameOrAfter(moment(from))
+                  !from || !value || dayjs(value).isSameOrAfter(dayjs(from))
                 );
               }
             )
@@ -510,12 +510,12 @@ export const newSessionSchemas = [
               const { core } = this.from[2].value;
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -535,12 +535,12 @@ export const newSessionSchemas = [
               const { core } = this.from[2].value;
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -559,7 +559,7 @@ export const newSessionSchemas = [
               function (value) {
                 const { from } = this.parent;
                 return (
-                  !from || !value || moment(value).isSameOrAfter(moment(from))
+                  !from || !value || dayjs(value).isSameOrAfter(dayjs(from))
                 );
               }
             )
@@ -567,12 +567,12 @@ export const newSessionSchemas = [
               const { core } = this.from[2].value;
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -592,12 +592,12 @@ export const newSessionSchemas = [
             const { core } = this.from[2].value;
             if (!core?.from || !core?.to || !value) return true;
 
-            const start = moment(core.from).format("Do MMMM YYYY");
-            const end = moment(core.to).format("Do MMMM YYYY");
+            const start = dayjs(core.from).format("Do MMMM YYYY");
+            const end = dayjs(core.to).format("Do MMMM YYYY");
 
-            const isValid = moment(value).isBetween(
-              moment(core.from),
-              moment(core.to),
+            const isValid = dayjs(value).isBetween(
+              dayjs(core.from),
+              dayjs(core.to),
               undefined,
               "[]"
             );
@@ -615,7 +615,7 @@ export const newSessionSchemas = [
             function (value) {
               const { from } = this.parent;
               return (
-                !from || !value || moment(value).isSameOrAfter(moment(from))
+                !from || !value || dayjs(value).isSameOrAfter(dayjs(from))
               );
             }
           )
@@ -623,12 +623,12 @@ export const newSessionSchemas = [
             const { core } = this.from[2].value;
             if (!core?.from || !core?.to || !value) return true;
 
-            const start = moment(core.from).format("YYYY-MM-DD");
-            const end = moment(core.to).format("YYYY-MM-DD");
+            const start = dayjs(core.from).format("YYYY-MM-DD");
+            const end = dayjs(core.to).format("YYYY-MM-DD");
 
-            const isValid = moment(value).isBetween(
-              moment(core.from),
-              moment(core.to),
+            const isValid = dayjs(value).isBetween(
+              dayjs(core.from),
+              dayjs(core.to),
               undefined,
               "[]"
             );
@@ -682,7 +682,7 @@ export const editSessionSchemas = [
           "End of Academic Year date must be after or the same as the start of Academic Year",
           function (value) {
             const { from } = this.parent;
-            return !from || !value || moment(value).isSameOrAfter(moment(from));
+            return !from || !value || dayjs(value).isSameOrAfter(dayjs(from));
           }
         ),
       term: string().trim().required("Required*"),
@@ -699,12 +699,12 @@ export const editSessionSchemas = [
 
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -722,7 +722,7 @@ export const editSessionSchemas = [
               function (value) {
                 const { from } = this.parent;
                 return (
-                  !from || !value || moment(value).isSameOrAfter(moment(from))
+                  !from || !value || dayjs(value).isSameOrAfter(dayjs(from))
                 );
               }
             )
@@ -730,12 +730,12 @@ export const editSessionSchemas = [
               const { core } = this.from[2].value;
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -755,12 +755,12 @@ export const editSessionSchemas = [
               const { core } = this.from[2].value;
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -779,7 +779,7 @@ export const editSessionSchemas = [
               function (value) {
                 const { from } = this.parent;
                 return (
-                  !from || !value || moment(value).isSameOrAfter(moment(from))
+                  !from || !value || dayjs(value).isSameOrAfter(dayjs(from))
                 );
               }
             )
@@ -787,12 +787,12 @@ export const editSessionSchemas = [
               const { core } = this.from[2].value;
               if (!core?.from || !core?.to || !value) return true;
 
-              const start = moment(core.from).format("Do MMMM YYYY");
-              const end = moment(core.to).format("Do MMMM YYYY");
+              const start = dayjs(core.from).format("Do MMMM YYYY");
+              const end = dayjs(core.to).format("Do MMMM YYYY");
 
-              const isValid = moment(value).isBetween(
-                moment(core.from),
-                moment(core.to),
+              const isValid = dayjs(value).isBetween(
+                dayjs(core.from),
+                dayjs(core.to),
                 undefined,
                 "[]"
               );
@@ -812,12 +812,12 @@ export const editSessionSchemas = [
             const { core } = this.from[2].value;
             if (!core?.from || !core?.to || !value) return true;
 
-            const start = moment(core.from).format("Do MMMM YYYY");
-            const end = moment(core.to).format("Do MMMM YYYY");
+            const start = dayjs(core.from).format("Do MMMM YYYY");
+            const end = dayjs(core.to).format("Do MMMM YYYY");
 
-            const isValid = moment(value).isBetween(
-              moment(core.from),
-              moment(core.to),
+            const isValid = dayjs(value).isBetween(
+              dayjs(core.from),
+              dayjs(core.to),
               undefined,
               "[]"
             );
@@ -835,7 +835,7 @@ export const editSessionSchemas = [
             function (value) {
               const { from } = this.parent;
               return (
-                !from || !value || moment(value).isSameOrAfter(moment(from))
+                !from || !value || dayjs(value).isSameOrAfter(dayjs(from))
               );
             }
           )
@@ -843,12 +843,12 @@ export const editSessionSchemas = [
             const { core } = this.from[2].value;
             if (!core?.from || !core?.to || !value) return true;
 
-            const start = moment(core.from).format("YYYY-MM-DD");
-            const end = moment(core.to).format("YYYY-MM-DD");
+            const start = dayjs(core.from).format("YYYY-MM-DD");
+            const end = dayjs(core.to).format("YYYY-MM-DD");
 
-            const isValid = moment(value).isBetween(
-              moment(core.from),
-              moment(core.to),
+            const isValid = dayjs(value).isBetween(
+              dayjs(core.from),
+              dayjs(core.to),
               undefined,
               "[]"
             );

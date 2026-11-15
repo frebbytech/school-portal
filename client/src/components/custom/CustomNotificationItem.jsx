@@ -4,7 +4,7 @@ import LocalLibraryOutlinedIcon from "@mui/icons-material/LocalLibraryOutlined";
 import { Divider, IconButton, Stack, Typography, Tooltip } from "@mui/material";
 import React from "react";
 import { motion } from "framer-motion";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 
@@ -106,7 +106,7 @@ function CustomNotificationItem({
           color="primary"
           fontWeight="bold"
         >
-          {moment(new Date(createdAt)).format("LLL")}
+          {dayjs(new Date(createdAt)).format("LLL")}
         </Typography>
         <Stack direction="row">
           {active ? (

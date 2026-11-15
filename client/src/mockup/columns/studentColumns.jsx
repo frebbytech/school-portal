@@ -234,8 +234,8 @@ export const RECENT_STUDENTS_COLUMN = [
           secondary={
             <Typography variant="caption">
               {/* {`${_.startCase(rowData.gender)} ,
-              ${moment().diff(
-                moment(rowData.dateofbirth),
+              ${dayjs().diff(
+                dayjs(rowData.dateofbirth),
                 "years"
               )}yrs`} */}
               {_.startCase(rowData.gender)}

@@ -15,7 +15,7 @@ import { teacherValidationSchema } from "@/config/validationSchema";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { uploadProfileImage } from "@/api/sessionAPI";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { useParams, useNavigate } from "react-router-dom";
 import CustomDatePicker from "@/components/inputs/CustomDatePicker";
 import { TOWNS } from "@/mockup/data/towns";
@@ -44,7 +44,7 @@ const TeacherEdit = () => {
   });
 
   useEffect(() => {
-    setDob(moment(teacher?.data?.dateofbirth));
+    setDob(dayjs(teacher?.data?.dateofbirth));
    
   }, [teacher?.data]);
 
@@ -54,7 +54,7 @@ const TeacherEdit = () => {
   });
   const onSubmit = (values) => {
     delete values?.profile;
-    values.dateofbirth = moment(dob).format("L");
+    values.dateofbirth = dayjs(dob).format("L");
 
     mutateAsync(values, {
       onSettled: () => {

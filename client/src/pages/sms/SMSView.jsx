@@ -9,7 +9,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import Swal from "sweetalert2";
-import moment from "moment/moment";
+import dayjs from "@/lib/dates";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
@@ -132,7 +132,7 @@ function SMSView() {
         <Stack>
           <ListItemText
             primary="Date of Issue"
-            secondary={moment(new Date(data?.createdAt)).format("Do MMMM YYYY")}
+            secondary={dayjs(new Date(data?.createdAt)).format("Do MMMM YYYY")}
             slotProps={{
               primary: {
                 color: "primary",

@@ -8,7 +8,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Formik } from "formik";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import React, { useContext, useState } from "react";
 import { postUser } from "@/api/userAPI";
 import CustomDatePicker from "@/components/inputs/CustomDatePicker";
@@ -39,7 +39,7 @@ function UserAdd() {
   //Post teacher
   const { mutateAsync, isPending } = useMutation({ mutationFn: postUser });
   const onSubmit = (values, options) => {
-    values.dateofbirth = moment(dob).format("L");
+    values.dateofbirth = dayjs(dob).format("L");
     values.fullname = `${values?.firstname} ${values?.lastname}`;
     // console.log(values);
     // return;

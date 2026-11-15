@@ -1,4 +1,3 @@
-import moment from "moment";
 import {
   messageValidationSchema,
   onlyEmailValidationSchema,
@@ -68,7 +67,7 @@ export const newStudentDefaultValues = {
     othername: "",
     gender: "male",
     email: "",
-    dateofbirth: moment(),
+    dateofbirth: "",
     phonenumber: "",
     address: "",
     residence: "",

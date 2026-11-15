@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import _ from "lodash";
 import { getAllEvents } from "@/api/eventAPI";
 import { useQuery } from "@tanstack/react-query";
-import dayjs from "dayjs";
+import dayjs from "@/lib/dates";
 
 const Event = () => {
   const navigate = useNavigate();

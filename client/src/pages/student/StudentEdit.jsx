@@ -14,7 +14,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 
 import { putStudent } from "@/api/studentAPI";
 import CustomFormControl from "@/components/inputs/CustomFormControl";
@@ -56,7 +56,7 @@ const StudentEdit = () => {
   useEffect(() => {
     if (student) {
       reset(student);
-      setDob(moment(student?.dateofbirth));
+      setDob(dayjs(student?.dateofbirth));
       setProfileImage(student?.profile);
     }
   }, [student, reset]);
@@ -73,7 +73,7 @@ const StudentEdit = () => {
   const { mutateAsync, isPending } = useMutation({ mutationFn: putStudent });
 
   const onSubmit = async (values) => {
-    values.dateofbirth = moment(dob).format("L");
+    values.dateofbirth = dayjs(dob).format("L");
     values.profile = profileImage;
 
     await mutateAsync(values, {
@@ -407,7 +407,7 @@ export default React.memo(StudentEdit);
 // import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 
 // import CustomDatePicker from "@/components/inputs/CustomDatePicker";
-// import moment from "moment";
+// import dayjs from "@/lib/dates";
 // import { NATIONALITY } from "@/mockup/data/nationality";
 // import { TOWNS } from "@/mockup/data/towns";
 // import CustomImageChooser from "@/components/inputs/CustomImageChooser";
@@ -427,7 +427,7 @@ export default React.memo(StudentEdit);
 //   const student = editStudentData?.data;
 
 //   useEffect(() => {
-//     setDob(moment(student?.dateofbirth));
+//     setDob(dayjs(student?.dateofbirth));
 //     setProfileImage(student?.profile);
 //   }, [student]);
 
@@ -445,7 +445,7 @@ export default React.memo(StudentEdit);
 //   //Put student
 //   const { mutateAsync, isPending } = useMutation({ mutationFn: putStudent });
 //   const onSubmit = (values) => {
-//     values.dateofbirth = moment(dob).format("L");
+//     values.dateofbirth = dayjs(dob).format("L");
 //     values.profile = profileImage;
 
 //     mutateAsync(values, {

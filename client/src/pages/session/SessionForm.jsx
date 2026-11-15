@@ -18,7 +18,7 @@ import Core from "./form/Core";
 import { sessionDefaultValues } from "@/config/initialValues";
 import Confirm from "./form/Confirm";
 import { yupResolver } from "@hookform/resolvers/yup";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { postTerm } from "@/api/termAPI";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
@@ -123,7 +123,7 @@ function SessionForm() {
   const { isPending, mutateAsync } = useMutation({
     mutationFn: () =>
       getValidTerm({
-        academicYear: `${moment(watchedValues?.core?.from).year()}/${moment(
+        academicYear: `${dayjs(watchedValues?.core?.from).year()}/${dayjs(
           watchedValues?.core?.to
         ).year()}`,
         term: watchedValues?.core?.term,

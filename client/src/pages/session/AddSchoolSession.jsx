@@ -8,7 +8,7 @@ import {
   FormLabel,
   Typography,
 } from "@mui/material";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Button from "@mui/material/Button";
 import { postTerm } from "@/api/termAPI";
@@ -132,7 +132,7 @@ const AddSchoolSession = ({ open, setOpen }) => {
                 border: "1px solid lightgray",
               }}
             >
-              {`${moment(sT || new Date()).year()}/${moment(
+              {`${dayjs(sT || new Date()).year()}/${dayjs(
                 eT || new Date()
               ).year()}`}
             </FormLabel>

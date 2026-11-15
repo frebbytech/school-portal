@@ -15,13 +15,12 @@ import {
   Stack,
   Container,
 } from "@mui/material";
-import dayjs from "dayjs";
 import CustomTitle from "@/components/custom/CustomTitle";
 import exams_icon from "../../assets/images/header/exams_ico.svg";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getAllEvents } from "@/api/eventAPI";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { RefreshRounded } from "@mui/icons-material";
 import { AnimatePresence, motion } from "framer-motion";
 import EventSkeleton from "@/components/skeleton/EventSkeleton";
@@ -214,7 +213,7 @@ const MoreEvents = () => {
                         color="textSecondary"
                         fontSize="12px"
                       >
-                        {moment(event?.createdAt)?.format("LLL")}
+                        {dayjs(event?.createdAt)?.format("LLL")}
                       </Typography>
                     </CardContent>
                   </Card>

@@ -11,7 +11,7 @@ import _ from "lodash";
 import MedicalAllergyItem from "@/components/items/MedicalAllergyItem";
 import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
 import { useReactToPrint } from "react-to-print";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { SchoolRounded } from "@mui/icons-material";
 import { UserContext } from "@/context/providers/UserProvider";
 import StudentViewItem from "./StudentViewItem";
@@ -217,7 +217,7 @@ function ConfirmStudent({ watch, isPending, id, hideSaveBtn, reset }) {
 
                 <StudentViewItem
                   secondary="Date of Birth"
-                  primary={moment(new Date(personal?.dateofbirth)).format("LL")}
+                  primary={dayjs(personal?.dateofbirth).format("LL")}
                 />
                 <StudentViewItem
                   secondary="Gender"

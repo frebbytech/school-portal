@@ -1,6 +1,6 @@
 import TextField from '@mui/material/TextField';
 import Datetime from 'react-datetime';
-import moment from 'moment';
+import dayjs from "@/lib/dates";
 
 ///
 import '../../theme/react-datetime.css';
@@ -12,7 +12,7 @@ const CustomYearPicker = ({ label, year, setYear }) => {
       dateFormat='YYYY'
       timeFormat={false}
       value={year}
-      initialValue={moment().format('YYYY')}
+      initialValue={dayjs().format('YYYY')}
       onChange={(date) => setYear(date.format('YYYY'))}
       closeOnSelect={true}
       renderInput={(params) => {

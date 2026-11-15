@@ -1,8 +1,8 @@
 import React from "react";
 import { Controller } from "react-hook-form";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment";
-import moment from "moment";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "@/lib/dates";
 
 // Custom Date Picker Controller
 const DateInputPicker = ({
@@ -21,12 +21,14 @@ const DateInputPicker = ({
       control={control}
       rules={rules}
       render={({ field: { onChange, value }, fieldState: { error } }) => (
-        <LocalizationProvider dateAdapter={AdapterMoment}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DatePicker
             label={label}
-            value={moment(value)}
+            value={value ? dayjs(value) : null}
             onChange={(newValue) => {
-              onChange(moment(new Date(newValue)));
+              // A cleared or half-typed date is stored as "" so the form says
+              // "Required*" instead of silently saving 1 January 1970.
+              onChange(newValue && newValue.isValid() ? newValue : "");
             }}
             format="Do MMMM YYYY"
             disableMaskedInput

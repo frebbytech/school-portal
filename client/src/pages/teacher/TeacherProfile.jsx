@@ -1,7 +1,7 @@
 import { Stack } from "@mui/material";
 import React from "react";
 import ProfileItem from "../../components/typo/ProfileItem";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 
 function TeacherProfile({ teacher }) {
   return (
@@ -10,7 +10,7 @@ function TeacherProfile({ teacher }) {
       <ProfileItem
         label="Date Of Birth"
         tex
-        text={moment(new Date(teacher?.dateofbirth)).format("Do MMMM, YYYY.")}
+        text={dayjs(new Date(teacher?.dateofbirth)).format("Do MMMM, YYYY.")}
       />
       <ProfileItem label="Gender" text={teacher?.gender} />
       <ProfileItem label="Email Address" text={teacher?.email} />

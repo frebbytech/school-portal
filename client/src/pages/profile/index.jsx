@@ -15,7 +15,7 @@ import FormDisplayItem from "@/components/inputs/FormDisplayItem";
 import { Edit } from "@mui/icons-material";
 import { useSearchParams } from "react-router-dom";
 import UpdateUserProfile from "@/components/dialog/UpdateUserProfile";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import { styled } from "@mui/material/styles";
 
 // Styled components for better customization
@@ -155,7 +155,7 @@ function Profile() {
               <Grid item xs={12} md={6}>
                 <FormDisplayItem
                   label="Date of Birth"
-                  value={moment(new Date(user.dateofbirth)).format("LL") || "-"}
+                  value={dayjs(new Date(user.dateofbirth)).format("LL") || "-"}
                   icon="calendar_today"
                 />
               </Grid>

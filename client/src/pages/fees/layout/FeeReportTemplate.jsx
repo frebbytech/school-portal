@@ -1,6 +1,6 @@
 import { currencyFormatter } from "@/config/currencyFormatter";
 import { UserContext } from "@/context/providers/UserProvider";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import React, { use } from "react";
 
 // const FeeReportTemplate = ({ student, feeData = [] }) => {
@@ -68,8 +68,8 @@ import React, { use } from "react";
 //             {feeData?.payment.map((payment, index) => (
 //               <tr key={index}>
 //                 <td>
-//                   {moment(new Date(payment?.date || payment?.createdAt)).format(
-//                     "do MMM, yyyy"
+//                   {dayjs(new Date(payment?.date || payment?.createdAt)).format(
+//                     "Do MMM, YYYY"
 //                   )}
 //                 </td>
 //                 <td>{currencyFormatter(payment?.paid)}</td>
@@ -225,9 +225,9 @@ function FeeReportTemplate({ student, feeData = [] }) {
               {feeData?.payment.map((payment, index) => (
                 <tr key={index}>
                   <td style={styles.td}>
-                    {moment(
+                    {dayjs(
                       new Date(payment?.date || payment?.createdAt)
-                    ).format("do MMM, yyyy hh:mm A")}
+                    ).format("Do MMM, YYYY hh:mm A")}
                   </td>
                   <td style={styles.td}>{currencyFormatter(payment?.paid)}</td>
                   <td style={styles.td}>

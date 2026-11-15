@@ -23,7 +23,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteUser, enableOrDisableAccount, getUser } from "@/api/userAPI";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import UserUpdatePassword from "./UserUpdatePassword";
 import Back from "@/components/Back";
 import CustomTitle from "@/components/custom/CustomTitle";
@@ -208,7 +208,7 @@ const UserView = () => {
           <ProfileItem
             label="Date Of Birth"
             tex
-            text={moment(new Date(user?.data?.dateofbirth)).format(
+            text={dayjs(new Date(user?.data?.dateofbirth)).format(
               "Do MMMM, YYYY."
             )}
           />

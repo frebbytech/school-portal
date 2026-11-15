@@ -1,4 +1,4 @@
-import moment from "moment";
+import dayjs from "@/lib/dates";
 import * as XLSX from "xlsx";
 
 export const getItem = (key) => {
@@ -14,7 +14,7 @@ export const removeItem = (key) => {
 };
 
 export const isWeekend = (date) => {
-  const day = moment(date).day();
+  const day = dayjs(date).day();
   return day === 0 || day === 6; // 0 is Sunday, 6 is Saturday
 };
 

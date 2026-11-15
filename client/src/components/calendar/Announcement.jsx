@@ -13,7 +13,7 @@ import _ from "lodash";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getAllAnnouncements } from "@/api/announcementAPI";
-import dayjs from "dayjs";
+import dayjs from "@/lib/dates";
 import { useAuth } from "@/hooks/useAuth";
 
 const Announcement = () => {
