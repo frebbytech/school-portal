@@ -36,7 +36,8 @@ describe("remarks dialog", () => {
       })
     );
     const { user, setOpen } = setup({});
-    await user.type(screen.getByLabelText("Class Teacher's Comments"), "A kind and diligent pupil.");
+    await user.click(screen.getByLabelText("Class Teacher's Comments"));
+    await user.paste("A kind and diligent pupil.");
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
     await waitFor(() => expect(setOpen).toHaveBeenCalledWith(false));
     expect(body._id).toBe("exam1");

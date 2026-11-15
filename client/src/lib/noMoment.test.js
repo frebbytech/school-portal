@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
+// Tests run from the app folder (where package.json is).
+const root = join(process.cwd(), "src");
 const walk = (dir) =>
   readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);

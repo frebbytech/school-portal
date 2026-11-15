@@ -16,6 +16,11 @@ export default mergeConfig(
       css: false,
       env: { VITE_BASE_URL: "http://api.test/api/frebbys/v1" },
       include: ["src/**/*.test.{js,jsx}"],
+      // Slower machines hit the default 5s on typing-heavy tests, and starting every worker at
+      // once can time out module loading ("Timeout calling fetch"), so run fewer at a time.
+      testTimeout: 20000,
+      hookTimeout: 20000,
+      poolOptions: { forks: { maxForks: 4, minForks: 1 } },
     },
   })
 );

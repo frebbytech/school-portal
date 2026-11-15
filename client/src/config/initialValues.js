@@ -4,7 +4,14 @@ import {
   onlyPhoneValidationSchema,
 } from "./validationSchema";
 
-const session = JSON.parse(localStorage.getItem("@school_session"));
+const readSession = () => {
+  try {
+    return JSON.parse(localStorage.getItem("@school_session"));
+  } catch {
+    return null;
+  }
+};
+const session = readSession();
 
 //session
 export const sessionInitialValues = {
