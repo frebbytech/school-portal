@@ -1,6 +1,7 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import dayjs from "@/lib/dates";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -29,7 +30,6 @@ import CustomizedMaterialTable from "@/components/tables/CustomizedMaterialTable
 import Back from "@/components/Back";
 import CustomTitle from "@/components/custom/CustomTitle";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
-import { isWeekend } from "@/config/helper";
 import {
   getAttendance,
   postAttendance,
@@ -40,6 +40,15 @@ import { UserContext } from "@/context/providers/UserProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import useLevelById from "@/components/hooks/useLevelById";
 import PropTypes from "prop-types";
+import useUnsavedChangesWarning from "@/components/hooks/useUnsavedChangesWarning";
+import {
+  countMarked,
+  entryOf,
+  isMarked as isMarkedRow,
+  isWeekendDay,
+  latestWeekday,
+  mergeMarks,
+} from "./attendanceRules";
 
 function NewAttendance({ to }) {
   const { breakpoints } = useTheme();
@@ -51,8 +60,12 @@ function NewAttendance({ to }) {
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const { levelName } = useLevelById(id);
 
-  const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
-  const [allStudents, setAllStudents] = useState([]);
+  // Today, or the last school day when it is a weekend (the picker refuses weekends).
+  const [date, setDate] = useState(() => latestWeekday());
+  // Marks not saved yet: { [studentId]: { status, reason } }. The saved register is never
+  // copied into state, so reloading it cannot wipe what the teacher has just marked, and
+  // changing the day cannot carry one day's students onto another.
+  const [marks, setMarks] = useState({});
 
   // Popover state
   const [anchorEl, setAnchorEl] = useState(null);
@@ -71,20 +84,25 @@ function NewAttendance({ to }) {
     enabled: Boolean(id && date),
   });
 
-  // Sync API data into state
-  useEffect(() => {
-    if (attendance?.data?.status?.length) {
-      setAllStudents(attendance.data.status);
-    }
-  }, [attendance.data]);
+  const allStudents = useMemo(
+    () => mergeMarks(attendance.data?.status || [], marks),
+    [attendance.data, marks]
+  );
+  const hasUnsaved = Object.keys(marks).length > 0;
+  useUnsavedChangesWarning(hasUnsaved);
 
-  // Progress calculation
-  const completedCount = allStudents.filter((s) =>
-    ["Present", "Absent"].includes(s.status)
-  ).length;
+  const completedCount = countMarked(allStudents);
+  const notMarked = allStudents.length - completedCount;
   const completedPercent = allStudents.length
     ? Math.round((completedCount / allStudents.length) * 100)
     : 0;
+
+  const changeDate = (next) => {
+    if (next === date) return;
+    if (hasUnsaved && !window.confirm("You have marks that are not saved. Change the date and lose them?")) return;
+    setMarks({});
+    setDate(next);
+  };
 
   // Mutations
   const { mutateAsync: saveAttendance, isPending: isPostingAttendance } =
@@ -93,48 +111,49 @@ function NewAttendance({ to }) {
     mutationFn: postStudentAttendance,
   });
 
-  const sanitizeStudents = (students) =>
-    students.map(({ tableData, ...rest }) => rest);
-
   const handleSave = (students, apiFn) => {
     const payload = {
       level: id,
       date,
       session: session?.sessionId,
       term: session?.termId,
-      status: sanitizeStudents(students),
+      status: students.map(entryOf),
     };
 
     apiFn(payload, {
-      onSettled: () => queryClient.invalidateQueries(["attendance-history"]),
-      onSuccess: (res) => schoolSessionDispatch(alertSuccess(res)),
+      onSuccess: (res) => {
+        // Saved marks are now on the server; keep only the ones not sent.
+        const sent = new Set(students.map((st) => st._id));
+        setMarks((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !sent.has(k))));
+        queryClient.invalidateQueries({ queryKey: ["attendance", id] });
+        queryClient.invalidateQueries({ queryKey: ["attendance-history"] });
+        schoolSessionDispatch(alertSuccess(res));
+      },
       onError: (err) => schoolSessionDispatch(alertError(err)),
     });
   };
 
+  const setMark = (studentId, change) =>
+    setMarks((prev) => ({ ...prev, [studentId]: { ...(prev[studentId] || {}), ...change } }));
+
+  const openReason = (student, target) => {
+    setSelectedStudent(student);
+    setReason(student.reason || "");
+    setAnchorEl(target);
+  };
+
   const handleCheckAttendance = (value, student, eventTarget) => {
     if (value === "Absent") {
-      // Show popover for reason
-      setSelectedStudent(student);
-      setReason(student.reason || "");
-      setAnchorEl(eventTarget);
+      // Ask for the reason; the mark is only made when the reason box is saved.
+      openReason(student, eventTarget);
     } else {
-      // Directly update
-      setAllStudents((prev) =>
-        prev.map((s) =>
-          s._id === student._id ? { ...s, status: value, reason: "" } : s
-        )
-      );
+      setMark(student._id, { status: value, reason: "" });
     }
   };
 
   const handleReasonSubmit = () => {
     if (selectedStudent) {
-      setAllStudents((prev) =>
-        prev.map((s) =>
-          s._id === selectedStudent._id ? { ...s, status: "Absent", reason } : s
-        )
-      );
+      setMark(selectedStudent._id, { status: "Absent", reason: reason.trim() });
     }
     setAnchorEl(null);
     setSelectedStudent(null);
@@ -192,6 +211,23 @@ function NewAttendance({ to }) {
         </Typography>
       </Box>
 
+      {attendance.isError && (
+        <Alert severity="error" sx={{ my: 2 }} action={<Button color="inherit" size="small" onClick={() => attendance.refetch()}>Try again</Button>}>
+          {typeof attendance.error === "string" ? attendance.error : attendance.error?.message || "Could not load the attendance register."}
+        </Alert>
+      )}
+      {!attendance.isError && attendance.isSuccess && allStudents.length === 0 && (
+        <Alert severity="info" sx={{ my: 2 }}>
+          {isWeekendDay(date) ? "Attendance is not taken at weekends." : "There are no active students in this class."}
+        </Alert>
+      )}
+      {hasUnsaved && (
+        <Alert severity="warning" sx={{ my: 2 }}>
+          You have marks that are not saved yet.
+          {notMarked > 0 && ` ${notMarked} student${notMarked === 1 ? " is" : "s are"} still not marked and will be saved as blank.`}
+        </Alert>
+      )}
+
       <Divider textAlign="center" sx={{ py: 4 }}>
         <Chip label="Details" color="secondary" />
       </Divider>
@@ -234,12 +270,15 @@ function NewAttendance({ to }) {
                     label="Absent"
                   />
                 </RadioGroup>
-                {rowData?.reason && (
-                  <Stack direction="row" gap={1}>
+                {rowData?.status === "Absent" && (
+                  <Stack direction="row" gap={1} alignItems="center">
                     <Typography variant="body2" fontWeight="bold">
                       Reason:
                     </Typography>
-                    <Typography variant="body2">{rowData?.reason}</Typography>
+                    <Typography variant="body2">{rowData?.reason || "none given"}</Typography>
+                    <Button size="small" onClick={(e) => openReason(rowData, e.currentTarget)}>
+                      {rowData?.reason ? "Edit" : "Add"}
+                    </Button>
                   </Stack>
                 )}
               </>
@@ -252,36 +291,22 @@ function NewAttendance({ to }) {
                 <Button
                   size="small"
                   startIcon={<SaveAltRounded color="secondary" />}
-                  onClick={() => {
-                    const student = {
-                      _id: rowData?._id,
-                      fullName: rowData?.fullName,
-                      gender: rowData?.gender,
-                      status: rowData?.status,
-                      reason: rowData?.reason,
-                    };
-                    handleSave([student], saveStudentAttendance);
-                  }}
-                  disabled={isPending}
+                  onClick={() => handleSave([rowData], saveStudentAttendance)}
+                  disabled={isPending || !isMarkedRow(rowData)}
                 >
                   Save
                 </Button>
               ) : (
                 <Tooltip title="Save">
-                  <IconButton
-                    onClick={() => {
-                      const student = {
-                        _id: rowData?._id,
-                        fullName: rowData?.fullName,
-                        gender: rowData?.gender,
-                        status: rowData?.status,
-                      };
-                      handleSave([student], saveStudentAttendance);
-                    }}
-                    disabled={isPending}
-                  >
-                    <SaveAltRounded color="secondary" />
-                  </IconButton>
+                  <span>
+                    <IconButton
+                      aria-label={`Save ${rowData?.fullName}`}
+                      onClick={() => handleSave([rowData], saveStudentAttendance)}
+                      disabled={isPending || !isMarkedRow(rowData)}
+                    >
+                      <SaveAltRounded color="secondary" />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               ),
           },
@@ -298,18 +323,18 @@ function NewAttendance({ to }) {
               <CustomDatePicker
                 label="Date of Attendance"
                 date={dayjs(date)}
-                setDate={(d) => setDate(dayjs(d).format("YYYY-MM-DD"))}
+                setDate={(d) => d && dayjs(d).isValid() && changeDate(dayjs(d).format("YYYY-MM-DD"))}
                 disableFuture
                 shouldDisableWeekends
               />
             </Box>
             <DialogActions sx={{ p: 2 }}>
-              {!isWeekend(date) && (
+              {!isWeekendDay(date) && (
                 <Button
                   variant="contained"
                   startIcon={<SaveAsRounded />}
                   onClick={() => handleSave(allStudents, saveAttendance)}
-                  disabled={isPostingAttendance}
+                  disabled={isPostingAttendance || allStudents.length === 0}
                 >
                   {isPostingAttendance ? "Saving..." : "Save Attendance"}
                 </Button>

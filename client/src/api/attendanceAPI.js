@@ -1,5 +1,9 @@
 
 import api from './customAxios';
+import { normalizeApiError } from './apiError';
+
+// Failures are thrown (not returned), so a rejected save reaches onError and is never shown
+// as a success message.
 
 //Get all Students
 export const getAllAttendances = async () => {
@@ -11,7 +15,7 @@ export const getAllAttendances = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -29,7 +33,7 @@ export const getAttendance = async (id, { date, session, term }) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -43,7 +47,7 @@ export const postAttendance = async (newAttendance) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -57,7 +61,7 @@ export const postStudentAttendance = async (newAttendance) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -71,7 +75,7 @@ export const putAttendance = async (updatedAttendance) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -84,7 +88,7 @@ export const deleteAttendance = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -97,6 +101,6 @@ export const getAttendanceHistory = async ({ id, session, term }) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };

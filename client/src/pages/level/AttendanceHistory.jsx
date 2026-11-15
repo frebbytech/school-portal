@@ -6,7 +6,8 @@ import {
   ListItemText,
   IconButton,
   Box,
-
+  Alert,
+  Button,
 } from "@mui/material";
 import {
   Table,
@@ -52,16 +53,17 @@ function AttendanceHistory() {
     mutationFn: deleteAttendance,
   });
 
-  const handleDeleteAttendance = (id) => {
+  const levelId = id;
+  const handleDeleteAttendance = (attendanceId) => {
     Swal.fire({
       title: "Removing Attendance",
       text: `You are about to remove the selected attendance.Changes cannot be undone.`,
       showCancelButton: true,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(id, {
+        mutateAsync(attendanceId, {
           onSettled: () => {
-            queryClient.invalidateQueries(["attendance-history", id]);
+            queryClient.invalidateQueries({ queryKey: ["attendance-history", levelId] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));
@@ -76,6 +78,17 @@ function AttendanceHistory() {
 
   if (attendanceHistory.isPending) {
     return <DataSkeleton />;
+  }
+
+  if (attendanceHistory.isError) {
+    const why = typeof attendanceHistory.error === "string" ? attendanceHistory.error : attendanceHistory.error?.message;
+    return (
+      <Container>
+        <Alert severity="error" sx={{ my: 4 }} action={<Button color="inherit" size="small" onClick={() => attendanceHistory.refetch()}>Try again</Button>}>
+          {why || "Could not load the attendance history."}
+        </Alert>
+      </Container>
+    );
   }
 
   return (
@@ -93,7 +106,7 @@ function AttendanceHistory() {
         subtitle="Review past attendance records to analyze trends, identify issues, and ensure comprehensive tracking of student and staff presence."
         color="primary.main"
         right={
-          <IconButton onClick={attendanceHistory.refetch}>
+          <IconButton aria-label="Refresh" onClick={() => attendanceHistory.refetch()}>
             <Refresh sx={{ width: 36, height: 36 }} />
           </IconButton>
         }
@@ -102,7 +115,7 @@ function AttendanceHistory() {
       <Box sx={{ bgcolor: "#fff", p: 2 }}>
         <ListItemText
           primary="Attendance"
-          secondary={`${attendanceHistory?.data?.length} days`}
+          secondary={`${attendanceHistory?.data?.length ?? 0} days`}
           slotProps={{
             primary: {
               fontSize: 20,
@@ -181,9 +194,6 @@ function AttendanceHistory() {
           </Table>
         </TableContainer>
       </Box>
-      {attendanceHistory.isPending && (
-        <LoadingSpinner value="Loading Attendance History" />
-      )}
       {isPending && <LoadingSpinner value="Removing.Please Wait..." />}
     </Container>
   );
