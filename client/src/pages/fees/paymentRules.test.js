@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkAmount, exceedsOutstanding, outstandingAfter, paymentBlocker, receiptFigures } from "./paymentRules";
+import { checkAmount, exceedsOutstanding, outstandingAfter, overpaymentMessage, paymentBlocker, receiptFigures } from "./paymentRules";
 
 describe("checkAmount", () => {
   it("accepts whole and 2-decimal amounts", () => {
@@ -55,5 +55,12 @@ describe("receiptFigures", () => {
   it("never shows NaN when a figure is missing", () => {
     expect(receiptFigures({ paid: 100 })).toEqual({ paidNow: 100, totalPaid: 100, outstanding: 0, termFee: 0, arrears: 0 });
     expect(receiptFigures()).toMatchObject({ paidNow: 0, totalPaid: 0 });
+  });
+});
+
+describe("overpaymentMessage", () => {
+  it("names the amount owed, and says when nothing is owed", () => {
+    expect(overpaymentMessage(150)).toBe("This is more than the GHS 150.00 still owed. Advance payments are not accepted.");
+    expect(overpaymentMessage(0)).toMatch(/Nothing is owed/);
   });
 });

@@ -18,7 +18,10 @@ import { UserContext } from "@/context/providers/UserProvider";
 import dayjs from "@/lib/dates";
 import { currencyFormatter } from "@/config/currencyFormatter";
 import { receiptFigures } from "./paymentRules";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { getReceipt } from "@/api/currentFeeAPI";
+import QueryError from "@/components/QueryError";
 import { useReactToPrint } from "react-to-print";
 import { PrintRounded } from "@mui/icons-material";
 
@@ -28,7 +31,16 @@ export default function Receipt() {
   const navigate = useNavigate();
   const { state } = useLocation();
 
-  const fee = state?.fee;
+  const { invoice } = useParams();
+  // Right after a payment the figures arrive with the navigation; otherwise (a reprint from
+  // history, or the page reloaded) the receipt is loaded again by its number.
+  const passed = fee?.id && state.fee.id === invoice ? state.fee : null;
+  const saved = useQuery({
+    queryKey: ["receipt", invoice],
+    queryFn: () => getReceipt(invoice),
+    enabled: Boolean(invoice) && !passed,
+  });
+  const fee = passed || saved.data;
   const figures = receiptFigures(fee);
 
   const reactToPrintFn = useReactToPrint({
@@ -43,6 +55,25 @@ export default function Receipt() {
 
   // The receipt comes from the payment that was just made. After a reload (or a bookmark)
   // there is nothing to show, and an empty receipt must not look like a real one.
+  if (invoice && !passed && saved.isPending) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 6, textAlign: "center" }}>
+        <Typography>Loading receipt…</Typography>
+      </Container>
+    );
+  }
+
+  if (invoice && !passed && saved.isError) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 6 }}>
+        <QueryError what="this receipt" error={saved.error} onRetry={saved.refetch} />
+        <Button variant="contained" onClick={() => navigate("/fee/history")}>
+          Payment History
+        </Button>
+      </Container>
+    );
+  }
+
   if (!fee?.id) {
     return (
       <Container maxWidth="sm" sx={{ py: 6, textAlign: "center" }}>
@@ -50,7 +81,7 @@ export default function Receipt() {
           No receipt to show
         </Typography>
         <Typography color="text.secondary" paragraph>
-          A receipt opens right after a payment is recorded. Past payments are listed under Payment History.
+          Open a receipt from Payment History, or record a payment to get a new one.
         </Typography>
         <Button variant="contained" onClick={() => navigate("/fee/history")}>
           Payment History
@@ -126,7 +157,7 @@ export default function Receipt() {
             <Typography fontWeight="bold" fontSize={12}>
               Invoice No:
             </Typography>
-            <Typography fontSize={12}>{state?.fee?.id}</Typography>
+            <Typography fontSize={12}>{fee?.id}</Typography>
             <Typography fontWeight="bold" fontSize={12}>
               Invoice Date:
             </Typography>
@@ -156,11 +187,17 @@ export default function Receipt() {
             Invoice To
           </Typography>
           <Typography fontSize={12} color="primary">
-            {state?.fee?.payer?.name}
+            {fee?.payer?.name}
           </Typography>
           <Typography fontSize={12}>
-            Phone: {state?.fee?.payer?.phonenumber}
+            Phone: {fee?.payer?.phonenumber}
           </Typography>
+          {fee?.studentName && (
+            <Typography fontSize={12}>
+              Student: {fee.studentName}
+              {fee.levelName ? ` (${fee.levelName})` : ""}
+            </Typography>
+          )}
         </Box>
 
         {/* Table */}
@@ -191,7 +228,7 @@ export default function Receipt() {
             <Typography fontSize={12} fontWeight="bold" color="primary" mb={1}>
               Payments Method:
             </Typography>
-            <Typography fontSize={12}>{state?.fee?.paymentMethod}</Typography>
+            <Typography fontSize={12}>{fee?.paymentMethod}</Typography>
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
             <Box sx={{ maxWidth: 250, ml: "auto" }}>

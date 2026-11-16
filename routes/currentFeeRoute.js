@@ -20,6 +20,8 @@ const {
   getTopFeePayments,
 } = require("../config/helpers/fees");
 const Term = require("../models/termModel");
+const Student = require("../models/studentModel");
+const Level = require("../models/levelModel");
 const {
   requireStaff,
   requireRoleEnforced,
@@ -35,7 +37,8 @@ const {
   sessionInSchool,
 } = require("../middlewares/tenant");
 const { isValidObjectId } = require("mongoose");
-const { sumAmounts, subtract, percentPaid, parseMoney } = require("../common/money");
+const { sumAmounts, subtract, percentPaid, parseMoney, toMinor } = require("../common/money");
+const { termFeeFor, previousArrears, balanceOf, paymentLimit, overpaymentMessage, exceeds } = require("../common/feeBalance");
 const { logger } = require("../common/logger");
 const { withPagination } = require("../common/pagination");
 
@@ -292,6 +295,35 @@ router.get(
   })
 );
 
+// A receipt by its number (reprint), for staff of the school the payment belongs to.
+router.get(
+  "/receipt/:invoice",
+  requireStaff,
+  asyncHandler(async (req, res) => {
+    const invoice = String(req.params.invoice || "").slice(0, 100);
+    const record = invoice ? await CurrentFee.findOne({ "payment.id": invoice }).select("-__v") : null;
+    const owned = record ? await ownedCurrentFee(req, record._id) : null;
+    if (!owned) return res.status(404).json("Receipt not found.");
+
+    const index = owned.payment.findIndex((p) => p?.id === invoice);
+    const entry = owned.payment[index];
+    const [student, level] = await Promise.all([
+      Student.findById(owned.student).select("firstname surname othername"),
+      Level.findById(owned.level).select("name type"),
+    ]);
+
+    res.status(200).json({
+      ...entry,
+      // Older payments were recorded before the figures were kept: work them out from the record.
+      fee: entry.termFees ?? (await termFeeFor(owned.level, owned.term)),
+      arreas: entry.arrears ?? 0,
+      feePaid: entry.paidBefore ?? sumAmounts(owned.payment.slice(0, index), "paid"),
+      studentName: student?.fullName || "",
+      levelName: `${level?.name ?? ""}${level?.type ?? ""}`.trim(),
+    });
+  })
+);
+
 router.get(
   "/:id",
   requireStaff,
@@ -439,27 +471,7 @@ router.post(
       return res.status(403).json(FORBIDDEN);
     }
 
-    // Earlier terms: what was owed (that term's fee for that class) less what was paid.
-    // Fixed (H-12): these were summed from fields of an array, so arrears were always 0.
-    const studentPreviousFees = await CurrentFee.find({
-      student,
-      term: { $ne: term },
-    }).select(["payment", "level", "term"]);
-
-    const previousFees = await Promise.all(
-      studentPreviousFees.map(async ({ level: previousLevel, term: previousTerm, payment }) => {
-        const levelFee = await Fee.findOne({ level: previousLevel, term: previousTerm }).select("amount");
-        const fees = sumAmounts(levelFee?.amount, "amount");
-        const paid = sumAmounts(payment, "paid");
-        return { fees, paid, remaining: Math.max(subtract(fees, paid), 0) };
-      })
-    );
-
-    const previous = {
-      fees: sumAmounts(previousFees, "fees"),
-      paid: sumAmounts(previousFees, "paid"),
-      remaining: sumAmounts(previousFees, "remaining"),
-    };
+    const previous = await previousArrears(student, term);
 
     // The student's record for this term. It is created on first use (as before);
     // `create(...).select()` threw, and the upsert avoids two requests both creating it.
@@ -475,22 +487,15 @@ router.post(
     ).select("payment");
 
     // This term's fee for this class (H-12c: previously not filtered by term)
-    const currentLevelFee = await Fee.findOne({ level, term }).select("amount");
-
-    const fees = sumAmounts(currentLevelFee?.amount, "amount");
+    const termFees = await termFeeFor(level, term);
     const amountPaid = sumAmounts(currentStudentFee?.payment, "paid");
-    const remaining = Math.max(subtract(fees, amountPaid), 0);
+    const balance = balanceOf({ termFees, previous, paid: amountPaid });
 
     res.status(200).json({
-      current: {
-        _id: currentStudentFee?._id,
-        fees: fees,
-        paid: amountPaid,
-        remaining,
-      },
-      previous,
-      totalFees: sumAmounts([fees, previous.remaining]),
-      totalOutstanding: sumAmounts([remaining, previous.remaining]),
+      current: { _id: currentStudentFee?._id, ...balance.current },
+      previous: balance.previous,
+      totalFees: balance.totalFees,
+      totalOutstanding: balance.totalOutstanding,
     });
   })
 );
@@ -516,24 +521,43 @@ router.post(
         .send("Error creating new CurrentFee.Try again later");
     }
 
+    // No advance payments: what is owed is worked out here, never taken from the browser.
+    const termFees = await termFeeFor(record.level, record.term);
+    const previous = await previousArrears(record.student, record.term);
+    const limit = paymentLimit({ termFees, previous });
+    const owed = balanceOf({ termFees, previous, paid: sumAmounts(record.payment, "paid") }).totalOutstanding;
+    if (exceeds(clean.paid, owed)) {
+      return res.status(400).send(overpaymentMessage(clean.paid, owed));
+    }
+
     const newPayment = {
       ...clean,
+      outstanding: subtract(owed, clean.paid),
+      // What the receipt showed at the time, kept so a reprint never changes later.
+      termFees,
+      arrears: previous.remaining,
+      paidBefore: sumAmounts(record.payment, "paid"),
       createdAt: new Date(),
       issuerID: req.user.id,
       issuerName: req.user?.fullname,
       id: getInvoiceId({ includeTimestamp: true }),
     };
 
-    // $push is atomic, so two simultaneous payments are both kept.
-    const currentFee = await CurrentFee.findByIdAndUpdate(
-      record._id,
+    // $push is atomic, so two simultaneous payments are both kept. The $expr makes the
+    // limit atomic too: if another payment landed first and this one no longer fits, nothing
+    // is written.
+    const currentFee = await CurrentFee.findOneAndUpdate(
+      {
+        _id: record._id,
+        $expr: { $lte: [{ $add: [{ $sum: "$payment.paid" }, clean.paid] }, limit + 0.005] },
+      },
       { $push: { payment: newPayment } },
       { new: true }
     );
     if (!currentFee) {
       return res
-        .status(404)
-        .send("Error creating new CurrentFee.Try again later");
+        .status(409)
+        .send("Another payment was just recorded for this student. Reload the balance and try again.");
     }
 
     logger.info("payment recorded", {
@@ -569,6 +593,17 @@ router.put(
         return res.status(400).send("Every payment needs a valid amount (0 or more, at most 2 decimals).");
       }
       changes.payment = cleaned;
+
+      // Edits may not push the total above what is owed (they can always lower it).
+      const termFees = await termFeeFor(owned.level, owned.term);
+      const previous = await previousArrears(owned.student, owned.term);
+      const limit = paymentLimit({ termFees, previous });
+      const paidAfter = sumAmounts(cleaned, "paid");
+      if (toMinor(paidAfter) > toMinor(limit) && toMinor(paidAfter) > toMinor(sumAmounts(owned.payment, "paid"))) {
+        return res
+          .status(400)
+          .send(`These payments add up to GHS ${paidAfter.toFixed(2)}, which is more than the GHS ${limit.toFixed(2)} owed for this term and earlier arrears. Advance payments are not accepted.`);
+      }
     }
 
     const modifiedCurrentFee = owned

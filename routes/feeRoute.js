@@ -15,7 +15,8 @@ const {
 } = require("../middlewares/authorize");
 const { levelInSchool, termInSchool, sessionInSchool } = require("../middlewares/tenant");
 const { isValidObjectId } = require("mongoose");
-const { sumAmounts, parseMoney } = require("../common/money");
+const { sumAmounts, parseMoney, toMinor } = require("../common/money");
+const { previousArrears } = require("../common/feeBalance");
 
 const MAX_FEE_ITEMS = 50;
 
@@ -247,7 +248,7 @@ router.put(
   adminOnly,
   asyncHandler(async (req, res) => {
     const owned = isValidObjectId(req.body._id)
-      ? await Fee.findOne({ _id: req.body._id, school: req.user.school }).select("_id")
+      ? await Fee.findOne({ _id: req.body._id, school: req.user.school }).select("_id amount level term")
       : null;
     if (!owned) {
       return res.status(404).send("Error updating Fees info.Try again later");
@@ -257,6 +258,27 @@ router.put(
     if (!amount) {
       return res.status(400).send("Fee items need a valid amount (0 or more, at most 2 decimals).");
     }
+
+    // No advance payments: lowering a class's fees must not leave any student having paid more
+    // than they now owe (this term's fee plus their earlier arrears).
+    const newTotal = sumAmounts(amount, "amount");
+    if (toMinor(newTotal) < toMinor(sumAmounts(owned.amount, "amount")) && owned.level && owned.term) {
+      const records = await CurrentFee.find({ level: owned.level, term: owned.term, "payment.0": { $exists: true } }).select(["payment", "student"]);
+      let mostOver = 0;
+      await Promise.all(
+        records.map(async (record) => {
+          const previous = await previousArrears(record.student, owned.term);
+          const over = sumAmounts(record.payment, "paid") - (newTotal + previous.remaining);
+          if (over > mostOver) mostOver = over;
+        })
+      );
+      if (toMinor(mostOver) > 0) {
+        return res
+          .status(409)
+          .send(`These fees cannot be lowered to GHS ${newTotal.toFixed(2)}: at least one student has already paid GHS ${(Math.round(mostOver * 100) / 100).toFixed(2)} more than that. Correct those payments first.`);
+      }
+    }
+
     await Fee.updateOne({ _id: owned._id }, { amount });
 
     res.status(201).json("Fee details has been updated successfully!!!");

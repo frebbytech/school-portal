@@ -65,7 +65,7 @@ import React, { use } from "react";
 //             </tr>
 //           </thead>
 //           <tbody>
-//             {feeData?.payment.map((payment, index) => (
+//             {(feeData?.payment || []).map((payment, index) => (
 //               <tr key={index}>
 //                 <td>
 //                   {dayjs(new Date(payment?.date || payment?.createdAt)).format(
@@ -193,11 +193,10 @@ function FeeReportTemplate({ student, feeData = [] }) {
             </span>
           </div>
           <div style={styles.salaryItem}>
-            <span style={styles.salaryLabel}>Arreas</span>
+            <span style={styles.salaryLabel}>Outstanding</span>
             <span style={styles.salaryValue}>
-              {currencyFormatter(
-                feeData.payment[feeData.payment?.length - 1]?.outstanding
-              )}
+              {/* The balance after the latest payment; before any payment, the whole fee. */}
+              {currencyFormatter(outstandingNow(feeData))}
             </span>
           </div>
         </div>
@@ -205,7 +204,7 @@ function FeeReportTemplate({ student, feeData = [] }) {
 
       {/* Statement of Monthly Contributions Section */}
       <div style={styles.contributionSection}>
-        <h3 style={styles.sectionTitle}>Statement of Fees Paymemt</h3>
+        <h3 style={styles.sectionTitle}>Statement of Fees Payments</h3>
         <p style={styles.contributionDescription}>
           Payment made since the beginning of the term.
         </p>
@@ -222,7 +221,7 @@ function FeeReportTemplate({ student, feeData = [] }) {
               </tr>
             </thead>
             <tbody>
-              {feeData?.payment.map((payment, index) => (
+              {(feeData?.payment || []).map((payment, index) => (
                 <tr key={index}>
                   <td style={styles.td}>
                     {dayjs(
@@ -245,6 +244,14 @@ function FeeReportTemplate({ student, feeData = [] }) {
     </div>
   );
 }
+
+// What is still owed: the balance stored on the latest payment, or the fee when nothing is paid.
+export const outstandingNow = (feeData) => {
+  const payments = feeData?.payment || [];
+  const last = payments[payments.length - 1]?.outstanding;
+  if (last !== undefined && last !== null && !Number.isNaN(Number(last))) return Number(last);
+  return Math.max(Math.round(Number(feeData?.fees || 0) * 100) - Math.round(Number(feeData?.paid || 0) * 100), 0) / 100;
+};
 
 const styles = {
   container: {

@@ -439,3 +439,12 @@ Branch `refactor/stage-10-cleanup` (from the Stage 9 branch). **Not executed** (
 - Enforcing authorization can block a legitimate flow nobody documented (especially for the student portal and teachers). Mitigation: `ENFORCE_AUTHZ` flag, staged rollout, access-matrix tests.
 - Rotating JWT secrets forces re-login; enabling SMTP TLS verification may expose a misconfigured mail provider.
 - Data migrations touch production financial and academic records; each needs backup, rehearsal, verification, and a rollback note.
+
+## 5q. No advance payments (2026-11-15, owner decision)
+
+- `common/feeBalance.js`: `termFeeFor`, `previousArrears`, `balanceOf`, `paymentLimit`, `overpaymentMessage`.
+- `POST /current-fees`: refuses a payment above what is owed (400); atomic `$expr` guard against simultaneous payments (409); the stored `outstanding` is computed by the server; the payment keeps `termFees`, `arrears`, `paidBefore` so a receipt reprints unchanged.
+- `PUT /current-fees`: an edit cannot raise the total above what is owed.
+- `PUT /fees`: lowering a class's fees is refused (409) when a student has already paid more than the new total.
+- `GET /current-fees/receipt/:invoice`: staff of the same school, 404 otherwise.
+- Open: payments beyond this term's fee clear arrears only on the current record; the earlier term's record is not credited (see `docs/ui-refactor-plan.md`, U5d).

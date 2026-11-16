@@ -177,6 +177,7 @@ export const shellRoutes = [
       { path: "payment/:student", component: pg.StudentFeesHistory },
       { path: "level", component: pg.LevelFeeInformation },
       { path: "receipt", element: <Receipt /> },
+      { path: "receipt/:invoice", element: <Receipt /> },
     ],
   },
   {

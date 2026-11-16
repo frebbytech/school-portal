@@ -20,7 +20,7 @@ import { getCurrentFeeForStudent, postCurrentFee } from "@/api/currentFeeAPI";
 import { currencyOrDash } from "@/config/currencyFormatter";
 import QueryError from "@/components/QueryError";
 import { thrownMessage } from "@/lib/formErrors";
-import { checkAmount, exceedsOutstanding, outstandingAfter, paymentBlocker } from "./paymentRules";
+import { checkAmount, exceedsOutstanding, overpaymentMessage, paymentBlocker } from "./paymentRules";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { UserContext } from "@/context/providers/UserProvider";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
@@ -80,6 +80,7 @@ const FeeMakePayment = () => {
     watch,
     setValue,
     trigger,
+    getValues,
     handleSubmit,
     formState: { errors },
     setError,
@@ -139,7 +140,13 @@ const FeeMakePayment = () => {
   const handleOpenPayee = async () => {
     if (blocker) return;
     // Check the amount now, so the payer's details are only asked for a valid payment.
-    if (await trigger("amount")) setShowPayeeDetails(true);
+    if (!(await trigger("amount"))) return;
+    const { amount } = checkAmount(getValues("amount"));
+    if (exceedsOutstanding(amount, feeInfo?.totalOutstanding)) {
+      setError("amount", { type: "custom", message: overpaymentMessage(feeInfo?.totalOutstanding) });
+      return;
+    }
+    setShowPayeeDetails(true);
   };
 
   //Add fees to database
@@ -151,22 +158,24 @@ const FeeMakePayment = () => {
     if (isPending || blocker) return;
     const { amount } = checkAmount(values.amount);
     const owed = Number(feeInfo?.totalOutstanding);
+    if (exceedsOutstanding(amount, owed)) {
+      setShowPayeeDetails(false);
+      setError("amount", { type: "custom", message: overpaymentMessage(owed) });
+      return;
+    }
+    // The balance after this payment is worked out and stored by the server.
     const payment = {
       _id: feeInfo?.current?._id,
       payment: {
         paid: amount,
-        outstanding: outstandingAfter(owed, amount),
         paymentMethod: values?.paymentMethod,
         payer: values.payee,
       },
     };
-    const over = exceedsOutstanding(amount, owed);
     Swal.fire({
       title: "Record this payment?",
       text:
-        `${currencyOrDash(amount)} from ${values.payee?.name || "the payer"} for ${studentInfo?.fullName}.` +
-        (over ? ` This is MORE than the ${currencyOrDash(owed)} still owed.` : ""),
-      icon: over ? "warning" : undefined,
+        `${currencyOrDash(amount)} from ${values.payee?.name || "the payer"} for ${studentInfo?.fullName}.`,
       showCancelButton: true,
       confirmButtonText: "Record payment",
       backdrop: false,
@@ -180,13 +189,16 @@ const FeeMakePayment = () => {
         },
         onSuccess: (recorded) => {
           schoolSessionDispatch(alertSuccess("Payment recorded"));
-          navigate("/fee/receipt", {
+          // The receipt has its own address (its number), so it can be reopened later.
+          navigate(`/fee/receipt/${encodeURIComponent(recorded.id)}`, {
             state: {
               fee: {
                 ...recorded,
-                fee: feeInfo?.current?.fees,
-                arreas: feeInfo?.previous?.remaining,
-                feePaid: feeInfo?.current?.paid,
+                fee: recorded.termFees ?? feeInfo?.current?.fees,
+                arreas: recorded.arrears ?? feeInfo?.previous?.remaining,
+                feePaid: recorded.paidBefore ?? feeInfo?.current?.paid,
+                studentName: studentInfo?.fullName,
+                levelName: currentLevel?.levelName,
               },
             },
           });

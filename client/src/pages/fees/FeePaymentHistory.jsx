@@ -2,6 +2,8 @@ import React, { useContext, useMemo, useState } from "react";
 import { Box, Stack, Typography } from "@mui/material";
 import PropTypes from "prop-types";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import Button from "@mui/material/Button";
 import CustomizedMaterialTable from "@/components/tables/CustomizedMaterialTable";
 import { getAllCurrentFeesPaymentHistoryByDate } from "@/api/currentFeeAPI";
 import CustomDatePicker from "@/components/inputs/CustomDatePicker";
@@ -15,6 +17,7 @@ import QueryError from "@/components/QueryError";
 
 function FeePaymentHistory() {
   const { session } = useContext(UserContext);
+  const navigate = useNavigate();
   const [date, setDate] = useState(dayjs());
 
   const fees = useQuery({
@@ -107,6 +110,16 @@ function FeePaymentHistory() {
             {
               title: "Completed By",
               field: "payment.issuerName",
+            },
+            {
+              title: "Receipt",
+              sorting: false,
+              render: ({ payment }) =>
+                payment?.id ? (
+                  <Button size="small" onClick={() => navigate(`/fee/receipt/${encodeURIComponent(payment.id)}`)}>
+                    View
+                  </Button>
+                ) : null,
             },
           ]}
           data={fees?.data || []}

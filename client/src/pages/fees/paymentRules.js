@@ -5,13 +5,13 @@
 const toPesewas = (value) => Math.round(Number(value) * 100);
 
 /** Checks what was typed in "Amount to be paid". Returns { ok, amount, message }. */
-export const checkAmount = (raw) => {
+export const checkAmount = (raw, { allowZero = false } = {}) => {
   const text = String(raw ?? "").trim();
   if (text === "") return { ok: false, message: "Enter the amount paid" };
   if (!/^\d+(\.\d+)?$/.test(text)) return { ok: false, message: "Amount must be a number, for example 150 or 150.50" };
   if (!/^\d+(\.\d{1,2})?$/.test(text)) return { ok: false, message: "Use at most 2 decimal places" };
   const amount = Number(text);
-  if (amount <= 0) return { ok: false, message: "Amount should be more than zero" };
+  if (amount <= 0 && !allowZero) return { ok: false, message: "Amount should be more than zero" };
   return { ok: true, amount };
 };
 
@@ -48,3 +48,11 @@ export const receiptFigures = (fee = {}) => {
     arrears: Number(fee.arreas) || 0,
   };
 };
+
+const money = (n) => `GHS ${Number(n).toFixed(2)}`;
+
+/** Advance payments are not accepted (owner decision 2026-11-15). The server enforces it too. */
+export const overpaymentMessage = (owed) =>
+  Number(owed) > 0
+    ? `This is more than the ${money(owed)} still owed. Advance payments are not accepted.`
+    : "Nothing is owed, so a payment cannot be recorded. Advance payments are not accepted.";

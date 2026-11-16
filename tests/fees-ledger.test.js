@@ -130,6 +130,107 @@ describe("fees ledger (Stage 8)", () => {
     });
   });
 
+  describe("no advance payments (owner decision 2026-11-15)", () => {
+    let lvl, s2, rec;
+    const pay = (payment, id = rec._id) =>
+      as(request(app).post(`${base}/current-fees`), adminTok).send({ _id: String(id), payment });
+
+    beforeAll(async () => {
+      // A fresh student: this term's fee is 100, no earlier terms.
+      lvl = await make(Level, { school: school._id, session: session._id, term: term2._id, name: "NA1" });
+      s2 = await make(Student, { indexnumber: uniq("na"), school: school._id, firstname: "Esi", level: lvl._id });
+      await make(Fee, { school: school._id, session: session._id, term: term2._id, level: lvl._id, amount: [{ name: "Tuition", amount: 100 }] });
+      rec = await make(CurrentFee, { school: school._id, session: session._id, term: term2._id, level: lvl._id, student: s2._id, payment: [] });
+    });
+
+    it("refuses a payment of more than is owed and records nothing", async () => {
+      const res = await pay({ paid: 100.01 });
+      expect(res.status).toBe(400);
+      expect(res.text).toMatch(/Advance payments are not accepted/);
+      expect((await CurrentFee.findById(rec._id)).payment).toHaveLength(0);
+    });
+
+    it("accepts exactly what is owed, and stores the balance worked out by the server", async () => {
+      const first = await pay({ paid: 60, outstanding: 99999 }); // the browser's figure is ignored
+      expect(first.status).toBe(200);
+      expect(first.body.outstanding).toBe(40);
+      const second = await pay({ paid: 40 });
+      expect(second.status).toBe(200);
+      expect(second.body.outstanding).toBe(0);
+    });
+
+    it("refuses any further payment once fully paid", async () => {
+      const res = await pay({ paid: 0.01 });
+      expect(res.status).toBe(400);
+      expect(res.text).toMatch(/Nothing is owed/);
+      expect((await CurrentFee.findById(rec._id)).payment).toHaveLength(2);
+    });
+
+    it("two payments that together exceed the balance cannot both be recorded", async () => {
+      const s3 = await make(Student, { indexnumber: uniq("na"), school: school._id, firstname: "Kofi", level: lvl._id });
+      const r3 = await make(CurrentFee, { school: school._id, session: session._id, term: term2._id, level: lvl._id, student: s3._id, payment: [] });
+      const results = await Promise.all([pay({ paid: 70 }, r3._id), pay({ paid: 70 }, r3._id)]);
+      const codes = results.map((r) => r.status).sort();
+      expect(codes[0]).toBe(200);
+      expect([400, 409]).toContain(codes[1]); // refused up front, or by the atomic check if both got past it
+      expect((await CurrentFee.findById(r3._id)).payment).toHaveLength(1);
+    });
+
+    it("lets money beyond this term's fee clear earlier arrears, and no more than that", async () => {
+      // stud has 200 arrears from term 1 and this term's fee of 500.1 (record2, already part-paid above)
+      const before = (await info()).body;
+      const owed = before.totalOutstanding;
+      const tooMuch = await pay({ paid: owed + 1 }, record2._id);
+      expect(tooMuch.status).toBe(400);
+      const exact = await pay({ paid: owed }, record2._id);
+      expect(exact.status).toBe(200);
+      const after = (await info()).body;
+      expect(after.totalOutstanding).toBe(0);
+      expect(after.previous.remaining).toBe(0);
+    });
+
+    it("a receipt can be fetched again by its number, with the figures it had", async () => {
+      const s4 = await make(Student, { indexnumber: uniq("na"), school: school._id, firstname: "Efua", surname: "Mensah", level: lvl._id });
+      const r4 = await make(CurrentFee, { school: school._id, session: session._id, term: term2._id, level: lvl._id, student: s4._id, payment: [] });
+      const made = await pay({ paid: 30, paymentMethod: "Cash", payer: "x" }, r4._id);
+      expect(made.status).toBe(200);
+      const res = await as(request(app).get(`${base}/current-fees/receipt/${made.body.id}`), adminTok);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ id: made.body.id, paid: 30, outstanding: 70, fee: 100, arreas: 0, feePaid: 0, levelName: "NA1" });
+      expect(res.body.studentName).toMatch(/Mensah/);
+    });
+
+    it("does not show a receipt to another school, or one that does not exist", async () => {
+      const made = await pay({ paid: 1 }, (await make(CurrentFee, { school: school._id, session: session._id, term: term2._id, level: lvl._id, student: s2._id, payment: [] }))._id);
+      const otherSchool = await createSchool();
+      const outsider = staffToken(await createUser(otherSchool, "administrator"));
+      expect((await as(request(app).get(`${base}/current-fees/receipt/${made.body.id}`), outsider)).status).toBe(404);
+      expect((await as(request(app).get(`${base}/current-fees/receipt/NOPE`), adminTok)).status).toBe(404);
+    });
+
+    it("fees cannot be lowered below what a student has already paid", async () => {
+      const s5 = await make(Student, { indexnumber: uniq("na"), school: school._id, firstname: "Yaa", level: lvl._id });
+      const lvl5 = await make(Level, { school: school._id, session: session._id, term: term2._id, name: "NA5" });
+      const fee5 = await make(Fee, { school: school._id, session: session._id, term: term2._id, level: lvl5._id, amount: [{ fee: "Tuition", amount: 100 }] });
+      const r5 = await make(CurrentFee, { school: school._id, session: session._id, term: term2._id, level: lvl5._id, student: s5._id, payment: [] });
+      expect((await pay({ paid: 80 }, r5._id)).status).toBe(200);
+      const put = (total) => as(request(app).put(`${base}/fees`), adminTok).send({ _id: String(fee5._id), amount: [{ fee: "Tuition", amount: total }] });
+      const refused = await put(50);
+      expect(refused.status).toBe(409);
+      expect(refused.text).toMatch(/already paid GHS 30.00 more/);
+      expect((await Fee.findById(fee5._id)).amount[0].amount).toBe(100);
+      expect((await put(80)).status).toBe(201); // exactly what was paid is fine
+      expect((await put(500)).status).toBe(201); // raising is always fine
+    });
+
+    it("an edit cannot raise the total above what is owed, but may lower it", async () => {
+      const raise = await as(request(app).put(`${base}/current-fees`), adminTok).send({ id: String(rec._id), payment: [{ paid: 100 }, { paid: 50 }] });
+      expect(raise.status).toBe(400);
+      const lower = await as(request(app).put(`${base}/current-fees`), adminTok).send({ id: String(rec._id), payment: [{ paid: 60 }, { paid: 30 }] });
+      expect(lower.status).toBe(200);
+    });
+  });
+
   describe("editing and deleting payment records", () => {
     it("validates edited payments and leaves the record unchanged when invalid", async () => {
       const before = (await CurrentFee.findById(record1._id)).payment;

@@ -59,6 +59,7 @@ Common behaviour:
 | GET | `/api/frebbys/v1/current-fees/day` | staff |
 | GET | `/api/frebbys/v1/current-fees/history` | staff, or the student themself |
 | POST | `/api/frebbys/v1/current-fees/level` | staff |
+| GET | `/api/frebbys/v1/current-fees/receipt/:invoice` | staff |
 | POST | `/api/frebbys/v1/current-fees/student` | staff |
 | POST | `/api/frebbys/v1/current-fees/summary` | staff |
 
@@ -333,4 +334,4 @@ Common behaviour:
 | PUT | `/api/frebbys/v1/users/school` | role-restricted |
 | POST | `/api/frebbys/v1/users/verify` | refresh cookie |
 
-_198 endpoints._
+_199 endpoints._

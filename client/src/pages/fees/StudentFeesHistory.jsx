@@ -104,7 +104,6 @@ const StudentFeesHistory = () => {
         </>
       </Box>
       <div ref={componentRef} className="print-container">
-        {/* <FeeReport student={studentFee?.data} /> */}
         {studentFee?.data?.map((data, index) => {
           return (
             <FeeReportTemplate

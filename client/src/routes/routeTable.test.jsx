@@ -28,7 +28,7 @@ describe("route table", () => {
 
   it("gives administrators every administrator screen when all modules are on", () => {
     const admin = pathsFor("administrator");
-    for (const p of ["/session", "/session/new", "/level", "/level/:id/history", "/subject", "/student", "/student/view/:studentId/fees", "/teacher/:id/levels", "/examination/:levelId/upload", "/fee/receipt", "/messages/new", "/uploads", "/settings", "/users/:id/permissions", "/events/:id/edit", "/departments-houses", "/announcements", "/profile", "/notes"]) {
+    for (const p of ["/session", "/session/new", "/level", "/level/:id/history", "/subject", "/student", "/student/view/:studentId/fees", "/teacher/:id/levels", "/examination/:levelId/upload", "/fee/receipt", "/fee/receipt/:invoice", "/messages/new", "/uploads", "/settings", "/users/:id/permissions", "/events/:id/edit", "/departments-houses", "/announcements", "/profile", "/notes"]) {
       expect(admin).toContain(p);
     }
     expect(admin).not.toContain("/course");

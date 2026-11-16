@@ -187,6 +187,8 @@ describe("schools, messages and fees authorization (finding C-6)", () => {
   describe("current fees", () => {
     let cfA, cfB;
     beforeAll(async () => {
+      // This term's fee for the class, so a payment of 50 is within what is owed (no advance payments).
+      await make(Fee, { school: schoolA._id, level: levelA._id, term: termA._id, amount: [{ name: "Tuition", amount: 100 }] });
       cfA = await make(CurrentFee, { term: termA._id, level: levelA._id, student: studentA._id, payment: [] });
       cfB = await make(CurrentFee, { term: termB._id, level: levelB._id, student: studentB._id, payment: [{ paid: 10 }] });
     });

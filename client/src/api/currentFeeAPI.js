@@ -150,3 +150,17 @@ export const deleteCurrentFee = async (id) => {
     throw normalizeApiError(error);
   }
 };
+
+// A receipt by its number (for reprints and for opening one after a page reload).
+export const getReceipt = async (invoice) => {
+  try {
+    const res = await api({
+      method: 'GET',
+      url: `/current-fees/receipt/${encodeURIComponent(invoice)}`,
+    });
+
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+};
