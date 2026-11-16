@@ -38,7 +38,7 @@ const EditFee = () => {
     reset({ items: normalizeItems(feeEditData?.data?.amount) });
   }, [feeEditData, reset]);
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: putFee });
+  const { mutate, isPending } = useMutation({ mutationFn: putFee });
 
   const handleClose = () => {
     schoolSessionDispatch({ type: "setFeeEditData", payload: { open: false, data: {} } });
@@ -46,7 +46,7 @@ const EditFee = () => {
 
   const onSubmit = (values) => {
     clearErrors("root.server");
-    mutateAsync(
+    mutate(
       { _id: feeEditData?.data?._id, amount: values.items },
       {
         onSettled: () => queryClient.invalidateQueries({ queryKey: ["fees"] }),

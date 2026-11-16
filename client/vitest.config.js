@@ -20,7 +20,7 @@ export default mergeConfig(
       // once can time out module loading ("Timeout calling fetch"), so run fewer at a time.
       testTimeout: 20000,
       hookTimeout: 20000,
-      poolOptions: { forks: { maxForks: 4, minForks: 1 } },
+      poolOptions: { forks: { maxForks: 2, minForks: 1 } },
     },
   })
 );

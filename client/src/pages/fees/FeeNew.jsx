@@ -1,3 +1,4 @@
+import { thrownMessage } from "@/lib/formErrors";
 import React, { useContext, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Swal from "sweetalert2";
@@ -28,7 +29,7 @@ const FeeNew = () => {
     initialData: [],
   });
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: deleteFee });
+  const { mutate, isPending } = useMutation({ mutationFn: deleteFee });
 
   const handleDeleteFee = (id) => {
     Swal.fire({
@@ -37,21 +38,18 @@ const FeeNew = () => {
       showCancelButton: true,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(id, {
+        mutate(id, {
           onSettled: () => {
-            queryClient.invalidateQueries([
-              "fees",
-              session?.sessionId,
-              session?.termId,
-            ]);
+            queryClient.invalidateQueries({ queryKey: ["fees"] });
           },
           onSuccess: () => {
             schoolSessionDispatch(
               alertSuccess("Fee has been removed successfully!!!")
             );
           },
-          onError: () => {
-            schoolSessionDispatch(alertError("Error removing Fee!!!"));
+          // The server says why (for example: payments were already recorded against it).
+          onError: (error) => {
+            schoolSessionDispatch(alertError(thrownMessage(error, "Error removing Fee!!!")));
           },
         });
       }

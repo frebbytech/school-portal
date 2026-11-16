@@ -40,7 +40,7 @@ const AddFee = ({ open, setOpen }) => {
   } = useForm({ resolver: yupResolver(schema), defaultValues: { level: null, items: [] } });
   useUnsavedChangesWarning(open && isDirty);
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: postFee });
+  const { mutate, isPending } = useMutation({ mutationFn: postFee });
 
   const handleClose = () => {
     reset();
@@ -49,7 +49,7 @@ const AddFee = ({ open, setOpen }) => {
 
   const onSubmit = (values) => {
     clearErrors("root.server");
-    mutateAsync(
+    mutate(
       {
         session: session?.sessionId,
         term: session?.termId,

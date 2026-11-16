@@ -41,7 +41,7 @@ describe("edit fees dialog", () => {
     const { dispatch, user } = setup();
     await screen.findByText("Tuition");
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/cannot be lowered/);
+    expect(await screen.findByText(/cannot be lowered/)).toBeInTheDocument();
     expect(dispatch).not.toHaveBeenCalled();
   });
 

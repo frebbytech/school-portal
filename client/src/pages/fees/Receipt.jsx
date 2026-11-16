@@ -34,7 +34,7 @@ export default function Receipt() {
   const { invoice } = useParams();
   // Right after a payment the figures arrive with the navigation; otherwise (a reprint from
   // history, or the page reloaded) the receipt is loaded again by its number.
-  const passed = fee?.id && state.fee.id === invoice ? state.fee : null;
+  const passed = state?.fee?.id && state.fee.id === invoice ? state.fee : null;
   const saved = useQuery({
     queryKey: ["receipt", invoice],
     queryFn: () => getReceipt(invoice),

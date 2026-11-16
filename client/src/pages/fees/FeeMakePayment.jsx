@@ -150,7 +150,7 @@ const FeeMakePayment = () => {
   };
 
   //Add fees to database
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postCurrentFee,
   });
 
@@ -181,7 +181,7 @@ const FeeMakePayment = () => {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (!isConfirmed) return;
-      mutateAsync(payment, {
+      mutate(payment, {
         onSettled: () => {
           queryClient.invalidateQueries({ queryKey: ["student-fees"] });
           queryClient.invalidateQueries({ queryKey: ["current-fees-summary"] });
