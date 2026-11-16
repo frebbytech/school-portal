@@ -16,7 +16,6 @@ const {
 const { levelInSchool, termInSchool, sessionInSchool } = require("../middlewares/tenant");
 const { isValidObjectId } = require("mongoose");
 const { sumAmounts, parseMoney, toMinor } = require("../common/money");
-const { previousArrears } = require("../common/feeBalance");
 
 const MAX_FEE_ITEMS = 50;
 
@@ -260,18 +259,17 @@ router.put(
     }
 
     // No advance payments: lowering a class's fees must not leave any student having paid more
-    // than they now owe (this term's fee plus their earlier arrears).
+    // than this term's total.
     const newTotal = sumAmounts(amount, "amount");
     if (toMinor(newTotal) < toMinor(sumAmounts(owned.amount, "amount")) && owned.level && owned.term) {
       const records = await CurrentFee.find({ level: owned.level, term: owned.term, "payment.0": { $exists: true } }).select(["payment", "student"]);
+      // Each term is paid on its own record, so a student's payments for this term may not
+      // exceed this term's (new) total.
       let mostOver = 0;
-      await Promise.all(
-        records.map(async (record) => {
-          const previous = await previousArrears(record.student, owned.term);
-          const over = sumAmounts(record.payment, "paid") - (newTotal + previous.remaining);
-          if (over > mostOver) mostOver = over;
-        })
-      );
+      for (const record of records) {
+        const over = sumAmounts(record.payment, "paid") - newTotal;
+        if (over > mostOver) mostOver = over;
+      }
       if (toMinor(mostOver) > 0) {
         return res
           .status(409)

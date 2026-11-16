@@ -32,6 +32,13 @@ describe("fee receipt", () => {
     expect(screen.getByText("GHS 200.00")).toBeInTheDocument();
     expect(screen.getByText("Paid This Term :").nextSibling).toHaveTextContent("GHS 300.00");
   });
+  it("says where a payment split over terms went", () => {
+    show({ fee: { id: "INV-9", paid: 120, paidThisTerm: 70, outstanding: 30, fee: 100, arreas: 50, appliedTo: [{ term: "Term 1", amount: 50 }, { term: "Term 2", amount: 70 }] } });
+    expect(screen.getByText(/applied to the oldest unpaid term first/i)).toBeInTheDocument();
+    expect(screen.getByText("Term 1: GHS 50.00")).toBeInTheDocument();
+    expect(screen.getByText("Paid This Term :").nextSibling).toHaveTextContent("GHS 70.00");
+  });
+
   it("has no placeholder text", () => {
     show({ fee: { id: "INV-9", paid: 1, outstanding: 0 } });
     expect(screen.queryByText(/lorem ipsum/i)).toBeNull();

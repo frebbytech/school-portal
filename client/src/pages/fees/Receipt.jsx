@@ -245,6 +245,18 @@ export default function Receipt() {
                 </Typography>
               </Box>
               <Divider sx={{ mb: 2 }} />
+              {figures.appliedTo.length > 1 && (
+                <Box mb={1}>
+                  <Typography fontSize={12} align="right" fontWeight="bold">
+                    This payment was applied to the oldest unpaid term first:
+                  </Typography>
+                  {figures.appliedTo.map((part, i) => (
+                    <Typography key={i} fontSize={12} align="right">
+                      {part.term}: {currencyFormatter(part.amount)}
+                    </Typography>
+                  ))}
+                </Box>
+              )}
               <Box display="flex" gap={2} justifyContent="flex-end">
                 <Typography fontSize={12}>Paid This Term :</Typography>
                 <Typography fontSize={12} align="right">

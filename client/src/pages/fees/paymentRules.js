@@ -42,7 +42,12 @@ export const receiptFigures = (fee = {}) => {
   const paidBefore = Number(fee.feePaid) || 0;
   return {
     paidNow,
-    totalPaid: (toPesewas(paidNow) + toPesewas(paidBefore)) / 100,
+    // A payment can be split over several terms, so the server says what was paid for THIS term.
+    totalPaid:
+      fee.paidThisTerm !== undefined && fee.paidThisTerm !== null
+        ? Number(fee.paidThisTerm) || 0
+        : (toPesewas(paidNow) + toPesewas(paidBefore)) / 100,
+    appliedTo: Array.isArray(fee.appliedTo) ? fee.appliedTo : [],
     outstanding: Number(fee.outstanding) || 0,
     termFee: Number(fee.fee) || 0,
     arrears: Number(fee.arreas) || 0,

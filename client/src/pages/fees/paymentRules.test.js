@@ -50,10 +50,10 @@ describe("paymentBlocker", () => {
 describe("receiptFigures", () => {
   it("adds this payment to what was paid before without float drift", () => {
     const r = receiptFigures({ paid: 0.2, feePaid: 0.1, outstanding: 50, fee: 400, arreas: 10 });
-    expect(r).toEqual({ paidNow: 0.2, totalPaid: 0.3, outstanding: 50, termFee: 400, arrears: 10 });
+    expect(r).toEqual({ paidNow: 0.2, totalPaid: 0.3, outstanding: 50, termFee: 400, arrears: 10, appliedTo: [] });
   });
   it("never shows NaN when a figure is missing", () => {
-    expect(receiptFigures({ paid: 100 })).toEqual({ paidNow: 100, totalPaid: 100, outstanding: 0, termFee: 0, arrears: 0 });
+    expect(receiptFigures({ paid: 100 })).toEqual({ paidNow: 100, totalPaid: 100, outstanding: 0, termFee: 0, arrears: 0, appliedTo: [] });
     expect(receiptFigures()).toMatchObject({ paidNow: 0, totalPaid: 0 });
   });
 });
@@ -62,5 +62,14 @@ describe("overpaymentMessage", () => {
   it("names the amount owed, and says when nothing is owed", () => {
     expect(overpaymentMessage(150)).toBe("This is more than the GHS 150.00 still owed. Advance payments are not accepted.");
     expect(overpaymentMessage(0)).toMatch(/Nothing is owed/);
+  });
+});
+
+describe("receiptFigures for a payment split over terms", () => {
+  it("uses what the server says was paid for this term, and lists where the money went", () => {
+    const r = receiptFigures({ paid: 120, feePaid: 0, paidThisTerm: 70, appliedTo: [{ term: "Term 1", amount: 50 }, { term: "Term 2", amount: 70 }], outstanding: 30, fee: 100, arreas: 50 });
+    expect(r.paidNow).toBe(120);
+    expect(r.totalPaid).toBe(70);
+    expect(r.appliedTo).toHaveLength(2);
   });
 });

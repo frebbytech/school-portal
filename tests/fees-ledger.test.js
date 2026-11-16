@@ -117,12 +117,14 @@ describe("fees ledger (Stage 8)", () => {
     });
 
     it("keeps both payments when two arrive at the same time and sums them exactly", async () => {
-      const before = (await CurrentFee.findById(record2._id)).payment.length;
+      // The student owes 200 from term 1, so these go to the older term first.
+      const before = (await CurrentFee.findById(record1._id)).payment.length;
       await Promise.all([pay({ paid: 0.1 }), pay({ paid: 0.2 })]);
-      const after = await CurrentFee.findById(record2._id);
+      const after = await CurrentFee.findById(record1._id);
       expect(after.payment).toHaveLength(before + 2);
       const res = await info();
-      expect(res.body.current.paid).toBe(25.8); // 25.5 + 0.1 + 0.2, no float drift
+      expect(res.body.previous.paid).toBe(125.8); // 100 + 25.5 + 0.1 + 0.2, no float drift
+      expect(res.body.current.paid).toBe(0);
     });
 
     it("only administrators may record payments", async () => {
@@ -132,6 +134,7 @@ describe("fees ledger (Stage 8)", () => {
 
   describe("no advance payments (owner decision 2026-11-15)", () => {
     let lvl, s2, rec;
+    const sumPaid = (doc) => Math.round(doc.payment.reduce((n, p) => n + Number(p.paid || 0), 0) * 100) / 100;
     const pay = (payment, id = rec._id) =>
       as(request(app).post(`${base}/current-fees`), adminTok).send({ _id: String(id), payment });
 
@@ -176,17 +179,86 @@ describe("fees ledger (Stage 8)", () => {
       expect((await CurrentFee.findById(r3._id)).payment).toHaveLength(1);
     });
 
-    it("lets money beyond this term's fee clear earlier arrears, and no more than that", async () => {
-      // stud has 200 arrears from term 1 and this term's fee of 500.1 (record2, already part-paid above)
-      const before = (await info()).body;
-      const owed = before.totalOutstanding;
-      const tooMuch = await pay({ paid: owed + 1 }, record2._id);
-      expect(tooMuch.status).toBe(400);
-      const exact = await pay({ paid: owed }, record2._id);
-      expect(exact.status).toBe(200);
-      const after = (await info()).body;
-      expect(after.totalOutstanding).toBe(0);
-      expect(after.previous.remaining).toBe(0);
+    describe("oldest term first", () => {
+      let recOld, recNew, tNew, lNew;
+      const summary = () =>
+        as(request(app).post(`${base}/current-fees/student`), adminTok).send({
+          session: String(session._id), term: String(tNew._id), level: String(lNew._id), student: String(recNew.student),
+        });
+
+      beforeAll(async () => {
+        const tOld = await make(Term, { school: school._id, session: session._id, status: "archived", from: "2020-01-01", term: "1" });
+        tNew = await make(Term, { school: school._id, session: session._id, status: "archived", from: "2020-06-01", term: "2" });
+        const lOld = await make(Level, { school: school._id, session: session._id, term: tOld._id, name: "OF1" });
+        lNew = await make(Level, { school: school._id, session: session._id, term: tNew._id, name: "OF2" });
+        const stu = await make(Student, { indexnumber: uniq("of"), school: school._id, firstname: "Adwoa", level: lNew._id });
+        await make(Fee, { school: school._id, session: session._id, term: tOld._id, level: lOld._id, amount: [{ fee: "Tuition", amount: 200 }] });
+        await make(Fee, { school: school._id, session: session._id, term: tNew._id, level: lNew._id, amount: [{ fee: "Tuition", amount: 100 }] });
+        recOld = await make(CurrentFee, { school: school._id, session: session._id, term: tOld._id, level: lOld._id, student: stu._id, payment: [{ paid: 50 }] });
+        recNew = await make(CurrentFee, { school: school._id, session: session._id, term: tNew._id, level: lNew._id, student: stu._id, payment: [] });
+      });
+
+      it("shows the arrears from the older term and the balance of this one", async () => {
+        const res = await summary();
+        expect(res.body.previous.remaining).toBe(150);
+        expect(res.body.current.remaining).toBe(100);
+        expect(res.body.totalOutstanding).toBe(250);
+      });
+
+      it("a small payment goes entirely to the older term", async () => {
+        const made = await pay({ paid: 100 }, recNew._id);
+        expect(made.status).toBe(200);
+        expect(made.body.paid).toBe(100);
+        expect(made.body.outstanding).toBe(150);
+        expect(sumPaid(await CurrentFee.findById(recOld._id))).toBe(150); // 50 before + 100
+        expect(sumPaid(await CurrentFee.findById(recNew._id))).toBe(0);
+        const after = (await summary()).body;
+        expect(after.previous.remaining).toBe(50);
+        expect(after.current.remaining).toBe(100);
+      });
+
+      it("the rest of a payment goes to this term once the older one is cleared", async () => {
+        const made = await pay({ paid: 120 }, recNew._id); // 50 to the older term, 70 to this one
+        expect(made.status).toBe(200);
+        expect(made.body.outstanding).toBe(30);
+        expect(made.body.appliedTo.map((p) => p.amount)).toEqual([50, 70]);
+        const old = await CurrentFee.findById(recOld._id);
+        const cur = await CurrentFee.findById(recNew._id);
+        expect(sumPaid(old)).toBe(200);
+        expect(sumPaid(cur)).toBe(70);
+        // one receipt number, stored on both terms
+        expect(old.payment.at(-1).id).toBe(made.body.id);
+        expect(cur.payment.at(-1).id).toBe(made.body.id);
+        const after = (await summary()).body;
+        expect(after.previous.remaining).toBe(0);
+        expect(after.totalOutstanding).toBe(30);
+      });
+
+      it("the receipt shows the whole payment and where it went", async () => {
+        const last = (await CurrentFee.findById(recNew._id)).payment.at(-1);
+        const res = await as(request(app).get(`${base}/current-fees/receipt/${last.id}`), adminTok);
+        expect(res.status).toBe(200);
+        expect(res.body.paid).toBe(120);
+        expect(res.body.appliedTo).toHaveLength(2);
+        expect(res.body.arreas).toBe(50);
+        expect(res.body.paidThisTerm).toBe(70);
+      });
+
+      it("refuses more than is owed across all terms, and nothing is written", async () => {
+        const res = await pay({ paid: 30.01 }, recNew._id);
+        expect(res.status).toBe(400);
+        expect(res.text).toMatch(/Advance payments are not accepted/);
+        expect(sumPaid(await CurrentFee.findById(recNew._id))).toBe(70);
+        expect((await pay({ paid: 30 }, recNew._id)).status).toBe(200);
+        expect((await summary()).body.totalOutstanding).toBe(0);
+      });
+
+      it("a payment is never applied to a LATER term", async () => {
+        // paying against the older record may only clear the older term
+        const res = await pay({ paid: 1 }, recOld._id);
+        expect(res.status).toBe(400);
+        expect(res.text).toMatch(/Nothing is owed/);
+      });
     });
 
     it("a receipt can be fetched again by its number, with the figures it had", async () => {

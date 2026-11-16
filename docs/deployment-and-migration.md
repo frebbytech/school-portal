@@ -28,6 +28,7 @@ All documented in `.env.example`. Never commit real values. In production the se
 4. Run the read-only audit: `AUDIT_MONGO_URL="<read-only url>" node scripts/data-audit.js audit-report.md`. Fix or accept what it reports.
 5. Create the first platform administrator (only they can create schools): set `PLATFORM_USERNAME`, `PLATFORM_PASSWORD` (12+ characters), `PLATFORM_EMAIL`, `PLATFORM_FIRSTNAME`, `PLATFORM_LASTNAME`, then `node scripts/create-platform-admin.js`. Sign in at `/platform` in the admin app.
 6. Run migration 001 as a dry run, then with `--apply` (see `docs/database.md`).
+7. **Fees (oldest term first):** after the backup, run `MIGRATE_MONGO_URL=... node scripts/migrations/002-oldest-term-first.js` as a dry run and read the list. It moves money that was paid beyond a term's fee onto the older term that still owes (totals paid do not change; receipt numbers are kept). Anything no older term owes is listed as a true advance payment and left alone for you to decide. Then run it again with `--apply`. Deploy the server before the front end.
 
 ## Authorization switch
 

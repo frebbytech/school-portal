@@ -197,6 +197,7 @@ const FeeMakePayment = () => {
                 fee: recorded.termFees ?? feeInfo?.current?.fees,
                 arreas: recorded.arrears ?? feeInfo?.previous?.remaining,
                 feePaid: recorded.paidBefore ?? feeInfo?.current?.paid,
+                paidThisTerm: recorded.paidThisTerm,
                 studentName: studentInfo?.fullName,
                 levelName: currentLevel?.levelName,
               },
@@ -402,6 +403,11 @@ const FeeMakePayment = () => {
                 }}
               />
 
+              {!blocker && Number(feeInfo?.previous?.remaining) > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  {`This student still owes ${currencyOrDash(feeInfo?.previous?.remaining)} from earlier terms. A payment goes to the oldest unpaid term first.`}
+                </Typography>
+              )}
               {blocker && (
                 <Typography variant="caption" color="text.secondary">
                   {blocker}
