@@ -42,26 +42,26 @@ export const isAuthenticated = () => {
   }
 };
 
-export const saveLoginInfo = (studentId, password, rememberMe) => {
+// "Remember me" keeps the student ID only, never the password.
+export const saveLoginInfo = (studentId, rememberMe) => {
   if (rememberMe) {
     localStorage.setItem("rememberStudentId", studentId);
-    localStorage.setItem("rememberPassword", password);
   } else {
     localStorage.removeItem("rememberStudentId");
-    localStorage.removeItem("rememberPassword");
   }
 };
 
-// After a password change the remembered password is wrong; keep the remembered id.
-export const forgetSavedPassword = () => {
-  localStorage.removeItem("rememberPassword");
-};
+export const getSavedLoginInfo = () => ({
+  studentId: localStorage.getItem("rememberStudentId") || "",
+});
 
-export const getSavedLoginInfo = () => {
-  return {
-    studentId: localStorage.getItem("rememberStudentId") || "",
-    password: localStorage.getItem("rememberPassword") || "",
-  };
+// Older versions saved the password in plain text. Removes it wherever it is found.
+export const purgeSavedPassword = () => {
+  try {
+    localStorage.removeItem("rememberPassword");
+  } catch {
+    // storage blocked: nothing to remove
+  }
 };
 
 export function parseJwt(token) {

@@ -3,7 +3,6 @@ import { Box, Button, Container, Stack, Typography } from "@mui/material";
 import { LockResetRounded } from "@mui/icons-material";
 import ChangePasswordForm from "@/components/forms/ChangePasswordForm";
 import { changePassword } from "@/hooks/useStudentAuth";
-import { forgetSavedPassword } from "@/config/sessionHandler";
 import { useAuth } from "@/context/AuthProvider";
 
 // Shown instead of the portal while the password is still the one the school set.
@@ -13,7 +12,6 @@ const ForceChangePassword = () => {
 
   const onSubmit = async (values) => {
     await changePassword(values);
-    forgetSavedPassword();
     passwordChanged();
   };
 

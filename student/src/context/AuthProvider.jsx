@@ -7,6 +7,7 @@ import {
   getUser,
   parseJwt,
   saveUser,
+  purgeSavedPassword,
 } from "@/config/sessionHandler";
 
 import { createContext, useState, useContext, useRef, useEffect } from "react";
@@ -41,6 +42,7 @@ export const AuthProvider = ({ children }) => {
 
   // Only runs once on mount
   useEffect(() => {
+    purgeSavedPassword();
     const tryInitialRefresh = async () => {
       setLoading(true);
 

@@ -45,10 +45,8 @@ describe("first-login password prompt (student app)", () => {
     expect(screen.queryByText("The portal")).not.toBeInTheDocument();
   });
 
-  it("changes the password, forgets the remembered one, and lets the student in", async () => {
+  it("changes the password and lets the student in", async () => {
     auth.value.mustChangePassword = true;
-    localStorage.setItem("rememberStudentId", "stu1");
-    localStorage.setItem("rememberPassword", "0240000000");
     changePassword.mockResolvedValue({ message: "Password changed" });
     const user = userEvent.setup();
     renderGate();
@@ -60,8 +58,6 @@ describe("first-login password prompt (student app)", () => {
       expect(changePassword).toHaveBeenCalledWith({ oldPassword: "0240000000", newPassword: "my-own-secret" })
     );
     await waitFor(() => expect(auth.value.passwordChanged).toHaveBeenCalled());
-    expect(localStorage.getItem("rememberPassword")).toBeNull();
-    expect(localStorage.getItem("rememberStudentId")).toBe("stu1");
   });
 
   it("shows the server's reason and stays on the prompt", async () => {

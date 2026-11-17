@@ -45,9 +45,8 @@ const Login = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { studentId, password } = getSavedLoginInfo();
+    const { studentId } = getSavedLoginInfo();
     setValue("studentId", studentId);
-    setValue("password", password);
     setValue("rememberMe", !!studentId);
   }, [setValue]);
 
@@ -55,19 +54,10 @@ const Login = () => {
 
   const onSubmit = async (data) => {
     loginStudent.mutate(data, {
-      onSettled: () => {
-        if (data.rememberMe) {
-          localStorage.setItem("rememberStudentId", data.studentId);
-          localStorage.setItem("rememberPassword", data.password);
-        } else {
-          localStorage.removeItem("rememberStudentId");
-          localStorage.removeItem("rememberPassword");
-        }
-      },
       onSuccess: (res) => {
         if (res.accessToken) {
           login(res.accessToken, res.data, { mustChangePassword: res.mustChangePassword });
-          saveLoginInfo(data.studentId, data.password, data.rememberMe);
+          saveLoginInfo(data.studentId, data.rememberMe);
           navigate("/");
         }
       },
@@ -205,7 +195,7 @@ const Login = () => {
                     size="small"
                   />
                 }
-                label="Remember me"
+                label="Remember my student ID"
                 sx={{ fontSize: "0.875rem" }}
               />
 
