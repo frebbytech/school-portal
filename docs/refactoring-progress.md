@@ -459,3 +459,7 @@ See row U5f in `ui-refactor-plan.md`. Server: `mustChangePassword` returned on s
 ## 5s. Exams: publishing report cards (2026-11-17)
 
 See row U5g in `ui-refactor-plan.md`. New `common/reportDelivery.js`; `/examinations/publish` and `/examinations/:id?publish=true` now answer with delivery counts (200), 502 when every send failed, 422 when nobody has a phone/email, 404 when there are no results, 400 for an unknown channel. Open items: publish is a GET that sends messages (move to POST); no publish record, so a second publish sends again.
+
+## 5t. Publishing in the background (2026-11-17)
+
+See row U5h in `ui-refactor-plan.md` and *Background jobs and live updates* in `deployment-and-migration.md`. New: `models/reportPublicationModel.js`, `services/reportPublishing.js`, `services/studentReport.js`, `jobs/` (queue, handlers, recovery), `realtime/socket.js`, `config/origins.js`, `worker.js`. API: POST `/examinations/publish`, POST `/examinations/:id/publish`, GET `/examinations/publications`; reference regenerated (202 endpoints). Open: new packages not installed or run here.

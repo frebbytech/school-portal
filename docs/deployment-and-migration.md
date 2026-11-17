@@ -18,6 +18,7 @@ All documented in `.env.example`. Never commit real values. In production the se
 | Rate limits | `RATE_LIMIT_MAX`, `STUDENT_LOGIN_RATE_LIMIT_MAX`, `PLATFORM_LOGIN_RATE_LIMIT_MAX`, `MESSAGE_RATE_LIMIT_MAX`, `RESET_RATE_LIMIT_MAX` |
 | Mail and SMS | `MAIL_CLIENT_SERVICE`, `MAIL_CLIENT_USER`, `MAIL_CLIENT_PASS`, `MAIL_TLS_REJECT_UNAUTHORIZED`, `SMS_URL`, `SMS_API_KEY` |
 | File storage | `FIREBASE_*` |
+| Background jobs | `REDIS_URL`, `RUN_WORKER_IN_API`, `PUBLISH_MAX_STUDENTS` (see *Background jobs and live updates*) |
 | Safety switch | `ENFORCE_AUTHZ` (see below) |
 
 ## First deployment of the refactored backend
@@ -29,6 +30,23 @@ All documented in `.env.example`. Never commit real values. In production the se
 5. Create the first platform administrator (only they can create schools): set `PLATFORM_USERNAME`, `PLATFORM_PASSWORD` (12+ characters), `PLATFORM_EMAIL`, `PLATFORM_FIRSTNAME`, `PLATFORM_LASTNAME`, then `node scripts/create-platform-admin.js`. Sign in at `/platform` in the admin app.
 6. Run migration 001 as a dry run, then with `--apply` (see `docs/database.md`).
 7. **Fees (oldest term first):** after the backup, run `MIGRATE_MONGO_URL=... node scripts/migrations/002-oldest-term-first.js` as a dry run and read the list. It moves money that was paid beyond a term's fee onto the older term that still owes (totals paid do not change; receipt numbers are kept). Anything no older term owes is listed as a true advance payment and left alone for you to decide. Then run it again with `--apply`. Deploy the server before the front end.
+
+## Background jobs and live updates (publishing report cards)
+
+Publishing report cards (PDFs, SMS, email) takes minutes, so it no longer runs inside the request. `POST /examinations/publish` (whole class) and `POST /examinations/:id/publish` (one student) save a **publication** record, queue a job and answer at once (`202`). The job sends each message separately and records the counts. Progress and the final result are pushed to the person who started it over a WebSocket (Socket.IO, same address as the API) and can always be read back with `GET /examinations/publications?levelId=&termId=`.
+
+| Setup | What to do | Notes |
+|---|---|---|
+| **Single server, no Redis** (works today) | Nothing. Leave `REDIS_URL` empty. | The API runs jobs itself, one at a time. A restart while a publish is running marks it *failed* ("server restarted") and the person is told to check who received theirs; nothing is sent twice. |
+| **With Redis and a worker** (recommended) | Provide a Redis (Render Key Value, Upstash, or Redis on the VPS) and set `REDIS_URL` on the API **and** the worker. Run the worker as its own process: `npm run worker` (on Render: a *Background Worker* service with the same environment variables). | Jobs survive an API restart. The worker takes one job at a time (headless-browser PDFs are heavy). Jobs are **never retried automatically** (a retry would message families twice): a stalled job is marked failed. |
+| One server with Redis | Set `REDIS_URL` and `RUN_WORKER_IN_API=true`. | Worker runs inside the API process. |
+
+- **Deploy order:** server first, then the front end (the old front end's publish buttons stop working until it is replaced, because publishing is POST now).
+- **WebSockets:** the host must allow them (Render and most VPS setups do; behind nginx add `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`). The socket uses WebSocket only (no long-polling), so several API instances need no sticky sessions. The browser origins allowed are the same `CORS_WHITELIST`.
+- **Safety:** only signed-in staff can connect; each person receives only their own publish messages; the browser never receives user or school ids.
+- **Double sends:** a class cannot be published while a publish for it is running (`409`); publishing again after a completed one needs the person's confirmation (`409 ALREADY_PUBLISHED`, then the app asks "Send again?").
+- **Test mode:** outside production only the first student is sent. `PUBLISH_MAX_STUDENTS` overrides it (`0` = everyone); the result message says when the limit applied.
+- New packages: `bullmq`, `ioredis`, `socket.io` (server), `socket.io-client` (both server tests and the admin app). Run `npm install` in the repo root and in `client/` and commit the updated lock files before deploying with `npm ci`.
 
 ## Authorization switch
 
