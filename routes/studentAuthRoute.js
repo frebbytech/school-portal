@@ -344,6 +344,7 @@ router.post("/refresh", async (req, res) => {
     res.json({
       token: newAccessToken,
       data: authUser,
+      mustChangePassword: student.mustChangePassword === true,
     });
   } catch (err) {
     res.status(403).json({ message: "Token expired or invalid" });
@@ -438,5 +439,56 @@ router.post("/reset-password", resetLimiter, async (req, res) => {
   await student.save();
   res.json({ message: "Password reset successful" });
 });
+
+// Failed attempts only, per student per IP, so a classroom behind one IP is not locked out
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RESET_RATE_LIMIT_MAX) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => `${req.ip}|${req.user?.id || ""}`,
+  handler: (req, res) =>
+    res.status(429).json({ message: "Too many attempts. Please try again later." }),
+});
+
+// ✅ A signed-in student changes their own password (needs the current one).
+// Also clears the "still the default password" flag.
+router.post(
+  "/change-password",
+  verifyJWT,
+  (req, res, next) =>
+    getPrincipal(req).kind === "student"
+      ? next()
+      : res.status(403).json({ message: "You do not have permission to perform this action." }),
+  changePasswordLimiter,
+  async (req, res) => {
+    const { oldPassword, newPassword } = req.body || {};
+
+    if (typeof oldPassword !== "string" || !oldPassword) {
+      return res.status(400).json({ message: "Enter your current password" });
+    }
+    if (typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json({ message: "New password must be at least 8 characters" });
+    }
+    if (newPassword === oldPassword) {
+      return res.status(400).json({ message: "New password must be different from the current one" });
+    }
+
+    const student = await StudentAuth.findById(getPrincipal(req).id);
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
+    if (!(await bcrypt.compare(oldPassword, student.password))) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    student.password = await bcrypt.hash(newPassword, 10);
+    student.mustChangePassword = false;
+    clearResetState(student);
+    await student.save();
+
+    res.json({ message: "Password changed" });
+  }
+);
 
 module.exports = router;

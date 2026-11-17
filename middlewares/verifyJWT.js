@@ -82,6 +82,8 @@ const verifyRefreshJWT = (req, res, next) => {
         active: authUser?.active,
         school: authUser?.school,
       };
+      // Not part of the token: the app reads it from the response to ask for a new password.
+      req.mustChangePassword = authUser.mustChangePassword === true;
     } else {
       authUser = await StudentAuth.findById(user?.id).select("-password");
 

@@ -24,6 +24,8 @@ export const UserContext = React.createContext();
 const UserProvider = ({ children }) => {
   const [accessToken, setAccessToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  // True while the password is one an administrator set: the app asks for a new one first.
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const refreshTimeoutRef = useRef(null);
 
   const [session, setSession] = useLocalStorage("@school_session", null);
@@ -119,6 +121,7 @@ const UserProvider = ({ children }) => {
         }
       );
       const token = res.data.token;
+      setMustChangePassword(res.data.mustChangePassword === true);
       setAccessToken(token);
       scheduleRefresh(token);
 
@@ -130,6 +133,7 @@ const UserProvider = ({ children }) => {
       setAccessToken(null);
       setUser(null);
       setSession(null);
+      setMustChangePassword(false);
       deleteUser();
       if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
       setLoading(false);
@@ -159,8 +163,9 @@ const UserProvider = ({ children }) => {
 
   const [userState, userDispatch] = useReducer(UserReducer, initState);
 
-  const authenticateUser = (token, school) => {
+  const authenticateUser = (token, school, { mustChangePassword: mustChange = false } = {}) => {
     setSchoolInformation(school);
+    setMustChangePassword(mustChange === true);
 
     const user = parseJwt(token);
     setUser(user);
@@ -202,6 +207,7 @@ const UserProvider = ({ children }) => {
               setSession(null);
               setUser(null);
               setAccessToken(null);
+              setMustChangePassword(false);
               deleteUser();
               if (refreshTimeoutRef.current) {
                 clearTimeout(refreshTimeoutRef.current);
@@ -223,6 +229,7 @@ const UserProvider = ({ children }) => {
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
         setSchoolInformation(null);
+        setMustChangePassword(false);
         deleteUser();
         setAccessToken(null);
         setUser(null);
@@ -233,6 +240,7 @@ const UserProvider = ({ children }) => {
 
   //Back to login
   const backToLogin = () => {
+    setMustChangePassword(false);
     deleteUser();
     setAccessToken(null);
     setUser(null);
@@ -255,6 +263,8 @@ const UserProvider = ({ children }) => {
           user: user,
           updateSession,
           authenticateUser,
+          mustChangePassword,
+          passwordChanged: () => setMustChangePassword(false),
           updateAccessToken,
           logOutUser,
           updateSchoolInformation,

@@ -38,7 +38,7 @@ const Login = () => {
   const onLogin = async (values) => {
     setMsg("");
     const data = await getUserAuth({ ...values, code: schoolInformation?._id });
-    authenticateUser(data?.token, data?.school);
+    authenticateUser(data?.token, data?.school, { mustChangePassword: data?.mustChangePassword });
     navigate("/school-session", { replace: true });
   };
 

@@ -1,6 +1,18 @@
 
 import api from "@/api/customAxios";
 import { useMutation } from "@tanstack/react-query";
+import { normalizeApiError } from "@/api/apiError";
+
+// A signed-in student changes their own password (needs the current one).
+// Throws what the server answered ({ message } or text) or a network-failure object.
+export const changePassword = async ({ oldPassword, newPassword }) => {
+  try {
+    const res = await api.post("/student-auth/change-password", { oldPassword, newPassword });
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+};
 
 export const useLogin = () =>
   useMutation({

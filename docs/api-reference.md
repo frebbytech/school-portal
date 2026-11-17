@@ -266,6 +266,7 @@ Common behaviour:
 | Method | Path | Access |
 |---|---|---|
 | GET | `/api/frebbys/v1/student-auth/:id` | staff or student |
+| POST | `/api/frebbys/v1/student-auth/change-password` | signed in |
 | POST | `/api/frebbys/v1/student-auth/confirm-reset-code` | public |
 | POST | `/api/frebbys/v1/student-auth/login` | public |
 | POST | `/api/frebbys/v1/student-auth/logout` | public |
@@ -334,4 +335,4 @@ Common behaviour:
 | PUT | `/api/frebbys/v1/users/school` | role-restricted |
 | POST | `/api/frebbys/v1/users/verify` | refresh cookie |
 
-_199 endpoints._
+_200 endpoints._

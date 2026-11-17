@@ -145,6 +145,20 @@ export const putUser = async (updatedUser) => {
   }
 };
 
+// A signed-in user changes their own password (needs the current one).
+export const changePassword = async ({ id, oldPassword, newPassword }) => {
+  try {
+    const res = await api({
+      method: "PUT",
+      url: `/users/reset`,
+      data: { id, oldPassword, newPassword },
+    });
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+};
+
 export const logOut = async () => {
   try {
     const res = await api({

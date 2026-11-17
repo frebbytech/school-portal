@@ -27,6 +27,8 @@ export const AuthProvider = ({ children }) => {
     null
   );
   const [loading, setLoading] = useState(true);
+  // True while the password is still the one the school set (phone / index number).
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const refreshTimeoutRef = useRef(null);
 
   // Lets the API client renew the token and retry when a request meets an expired session
@@ -94,6 +96,7 @@ export const AuthProvider = ({ children }) => {
       );
 
       const token = res.data.token;
+      setMustChangePassword(res.data.mustChangePassword === true);
       const { student, school, session } = res.data.data;
       if (token) {
         api.defaults.headers.Authorization = `Bearer ${token}`;
@@ -125,6 +128,7 @@ export const AuthProvider = ({ children }) => {
 
   const handleAuthError = () => {
     deleteUser();
+    setMustChangePassword(false);
     setUser(null);
     setAccessToken(null);
 
@@ -142,8 +146,9 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
-  const login = (token, details) => {
+  const login = (token, details, { mustChangePassword: mustChange = false } = {}) => {
     const parsed = parseJwt(token);
+    setMustChangePassword(mustChange === true);
 
     setUser(details?.student);
     setSession(details?.session);
@@ -162,6 +167,7 @@ export const AuthProvider = ({ children }) => {
       await api.post("/student-auth/logout");
     } finally {
       deleteUser();
+      setMustChangePassword(false);
       setUser(null);
       setAccessToken(null);
 
@@ -181,6 +187,8 @@ export const AuthProvider = ({ children }) => {
         session: session,
         accessToken,
         loading,
+        mustChangePassword,
+        passwordChanged: () => setMustChangePassword(false),
         login,
         logout,
       }}

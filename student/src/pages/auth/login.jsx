@@ -66,7 +66,7 @@ const Login = () => {
       },
       onSuccess: (res) => {
         if (res.accessToken) {
-          login(res.accessToken, res.data);
+          login(res.accessToken, res.data, { mustChangePassword: res.mustChangePassword });
           saveLoginInfo(data.studentId, data.password, data.rememberMe);
           navigate("/");
         }

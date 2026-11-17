@@ -248,6 +248,8 @@ router.post(
     res.status(200).json({
       token,
       school: schoolInfo,
+      // True while the password is one an administrator set; the app asks for a new one.
+      mustChangePassword: user.mustChangePassword === true,
     });
   })
 );
@@ -273,6 +275,7 @@ router.post(
 
     res.status(200).json({
       token,
+      mustChangePassword: req.mustChangePassword === true,
     });
   })
 );
@@ -456,6 +459,15 @@ router.put(
     // Changing a password with the old one is something a user does for themself.
     if (!isSelf(req, id)) {
       return res.status(403).json(NOT_ALLOWED);
+    }
+    if (typeof oldPassword !== "string" || !oldPassword) {
+      return res.status(400).json("Enter your current password");
+    }
+    if (typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json("New password must be at least 8 characters");
+    }
+    if (newPassword === oldPassword) {
+      return res.status(400).json("New password must be different from the current one");
     }
 
     const user = await User.findById(id);

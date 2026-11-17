@@ -52,6 +52,11 @@ export const saveLoginInfo = (studentId, password, rememberMe) => {
   }
 };
 
+// After a password change the remembered password is wrong; keep the remembered id.
+export const forgetSavedPassword = () => {
+  localStorage.removeItem("rememberPassword");
+};
+
 export const getSavedLoginInfo = () => {
   return {
     studentId: localStorage.getItem("rememberStudentId") || "",

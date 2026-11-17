@@ -450,3 +450,8 @@ Branch `refactor/stage-10-cleanup` (from the Stage 9 branch). **Not executed** (
 - **Oldest term first (2026-11-16, owner decision):** `common/feeAllocation.js` (pure: `compareTerms`, `allocate`, `summarize`, `planOverflowMoves`) and `common/feeBalance.js` (`ledgerFor`, `planPayment`). A payment is split over the student's records, oldest term first, ending with the term it was recorded against; each part is written to that term's own record with the same receipt number and its own atomic "still fits the fee" check; if a part no longer fits, parts already written are pulled back (by receipt number) and the request answers 409. Each entry keeps `paid` (its part), `receiptTotal`, `appliedTo`, `termFees`, `arrears`, `paidBefore`, `paidThisTerm`. The receipt endpoint gathers all parts. Arrears are the earlier terms' own remaining (no double counting). Editing a record's payments is limited to that term's fee; lowering fees is refused if a student has paid more than the new total.
 - Term order: the term's `from` date, then term number, then creation time.
 - Migration `scripts/migrations/002-oldest-term-first.js` (dry run by default) moves existing overpayments onto older owing terms; see `docs/deployment-and-migration.md`.
+
+
+## 5r. First-login password prompt (2026-11-17)
+
+See row U5f in `ui-refactor-plan.md`. Server: `mustChangePassword` returned on staff login/verify and student refresh; new `POST /student-auth/change-password`; staff `PUT /users/reset` validated (new password at least 8 characters, different from the old one). API reference regenerated (200 endpoints). Risk noted: the student app's *Remember me* saves the password in `localStorage` in plain text; recommended to remove (keep the ID only).
