@@ -455,3 +455,7 @@ Branch `refactor/stage-10-cleanup` (from the Stage 9 branch). **Not executed** (
 ## 5r. First-login password prompt (2026-11-17)
 
 See row U5f in `ui-refactor-plan.md`. Server: `mustChangePassword` returned on staff login/verify and student refresh; new `POST /student-auth/change-password`; staff `PUT /users/reset` validated (new password at least 8 characters, different from the old one). API reference regenerated (200 endpoints). Fixed at the owner's request: the student app's *Remember me* no longer saves the password (ID only); an old saved password is purged on app start. Prompt confirmed mandatory.
+
+## 5s. Exams: publishing report cards (2026-11-17)
+
+See row U5g in `ui-refactor-plan.md`. New `common/reportDelivery.js`; `/examinations/publish` and `/examinations/:id?publish=true` now answer with delivery counts (200), 502 when every send failed, 422 when nobody has a phone/email, 404 when there are no results, 400 for an unknown channel. Open items: publish is a GET that sends messages (move to POST); no publish record, so a second publish sends again.
