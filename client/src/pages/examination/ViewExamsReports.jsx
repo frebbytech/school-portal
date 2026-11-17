@@ -23,8 +23,8 @@ import Swal from "sweetalert2";
 import { useReactToPrint } from "react-to-print";
 import { FixedSizeList } from "react-window";
 import { useParams } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { generateReports, publishReports } from "@/api/ExaminationAPI";
+import { useQuery } from "@tanstack/react-query";
+import { generateReports } from "@/api/ExaminationAPI";
 import { UserContext } from "@/context/providers/UserProvider";
 import ViewScoreSheet from "./ViewScoreSheet";
 import {
@@ -35,14 +35,15 @@ import {
 } from "@mui/icons-material";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import ViewListIcon from "@mui/icons-material/ViewList";
-import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import CustomTitle from "@/components/custom/CustomTitle";
 import ReportCard from "./ReportCard";
 import { REPORT_CARD_PAGE_STYLE } from "./reportCardPrint";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import { StudentContext } from "@/context/providers/StudentProvider";
 import PublishResultOption from "@/components/modals/PublishResultOption";
-import { publishAlert, publishConfirmText, publishFailure, publishOutcome } from "./publishOutcome";
+import { publishConfirmText } from "./publishOutcome";
+import { usePublishing } from "./usePublishing";
+import PublishStatus from "./PublishStatus";
 import { debounce } from "lodash";
 
 const ViewExamsReports = () => {
@@ -52,7 +53,6 @@ const ViewExamsReports = () => {
   const { session } = use(UserContext);
   const [isPending, startTransition] = useTransition();
   const { studentDispatch } = use(StudentContext);
-  const { schoolSessionDispatch } = use(SchoolSessionContext);
   const [filteredData, setFilteredData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [openScoreSheet, setOpenScoreSheet] = useState(false);
@@ -76,9 +76,14 @@ const ViewExamsReports = () => {
     setFilteredData(reports?.data?.results);
   }, [reports.data]);
 
-  const { mutate, isPending: publishIsPending } = useMutation({
-    mutationFn: publishReports,
+  // Sending runs in the background; this screen is never blocked while it does
+  const { publication, active, starting, start } = usePublishing({
+    levelId,
+    termId: session.termId,
+    sessionId: session.sessionId,
   });
+  const publishIsPending = starting || active;
+
   const handlePublishReports = () => {
     Swal.fire({
       title: "Publishing Reports",
@@ -90,19 +95,8 @@ const ViewExamsReports = () => {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (!isConfirmed) return;
-      mutate(
-        { sessionId: session.sessionId, termId: session.termId, levelId, value },
-        {
-          // The result (with the counts) replaces the "please wait" message; it is not closed afterwards.
-          onSuccess: (data) => {
-            schoolSessionDispatch(publishAlert(publishOutcome(data)));
-            handleCloseOption();
-          },
-          onError: (error) => {
-            schoolSessionDispatch(publishAlert(publishFailure(error)));
-          },
-        }
-      );
+      start(value);
+      handleCloseOption();
     });
   };
 
@@ -229,9 +223,10 @@ const ViewExamsReports = () => {
               onClick={() => setOpenPublishOption(true)}
               color="success"
             >
-              {publishIsPending ? "Please Wait" : "Publish Reports"}
+              {publishIsPending ? "Publishing..." : "Publish Reports"}
             </Button>
           </ButtonGroup>
+          <PublishStatus publication={publication} />
           <TextField
             placeholder="Search for Report"
             value={searchTerm}
@@ -325,7 +320,6 @@ const ViewExamsReports = () => {
         <LoadingSpinner value="Loading Reports.Please Wait..." />
       )}
 
-      {publishIsPending && <LoadingSpinner value="Publishing. This might take a while, please wait..." />}
 
       <IconButton onClick={handleScrollToTop} className="scroll-to-top-button">
         <ArrowUpwardSharp />

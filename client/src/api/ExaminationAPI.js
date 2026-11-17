@@ -77,30 +77,44 @@ export const generateReports = async (session) => {
 };
 
 // Publish the whole class's report cards (value: "sms" | "email" | "both").
-// There is no progress to report: this is a plain request, so the screen only shows "Publishing".
-export const publishReports = async ({ value, ...session }) => {
+// Answers at once with { publicationId, status: "queued" }: the sending runs in the background and
+// the result arrives over the socket (and can be read from getPublications).
+// `resend: true` is the person's confirmation to send again after an earlier completed publish.
+export const publishReports = async ({ value, resend = false, ...session }) => {
   try {
     const res = await api({
-      method: "GET",
+      method: "POST",
       url: `/examinations/publish`,
-      params: { ...session, type: value },
+      data: { ...session, type: value, ...(resend ? { resend: true } : {}) },
     });
-
     return res.data;
   } catch (error) {
     throw normalizeApiError(error);
   }
 };
 
-// Publish one student's report card.
-export const publishReport = async ({ id, value }) => {
+// Publish one student's report card (same background job).
+export const publishReport = async ({ id, value, resend = false }) => {
+  try {
+    const res = await api({
+      method: "POST",
+      url: `/examinations/${id}/publish`,
+      data: { type: value, ...(resend ? { resend: true } : {}) },
+    });
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+};
+
+// What has been published for a class this term, newest first (status, progress, counts).
+export const getPublications = async ({ levelId, termId }) => {
   try {
     const res = await api({
       method: "GET",
-      url: `/examinations/${id}`,
-      params: { type: value, publish: true },
+      url: `/examinations/publications`,
+      params: { levelId, termId },
     });
-
     return res.data;
   } catch (error) {
     throw normalizeApiError(error);

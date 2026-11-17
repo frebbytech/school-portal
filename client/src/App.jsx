@@ -3,6 +3,7 @@ import Scrollbars from "react-custom-scrollbars";
 import { Chart, registerables } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import StudentProvider from "./context/providers/StudentProvider";
+import RealtimeProvider from "./realtime/RealtimeProvider";
 import {
   QueryClient,
   QueryClientProvider,
@@ -41,10 +42,12 @@ function App() {
           <ThemeProvider>
             <SchoolSessionProvider>
               <StudentProvider>
-                <Scrollbars>
-                  {/* <PageTitle /> */}
-                  <Root />
-                </Scrollbars>
+                <RealtimeProvider>
+                  <Scrollbars>
+                    {/* <PageTitle /> */}
+                    <Root />
+                  </Scrollbars>
+                </RealtimeProvider>
               </StudentProvider>
             </SchoolSessionProvider>
           </ThemeProvider>

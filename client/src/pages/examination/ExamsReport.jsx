@@ -4,12 +4,12 @@ import Swal from "sweetalert2";
 import Transition from "@/components/animations/Transition";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
-import { useMutation } from "@tanstack/react-query";
-import { publishReport } from "@/api/ExaminationAPI";
-import { publishAlert, publishConfirmText, publishFailure, publishOutcome } from "./publishOutcome";
+import { UserContext } from "@/context/providers/UserProvider";
+import { publishConfirmText } from "./publishOutcome";
+import { usePublishing } from "./usePublishing";
+import PublishStatus from "./PublishStatus";
 import ReportCard from "./ReportCard";
 import { useSearchParams } from "react-router-dom";
-import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import PublishResultOption from "@/components/modals/PublishResultOption";
 import PropTypes from "prop-types";
 
@@ -31,9 +31,14 @@ const ExamsReport = ({ student }) => {
     });
   };
 
-  const { mutate, isPending } = useMutation({
-    mutationFn: publishReport,
+  const { session } = use(UserContext);
+  const { publication, active, starting, start } = usePublishing({
+    levelId: student?.levelId,
+    termId: session?.termId,
+    sessionId: session?.sessionId,
+    examId: searchParams.get("eid"),
   });
+  const isPending = starting || active;
 
   const handlePublishReports = () => {
     Swal.fire({
@@ -43,19 +48,8 @@ const ExamsReport = ({ student }) => {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (!isConfirmed) return;
-      mutate(
-        { id: searchParams.get("eid"), value },
-        {
-          // The result replaces the "please wait" message; it is not closed afterwards.
-          onSuccess: (data) => {
-            schoolSessionDispatch(publishAlert(publishOutcome(data)));
-            handleCloseOption();
-          },
-          onError: (error) => {
-            schoolSessionDispatch(publishAlert(publishFailure(error)));
-          },
-        }
-      );
+      start(value);
+      handleCloseOption();
     });
   };
 
@@ -76,13 +70,14 @@ const ExamsReport = ({ student }) => {
         <CustomDialogTitle title="Report Card" onClose={handleClose} />
         <DialogActions>
           <Button
-            loading={isPending}
+            disabled={isPending}
             onClick={() => setOpenPublishOption(true)}
           >
-            {isPending ? "Please Wait...." : "Publish Report"}
+            {isPending ? "Publishing..." : "Publish Report"}
           </Button>
         </DialogActions>
         <DialogContent>
+          <PublishStatus publication={publication} />
           <ReportCard student={student} />
         </DialogContent>
       </Dialog>
@@ -96,7 +91,6 @@ const ExamsReport = ({ student }) => {
         handlePublish={handlePublishReports}
       />
 
-      {isPending && <LoadingSpinner value="Publishing. This might take a while, please wait..." />}
     </>
   );
 };
