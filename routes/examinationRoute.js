@@ -17,6 +17,7 @@ const generateReport = require("../config/generateReport");
 const generateRemarks = require("../config/generateRemarks");
 const { convertImageToBase64, SUBJECT_OPTIONS } = require("../config/helper");
 const { sendReportSMS } = require("../config/sms/messenger");
+const { channelsFor, deliverReports, summarizeDelivery, failureMessage } = require("../common/reportDelivery");
 const {
   getBestOverallScore,
   getStudentPosition,
@@ -254,6 +255,56 @@ router.get(
   })
 );
 
+// Sends the given report cards by SMS and/or email and answers with what really happened
+// (sent / failed / no phone or email on record) instead of an unconditional "ok".
+const publishAndRespond = async (res, { results, school, type }) => {
+  const limit = pLimit(5);
+
+  // Email needs each report's PDF first; a report whose PDF cannot be made counts as failed.
+  const prepare = async (items) => {
+    const ids = await Promise.all(
+      items.map((result) =>
+        limit(async () => {
+          try {
+            const template = await generateReportTemplate({ report: result, school });
+            if (!template) return null;
+            await generateReport({ id: result?.report_id, template });
+            return result?.report_id;
+          } catch (error) {
+            logger.error("report could not be generated", { err: error });
+            return null;
+          }
+        })
+      )
+    );
+    return _.compact(ids);
+  };
+
+  const outcomes = await deliverReports({
+    results,
+    type,
+    limit,
+    prepare,
+    send: {
+      sms: (result) => sendReportSMS(result, school),
+      mail: ({ fullName, email, report_id }) =>
+        sendReportMail({
+          school: { name: school?.name, email: school?.email, phonenumber: school?.phonenumber },
+          id: report_id,
+          email,
+          fullName,
+        }),
+    },
+  });
+
+  const summary = summarizeDelivery(outcomes, { total: results.length, type });
+  if (summary.allFailed) return res.status(502).json(failureMessage(summary, type));
+  if (summary.nobodyReachable) return res.status(422).json(failureMessage(summary, type));
+  return res.status(200).json(summary);
+};
+
+const PUBLISH_TYPE_MESSAGE = "Choose how to publish: SMS, email or both.";
+
 router.get(
   "/publish",
   requireStaff,
@@ -261,6 +312,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const publishType = req.query.type || "sms";
     const { sessionId, termId, levelId } = req.query;
+
+    if (!channelsFor(publishType)) return res.status(400).json(PUBLISH_TYPE_MESSAGE);
 
     const studentRecords = await Examination.find({
       session: new ObjectId(sessionId),
@@ -286,7 +339,8 @@ router.get(
       });
 
     if (_.isEmpty(studentRecords)) {
-      return res.status(200).json([]);
+      // Used to answer 200 [] and the screen said "published successfully".
+      return res.status(404).json("No results have been entered for this class this term, so there is nothing to publish.");
     }
     const school = await School.findById(req.user.school);
 
@@ -337,106 +391,7 @@ router.get(
           ? mainResults
           : _.take(mainResults, 1);
 
-      const limit = pLimit(5);
-
-      //SEND REPORTS TO STUDENT SMS
-      if (publishType === "sms") {
-        const response = results.map(async (result) => {
-          return limit(() => sendReportSMS(result, school));
-        });
-
-        await Promise.all(response);
-
-        return res.status(200).json("ok");
-      }
-
-      //GENERATE ALL REPORT TEMPLATES
-      const allTemplates = results.map(async (result) => {
-        try {
-          const template = await generateReportTemplate({
-            report: result,
-            school,
-          });
-
-          if (template) {
-            return {
-              id: result?.report_id,
-              template,
-            };
-          }
-        } catch (error) {
-          // One bad report must not answer the request twice; skip it and keep going.
-          logger.error("report template failed", { err: error });
-          return null;
-        }
-      });
-
-      //WAIT FOR ALL TEMPLATES TO FINISH LOADING
-      const generatedTemplates = _.compact(await Promise.all(allTemplates));
-
-      //GENERATE REPORTS
-      const generatedReports = generatedTemplates.map((template) => {
-        return limit(() => generateReport(template));
-      });
-
-      const allReports = await Promise.all(generatedReports);
-
-      // return res.status(200).json("ok");
-
-      if (publishType === "email") {
-        if (allReports) {
-          const mailedReports = results.map(
-            async ({ fullName, email, report_id }) => {
-              const mailResults = await limit(() =>
-                sendReportMail({
-                  school: {
-                    name: school?.name,
-                    email: school?.email,
-                    phonenumber: school?.phonenumber,
-                  },
-                  id: report_id,
-                  email: email,
-                  fullName,
-                })
-              );
-
-              return mailResults?.messageId;
-            }
-          );
-
-          await Promise.all(mailedReports);
-        }
-      }
-
-      if (publishType === "both") {
-        //SEND REPORTS TO STUDENT SMS
-        const response = results.map(async (result) => {
-          return limit(() => sendReportSMS(result, school));
-        });
-
-        const mailedReports = results.map(
-          async ({ fullName, email, report_id }) => {
-            const mailResults = await limit(() =>
-              sendReportMail({
-                school: {
-                  name: school?.name,
-                  email: school?.email,
-                  phonenumber: school?.phonenumber,
-                },
-                id: report_id,
-                email: email,
-                fullName,
-              })
-            );
-
-            return mailResults?.messageId;
-          }
-        );
-
-        await Promise.all([...mailedReports, ...response]);
-      }
-
-      return res.status(200).json("ok");
+      return await publishAndRespond(res, { results, school, type: publishType });
     } catch (error) {
       logger.error("publishing reports failed", { err: error });
       return res.status(400).json("An unknown error has occured.");
@@ -672,6 +627,8 @@ router.get(
     const publishType = req.query.type || "sms";
     const { id } = req.params;
 
+    if (publish && !channelsFor(publishType)) return res.status(400).json(PUBLISH_TYPE_MESSAGE);
+
     const studentRecord = await Examination.findById(id)
       .populate("term")
       .populate({
@@ -763,61 +720,7 @@ router.get(
 
     school.badge = SCHOOL_PHOTO;
 
-    //SEND REPORTS TO STUDENT SMS
-    if (publishType === "sms") {
-      await sendReportSMS(generatedResult, school);
-
-      return res.status(200).json("ok");
-    }
-
-    //GENERATE ALL REPORT TEMPLATES
-    const template = await generateReportTemplate({
-      report: generatedResult,
-      school,
-    });
-
-    //GENERATE REPORTS
-    const generatedReports = await generateReport({
-      id: generatedResult?.report_id,
-      template,
-    });
-
-    // return res.status(200).json("ok");
-
-    if (publishType === "email") {
-      if (generatedReports) {
-        //SEND REPORTS TO STUDENT EMAIL
-        await sendReportMail({
-          school: {
-            name: school?.name,
-            email: school?.email,
-            phonenumber: school?.phonenumber,
-          },
-          id: generatedResult.report_id,
-          email: generatedResult?.email,
-          fullName: generatedResult?.fullName,
-        });
-      }
-    }
-
-    if (publishType === "both") {
-      await sendReportSMS(generatedResult, school);
-      if (generatedReports) {
-        //SEND REPORTS TO STUDENT EMAIL
-        await sendReportMail({
-          school: {
-            name: school?.name,
-            email: school?.email,
-            phonenumber: school?.phonenumber,
-          },
-          id: generatedResult.report_id,
-          email: generatedResult?.email,
-          fullName: generatedResult?.fullName,
-        });
-      }
-    }
-
-    return res.status(200).json("ok");
+    return publishAndRespond(res, { results: [generatedResult], school, type: publishType });
   })
 );
 

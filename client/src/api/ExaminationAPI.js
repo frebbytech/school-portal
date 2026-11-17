@@ -76,19 +76,14 @@ export const generateReports = async (session) => {
   }
 };
 
-//GENERATE REPORTS
-export const publishReports = async ({ onProgress, value, ...session }) => {
+// Publish the whole class's report cards (value: "sms" | "email" | "both").
+// There is no progress to report: this is a plain request, so the screen only shows "Publishing".
+export const publishReports = async ({ value, ...session }) => {
   try {
     const res = await api({
       method: "GET",
-      url: `/examinations/publish?type=${value}`,
-      params: session,
-      onUploadProgress: (progressEvent) => {
-        const percentCompleted = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        onProgress(percentCompleted);
-      },
+      url: `/examinations/publish`,
+      params: { ...session, type: value },
     });
 
     return res.data;
@@ -97,18 +92,13 @@ export const publishReports = async ({ onProgress, value, ...session }) => {
   }
 };
 
-//GENERATE REPORTS
-export const publishReport = async ({ id, value, onProgress }) => {
+// Publish one student's report card.
+export const publishReport = async ({ id, value }) => {
   try {
     const res = await api({
       method: "GET",
-      url: `/examinations/${id}?type=${value}&publish=true`,
-      onUploadProgress: (progressEvent) => {
-        const percentCompleted = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        onProgress(percentCompleted);
-      },
+      url: `/examinations/${id}`,
+      params: { type: value, publish: true },
     });
 
     return res.data;

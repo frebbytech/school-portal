@@ -6,7 +6,7 @@ import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider"
 import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
 import { useMutation } from "@tanstack/react-query";
 import { publishReport } from "@/api/ExaminationAPI";
-import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
+import { publishAlert, publishConfirmText, publishFailure, publishOutcome } from "./publishOutcome";
 import ReportCard from "./ReportCard";
 import { useSearchParams } from "react-router-dom";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
@@ -18,7 +18,6 @@ const ExamsReport = ({ student }) => {
   const [openPublishOption, setOpenPublishOption] = useState(false);
   const [value, setValue] = useState("sms");
   const [searchParams] = useSearchParams();
-  const [uploadProgress, setUploadProgress] = useState(0);
   const { schoolSessionState, schoolSessionDispatch } =
     use(SchoolSessionContext);
 
@@ -32,59 +31,31 @@ const ExamsReport = ({ student }) => {
     });
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: publishReport,
   });
 
   const handlePublishReports = () => {
     Swal.fire({
-      title: "Publishing Reports",
-      text: `You are about to publish the report of ${
-        student?.fullName || "student"
-      }.Do you wish to continue?`,
+      title: "Publishing Report",
+      text: publishConfirmText(value, student?.fullName || "this student"),
       showCancelButton: true,
       backdrop: false,
     }).then(({ isConfirmed }) => {
-      if (isConfirmed) {
-        schoolSessionDispatch({
-          type: "openGeneralAlert",
-          payload: {
-            message: `Publishing report.This might take a while please wait....${uploadProgress}%`,
-            severity: "info",
+      if (!isConfirmed) return;
+      mutate(
+        { id: searchParams.get("eid"), value },
+        {
+          // The result replaces the "please wait" message; it is not closed afterwards.
+          onSuccess: (data) => {
+            schoolSessionDispatch(publishAlert(publishOutcome(data)));
+            handleCloseOption();
           },
-        });
-
-        mutateAsync(
-          {
-            id: searchParams.get("eid"),
-            value,
-            onProgress: setUploadProgress,
+          onError: (error) => {
+            schoolSessionDispatch(publishAlert(publishFailure(error)));
           },
-
-          {
-            onSettled: () => {
-              schoolSessionDispatch({
-                type: "closeGeneralAlert",
-              });
-            },
-            onSuccess: () => {
-              setUploadProgress(0);
-
-              schoolSessionDispatch(
-                alertSuccess("Result published successfully!!!")
-              );
-              handleCloseOption();
-            },
-            onError: () => {
-              schoolSessionDispatch(
-                alertError(
-                  "An error has occured.Couldn't Generate Reports.Try again later"
-                )
-              );
-            },
-          }
-        );
-      }
+        }
+      );
     });
   };
 
@@ -125,11 +96,7 @@ const ExamsReport = ({ student }) => {
         handlePublish={handlePublishReports}
       />
 
-      {isPending && (
-        <LoadingSpinner
-          value={isPending ? `Publishing..${uploadProgress}%` : "Please Wait.."}
-        />
-      )}
+      {isPending && <LoadingSpinner value="Publishing. This might take a while, please wait..." />}
     </>
   );
 };

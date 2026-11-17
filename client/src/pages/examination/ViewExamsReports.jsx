@@ -42,13 +42,13 @@ import { REPORT_CARD_PAGE_STYLE } from "./reportCardPrint";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import { StudentContext } from "@/context/providers/StudentProvider";
 import PublishResultOption from "@/components/modals/PublishResultOption";
+import { publishAlert, publishConfirmText, publishFailure, publishOutcome } from "./publishOutcome";
 import { debounce } from "lodash";
 
 const ViewExamsReports = () => {
   const [openPublishOption, setOpenPublishOption] = useState(false);
   const [value, setValue] = useState("sms");
   const [viewMode, setViewMode] = useState("list");
-  const [uploadProgress, setUploadProgress] = useState(0);
   const { session } = use(UserContext);
   const [isPending, startTransition] = useTransition();
   const { studentDispatch } = use(StudentContext);
@@ -76,63 +76,33 @@ const ViewExamsReports = () => {
     setFilteredData(reports?.data?.results);
   }, [reports.data]);
 
-  const { mutateAsync, isPending: publishIsPending } = useMutation({
+  const { mutate, isPending: publishIsPending } = useMutation({
     mutationFn: publishReports,
   });
   const handlePublishReports = () => {
     Swal.fire({
       title: "Publishing Reports",
-      text: `You are about to publish the report of ${
-        reports?.data?.results?.length || "all"
-      } students.Do you wish to continue?`,
+      text: publishConfirmText(
+        value,
+        reports?.data?.results?.length ? `${reports.data.results.length} students` : "all students"
+      ),
       showCancelButton: true,
       backdrop: false,
     }).then(({ isConfirmed }) => {
-      if (isConfirmed) {
-        schoolSessionDispatch({
-          type: "openGeneralAlert",
-          payload: {
-            message: `Publishing reports.This might take a while please wait....${uploadProgress}%`,
-            severity: "info",
-          },
-        });
-        const reportInfo = {
-          sessionId: session.sessionId,
-          termId: session.termId,
-          levelId,
-          value,
-          onProgress: setUploadProgress,
-        };
-
-        mutateAsync(reportInfo, {
-          onSettled: () => {
-            schoolSessionDispatch({
-              type: "closeGeneralAlert",
-            });
-          },
-          onSuccess: () => {
-            setUploadProgress(0);
-            schoolSessionDispatch({
-              type: "openGeneralAlert",
-              payload: {
-                message: "Results published Successfully!!!",
-                severity: "success",
-              },
-            });
+      if (!isConfirmed) return;
+      mutate(
+        { sessionId: session.sessionId, termId: session.termId, levelId, value },
+        {
+          // The result (with the counts) replaces the "please wait" message; it is not closed afterwards.
+          onSuccess: (data) => {
+            schoolSessionDispatch(publishAlert(publishOutcome(data)));
             handleCloseOption();
           },
-          onError: () => {
-            schoolSessionDispatch({
-              type: "openGeneralAlert",
-              payload: {
-                message:
-                  "An error has occured.Couldn't Generate Reports.Try again later",
-                severity: "error",
-              },
-            });
+          onError: (error) => {
+            schoolSessionDispatch(publishAlert(publishFailure(error)));
           },
-        });
-      }
+        }
+      );
     });
   };
 
@@ -355,15 +325,7 @@ const ViewExamsReports = () => {
         <LoadingSpinner value="Loading Reports.Please Wait..." />
       )}
 
-      {publishIsPending && (
-        <LoadingSpinner
-          value={
-            publishIsPending
-              ? `Publishing..${uploadProgress}%`
-              : "Please Wait.."
-          }
-        />
-      )}
+      {publishIsPending && <LoadingSpinner value="Publishing. This might take a while, please wait..." />}
 
       <IconButton onClick={handleScrollToTop} className="scroll-to-top-button">
         <ArrowUpwardSharp />
