@@ -91,12 +91,14 @@ Common behaviour:
 |---|---|---|
 | POST | `/api/frebbys/v1/examinations` | staff + class access (via record) |
 | GET | `/api/frebbys/v1/examinations/:id` | signed in (checks inside) |
+| POST | `/api/frebbys/v1/examinations/:id/publish` | staff + class access (via record) |
 | GET | `/api/frebbys/v1/examinations/academic/:studentId` | student in school |
 | GET | `/api/frebbys/v1/examinations/analytics/:id` | student in school |
 | POST | `/api/frebbys/v1/examinations/bulk` | staff + class access |
 | PUT | `/api/frebbys/v1/examinations/comments` | staff + class access (via record) |
 | GET | `/api/frebbys/v1/examinations/details` | staff + class access |
-| GET | `/api/frebbys/v1/examinations/publish` | staff + class access |
+| GET | `/api/frebbys/v1/examinations/publications` | staff + class access |
+| POST | `/api/frebbys/v1/examinations/publish` | staff + class access |
 | GET | `/api/frebbys/v1/examinations/reports` | staff + class access |
 | POST | `/api/frebbys/v1/examinations/student/academics` | staff + class access + student in school |
 | GET | `/api/frebbys/v1/examinations/subject` | staff + class access |
@@ -335,4 +337,4 @@ Common behaviour:
 | PUT | `/api/frebbys/v1/users/school` | role-restricted |
 | POST | `/api/frebbys/v1/users/verify` | refresh cookie |
 
-_200 endpoints._
+_202 endpoints._

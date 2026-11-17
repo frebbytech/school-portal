@@ -22,8 +22,9 @@ const MISSING = { sms: "without a phone number", email: "without an email addres
  *            (undefined means "not sent", which is what the senders return on failure)
  *   prepare  async (results) -> array of report_id whose PDF exists (needed for email)
  *   limit    optional concurrency limiter, (fn) => Promise
+ *   onProgress  optional, called after each message with ({ done, total })
  */
-async function deliverReports({ results, type, send, prepare, limit = (fn) => fn() }) {
+async function deliverReports({ results, type, send, prepare, limit = (fn) => fn(), onProgress = () => {} }) {
   const channels = channelsFor(type);
   if (!channels) throw new Error(`Unknown publish type: ${type}`);
 
@@ -49,10 +50,23 @@ async function deliverReports({ results, type, send, prepare, limit = (fn) => fn
     }
   };
 
+  const total = results.length * channels.length;
+  let done = 0;
   const tasks = [];
   for (const result of results) {
     for (const channel of channels) {
-      tasks.push(limit(async () => ({ channel, result, status: await attempt(channel, result) })));
+      tasks.push(
+        limit(async () => {
+          const outcome = { channel, result, status: await attempt(channel, result) };
+          done += 1;
+          try {
+            onProgress({ done, total });
+          } catch {
+            // a progress listener must never stop the sending
+          }
+          return outcome;
+        })
+      );
     }
   }
   return Promise.all(tasks);

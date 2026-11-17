@@ -13,6 +13,9 @@ try {
 
 const app = require("./app");
 const db = require("./db/DBConnection");
+const { attach: attachSockets, closeSockets } = require("./realtime/socket");
+const { startWorker, closeQueue } = require("./jobs/queue");
+const { recoverInterrupted } = require("./jobs/recovery");
 
 // Server port
 const port = process.env.PORT || 8002;
@@ -25,6 +28,16 @@ db.asPromise()
     const server = app.listen(port, () => {
       logger.info("server started", { port });
     });
+
+    // Live updates (publishing progress and results) over WebSocket
+    attachSockets(server);
+
+    // Without REDIS_URL the API runs background jobs itself; close any left over from a restart.
+    recoverInterrupted().catch((error) => logger.error("could not close interrupted jobs", { err: error }));
+
+    // With REDIS_URL the jobs normally run in the separate worker (`npm run worker`);
+    // RUN_WORKER_IN_API=true runs one here too, for a single-server setup.
+    const inlineWorker = process.env.RUN_WORKER_IN_API === "true" ? startWorker() : null;
 
     // Graceful shutdown: stop accepting requests, let in-flight ones finish,
     // then close the database. A timer forces exit if something hangs.
@@ -42,6 +55,9 @@ db.asPromise()
 
       server.close(async () => {
         try {
+          await closeSockets();
+          if (inlineWorker) await inlineWorker.close();
+          await closeQueue();
           await db.close();
           logger.info("shutdown complete");
           process.exit(0);

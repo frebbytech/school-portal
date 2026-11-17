@@ -82,6 +82,14 @@ function validateEnv(env = process.env) {
     warnings.push('COOKIE_SECURE=false is ignored while COOKIE_SAMESITE is "none" (browsers require Secure)');
   }
 
+  // Background jobs (publishing report cards). Without REDIS_URL the API runs them itself.
+  if (isSet(env, "REDIS_URL") && !/^rediss?:\/\//i.test(env.REDIS_URL.trim())) {
+    warnings.push("REDIS_URL must start with redis:// or rediss://; background jobs will fail to start");
+  }
+  if (isSet(env, "PUBLISH_MAX_STUDENTS") && !(Number.isInteger(Number(env.PUBLISH_MAX_STUDENTS)) && Number(env.PUBLISH_MAX_STUDENTS) >= 0)) {
+    warnings.push("PUBLISH_MAX_STUDENTS must be a whole number (0 = no limit); the default is used");
+  }
+
   if (production) {
     for (const [name, effect] of RECOMMENDED) {
       if (!isSet(env, name)) warnings.push(`${name} is not set: ${effect}`);

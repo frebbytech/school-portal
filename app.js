@@ -69,24 +69,9 @@ app.use(
 app.set("view engine", "ejs");
 app.disable("x-powered-by");
 
-// CORS configuration
-// Browsers send the Origin header without a trailing slash, so entries are
-// normalised (trailing slashes and whitespace removed) before comparison.
-const normalizeOrigin = (value) => String(value).trim().replace(/\/+$/, "");
-
-const whitelist = (
-  process.env.CORS_WHITELIST
-    ? process.env.CORS_WHITELIST.split(",")
-    : [
-        "https://frebbys-school-portal.vercel.app/",
-        "https://frebbys-student-portal.vercel.app/",
-        "https://school-portal-aivn.onrender.com",
-        "https://school-portal-git-main-nicktest701s-projects.vercel.app/",
-        "https://school-portal-mqk4r390o-nicktest701s-projects.vercel.app/",
-      ]
-)
-  .filter(Boolean)
-  .map(normalizeOrigin);
+// CORS configuration (the list of allowed origins lives in config/origins.js,
+// shared with the live-updates socket)
+const { isAllowedOrigin } = require("./config/origins");
 
 const corsOptions = {
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -103,7 +88,7 @@ const corsOptions = {
   credentials: true,
   exposedHeaders: ["X-Request-Id", "X-Total-Count", "X-Page", "X-Page-Size"],
   origin: (origin, callback) => {
-    if (!origin || whitelist.includes(normalizeOrigin(origin))) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
     } else {
       callback(createError.Forbidden("Origin not allowed by CORS policy"));

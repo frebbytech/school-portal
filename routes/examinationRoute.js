@@ -1,23 +1,20 @@
 const router = require("express").Router();
 const asyncHandler = require("express-async-handler");
-const School = require("../models/schoolModel");
 const Examination = require("../models/examinationModel");
 const Level = require("../models/levelModel");
-const Grade = require("../models/gradeModel");
 const _ = require("lodash");
 const pLimit = require("p-limit");
 const moment = require("moment");
 const {
   Types: { ObjectId },
 } = require("mongoose");
-const { sendReportMail } = require("../config/mail/mail2");
 const generateTotalGrade = require("../config/generateTotalGrade");
-const generateReportTemplate = require("../config/generateReportTemplate");
-const generateReport = require("../config/generateReport");
 const generateRemarks = require("../config/generateRemarks");
-const { convertImageToBase64, SUBJECT_OPTIONS } = require("../config/helper");
-const { sendReportSMS } = require("../config/sms/messenger");
-const { channelsFor, deliverReports, summarizeDelivery, failureMessage } = require("../common/reportDelivery");
+const { SUBJECT_OPTIONS } = require("../config/helper");
+const { studentReportDetails } = require("../services/studentReport");
+const { channelsFor } = require("../common/reportDelivery");
+const ReportPublication = require("../models/reportPublicationModel");
+const { enqueue } = require("../jobs/queue");
 const {
   getBestOverallScore,
   getStudentPosition,
@@ -26,7 +23,6 @@ const {
   getTopSubjects,
   getTopOverallScores,
   getMyPosition,
-  getSubjectPosition,
   preparePerformanceIndexChartData,
   getTrend,
 } = require("../config/helpers/examination");
@@ -255,147 +251,122 @@ router.get(
   })
 );
 
-// Sends the given report cards by SMS and/or email and answers with what really happened
-// (sent / failed / no phone or email on record) instead of an unconditional "ok".
-const publishAndRespond = async (res, { results, school, type }) => {
-  const limit = pLimit(5);
+const PUBLISH_TYPE_MESSAGE = "Choose how to publish: SMS, email or both.";
+const PUBLISH_IN_PROGRESS = "Report cards for this class are already being sent. Wait for that to finish.";
 
-  // Email needs each report's PDF first; a report whose PDF cannot be made counts as failed.
-  const prepare = async (items) => {
-    const ids = await Promise.all(
-      items.map((result) =>
-        limit(async () => {
-          try {
-            const template = await generateReportTemplate({ report: result, school });
-            if (!template) return null;
-            await generateReport({ id: result?.report_id, template });
-            return result?.report_id;
-          } catch (error) {
-            logger.error("report could not be generated", { err: error });
-            return null;
-          }
-        })
-      )
-    );
-    return _.compact(ids);
-  };
+// Queues a publication and answers at once (202). Sending takes minutes, so it runs in the
+// background (see jobs/queue.js); progress and the result reach the browser over the socket
+// and can always be read back from GET /examinations/publications.
+const startPublication = async (req, res, { scope, sessionId, termId, levelId, examination }) => {
+  const type = req.body?.type || "sms";
+  if (!channelsFor(type)) return res.status(400).json(PUBLISH_TYPE_MESSAGE);
 
-  const outcomes = await deliverReports({
-    results,
+  const school = req.user.school;
+  const sameClass = { school, level: levelId, term: termId };
+
+  // Two sends to the same class at once would message families twice
+  const running = await ReportPublication.findOne({ ...sameClass, status: { $in: ["queued", "running"] } });
+  if (running) {
+    return res.status(409).json({ message: PUBLISH_IN_PROGRESS, code: "PUBLISH_IN_PROGRESS", publicationId: String(running._id) });
+  }
+
+  // Sending the same thing again has to be a decision, not an accident
+  const resend = req.body?.resend === true;
+  const earlier = await ReportPublication.findOne({
+    ...sameClass,
+    scope,
     type,
-    limit,
-    prepare,
-    send: {
-      sms: (result) => sendReportSMS(result, school),
-      mail: ({ fullName, email, report_id }) =>
-        sendReportMail({
-          school: { name: school?.name, email: school?.email, phonenumber: school?.phonenumber },
-          id: report_id,
-          email,
-          fullName,
-        }),
-    },
+    ...(examination ? { examination } : {}),
+    status: "completed",
+  }).sort({ createdAt: -1 });
+  if (earlier && !resend) {
+    return res.status(409).json({
+      message: `These report cards were already sent on ${moment(earlier.finishedAt || earlier.createdAt).format("Do MMMM YYYY [at] h:mm a")}. Send them again?`,
+      code: "ALREADY_PUBLISHED",
+      publishedAt: earlier.finishedAt || earlier.createdAt,
+      publicationId: String(earlier._id),
+    });
+  }
+
+  const publication = await ReportPublication.create({
+    school,
+    session: sessionId,
+    term: termId,
+    level: levelId,
+    examination,
+    scope,
+    type,
+    requestedBy: req.user.id,
+    resend: Boolean(earlier),
   });
 
-  const summary = summarizeDelivery(outcomes, { total: results.length, type });
-  if (summary.allFailed) return res.status(502).json(failureMessage(summary, type));
-  if (summary.nobodyReachable) return res.status(422).json(failureMessage(summary, type));
-  return res.status(200).json(summary);
+  try {
+    await enqueue("publish-reports", { publicationId: String(publication._id) }, { jobId: String(publication._id) });
+  } catch (error) {
+    logger.error("could not queue the publication", { err: error });
+    await ReportPublication.updateOne(
+      { _id: publication._id },
+      { status: "failed", finishedAt: new Date(), message: "Publishing could not be started. Nothing was sent; please try again." }
+    );
+    return res.status(503).json("Publishing could not be started. Nothing was sent; please try again.");
+  }
+
+  return res.status(202).json({ publicationId: String(publication._id), status: "queued" });
 };
 
-const PUBLISH_TYPE_MESSAGE = "Choose how to publish: SMS, email or both.";
-
-router.get(
+// Publish a whole class's report cards: { sessionId, termId, levelId, type: sms|email|both, resend? }
+router.post(
   "/publish",
+  requireStaff,
+  requireLevelAccess((req) => req.body?.levelId, { full: true }),
+  asyncHandler(async (req, res) => {
+    const { sessionId, termId, levelId } = req.body || {};
+    if (!isValidObjectId(sessionId) || !isValidObjectId(termId)) {
+      return res.status(400).json("Choose the session, term and class to publish.");
+    }
+
+    const anyResults = await Examination.exists({ school: req.user.school, session: sessionId, term: termId, level: levelId });
+    if (!anyResults) {
+      return res.status(404).json("No results have been entered for this class this term, so there is nothing to publish.");
+    }
+
+    return startPublication(req, res, { scope: "class", sessionId, termId, levelId });
+  })
+);
+
+// Publish one student's report card: { type: sms|email|both, resend? }
+router.post(
+  "/:id/publish",
+  requireStaff,
+  requireExamAccess((req) => req.params.id, { full: true }),
+  asyncHandler(async (req, res) => {
+    const record = await Examination.findById(req.params.id).select("session term level");
+    return startPublication(req, res, {
+      scope: "student",
+      sessionId: record.session,
+      termId: record.term,
+      levelId: record.level,
+      examination: record._id,
+    });
+  })
+);
+
+// What has been published for a class this term (newest first): for the status shown on the
+// report screens, and to pick up where things stand after a page reload.
+router.get(
+  "/publications",
   requireStaff,
   requireLevelAccess((req) => req.query.levelId, { full: true }),
   asyncHandler(async (req, res) => {
-    const publishType = req.query.type || "sms";
-    const { sessionId, termId, levelId } = req.query;
+    const { levelId, termId } = req.query;
+    if (!isValidObjectId(termId)) return res.status(400).json("Choose the term.");
 
-    if (!channelsFor(publishType)) return res.status(400).json(PUBLISH_TYPE_MESSAGE);
-
-    const studentRecords = await Examination.find({
-      session: new ObjectId(sessionId),
-      term: new ObjectId(termId),
-      level: new ObjectId(levelId),
-    })
-      .populate("term")
-      .populate({
-        path: "level",
-        select: ["level", "students", "grades"],
-      })
-      .populate({
-        path: "student",
-        select: [
-          "firstname",
-          "surname",
-          "othername",
-          "indexnumber",
-          "phonenumber",
-          "email",
-          "profile",
-        ],
-      });
-
-    if (_.isEmpty(studentRecords)) {
-      // Used to answer 200 [] and the screen said "published successfully".
-      return res.status(404).json("No results have been entered for this class this term, so there is nothing to publish.");
-    }
-    const school = await School.findById(req.user.school);
-
-    const scorePreference =
-      studentRecords[0]?.term?.exams?.scorePreference?.split("/") || [
-        "50",
-        "50",
-      ];
-    const termDetails = {
-      report: studentRecords[0]?.term?.report,
-      class: scorePreference[0],
-      exams: scorePreference[1],
-      headmaster: studentRecords[0]?.term?.headmaster,
-    };
-    school.termDetails = termDetails;
-
-    //CONVERT IMAGE TO BASE64
-    let SCHOOL_PHOTO = "";
-
-    if (!_.isEmpty(school)) {
-      if (school.badge) {
-        SCHOOL_PHOTO = await convertImageToBase64(school.badge);
-      }
-    }
-
-    school.badge = SCHOOL_PHOTO;
-
-    try {
-      //GENERATE STUDENT RESULTS
-
-      const generatedResults = studentRecords.map(async (report) => {
-        //GET student position
-        const position = await getMyPosition(termId, levelId, report?._id);
-        //GENERATE STUDENT RESULTS
-        const generatedResult = await studentReportDetails(
-          report,
-          position,
-          "print"
-        );
-        return generatedResult;
-      });
-
-      //WAIT FOR ALL RESULTS TO FINISH
-      const mainResults = await Promise.all(generatedResults);
-
-      const results =
-        process.env.NODE_ENV === "production"
-          ? mainResults
-          : _.take(mainResults, 1);
-
-      return await publishAndRespond(res, { results, school, type: publishType });
-    } catch (error) {
-      logger.error("publishing reports failed", { err: error });
-      return res.status(400).json("An unknown error has occured.");
-    }
+    const publications = await ReportPublication.find({ school: req.user.school, level: levelId, term: termId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select("scope examination type status phase done total summary message startedAt finishedAt createdAt requestedBy")
+      .populate("requestedBy", "fullname");
+    return res.status(200).json(publications);
   })
 );
 
@@ -624,10 +595,12 @@ router.get(
   examinationRead,
   asyncHandler(async (req, res) => {
     const publish = req.query.publish || "";
-    const publishType = req.query.type || "sms";
     const { id } = req.params;
 
-    if (publish && !channelsFor(publishType)) return res.status(400).json(PUBLISH_TYPE_MESSAGE);
+    // Used to send messages from a GET. Sending is POST /examinations/:id/publish now.
+    if (publish) {
+      return res.status(405).json("Publishing report cards now uses POST /examinations/:id/publish.");
+    }
 
     const studentRecord = await Examination.findById(id)
       .populate("term")
@@ -675,52 +648,34 @@ router.get(
     let generatedResult = await studentReportDetails(
       studentRecord,
       position,
-      publish ? "print" : "preview"
+      "preview"
     );
 
-    if (_.isEmpty(publish)) {
-      const expectedScore = studentRecord?.level.subjects?.length * 100;
-      const scorePercentage = parseInt(
-        Number(generatedResult.overallScore / expectedScore) * 100
-      );
+    const expectedScore = studentRecord?.level.subjects?.length * 100;
+    const scorePercentage = parseInt(
+      Number(generatedResult.overallScore / expectedScore) * 100
+    );
 
-      const noOfSubjects = studentRecord?.level?.subjects?.length || 0;
-      const noOfScores = generatedResult?.scores?.length || 0;
+    const noOfSubjects = studentRecord?.level?.subjects?.length || 0;
+    const noOfScores = generatedResult?.scores?.length || 0;
 
-      generatedResult = {
-        ...generatedResult,
-        scorePercentage,
-        entry: {
-          completed: noOfScores || 0,
-          total: noOfSubjects,
-          percent: parseInt(Number(noOfScores / noOfSubjects) * 100),
-          bestScoreSubject: _.maxBy(generatedResult?.scores, "totalScore"),
-          worstScoreSubject: _.minBy(generatedResult?.scores, "totalScore"),
-        },
+    generatedResult = {
+      ...generatedResult,
+      scorePercentage,
+      entry: {
+        completed: noOfScores || 0,
+        total: noOfSubjects,
+        percent: parseInt(Number(noOfScores / noOfSubjects) * 100),
+        bestScoreSubject: _.maxBy(generatedResult?.scores, "totalScore"),
+        worstScoreSubject: _.minBy(generatedResult?.scores, "totalScore"),
+      },
 
-        session: termDetails,
-      };
-      // console.log(generatedResult);
+      session: termDetails,
+    };
+    // console.log(generatedResult);
 
-      return res.status(200).json(generatedResult);
-    }
+    return res.status(200).json(generatedResult);
 
-    const school = await School.findById(req.user.school);
-
-    school.termDetails = termDetails;
-
-    //CONVERT IMAGE TO BASE64
-    let SCHOOL_PHOTO = "";
-
-    if (!_.isEmpty(school)) {
-      if (school.badge) {
-        SCHOOL_PHOTO = await convertImageToBase64(school.badge);
-      }
-    }
-
-    school.badge = SCHOOL_PHOTO;
-
-    return publishAndRespond(res, { results: [generatedResult], school, type: publishType });
   })
 );
 
@@ -991,85 +946,5 @@ router.put(
     res.status(201).json("Remarks updated successfully!!!");
   })
 );
-
-const studentReportDetails = async (
-  report,
-  position,
-  reportType = "preview"
-) => {
-  const {
-    _id,
-    term,
-    level,
-    scores,
-    scoresWithTotal,
-    overallScore,
-    comments,
-    student,
-  } = report;
-
-  const newGenerateScore = await scoresWithTotal;
-
-  const modifiedScores = newGenerateScore.map(async (score) => {
-    const position = await getSubjectPosition(term?._id, level?._id, _id, {
-      _id: score._id,
-      subject: score.subject,
-    });
-
-    return {
-      ...score,
-      position: position,
-    };
-  });
-
-  const finalScores = await Promise.all(modifiedScores);
-  //SORT SCORES ACCORDING TO SUBJECT_OPTIONS
-  const sortedScores = finalScores.sort(
-    (a, b) =>
-      SUBJECT_OPTIONS.indexOf(a.subject) - SUBJECT_OPTIONS.indexOf(b.subject)
-  );
-
-  //CONVERT IMAGE TO BASE64
-  let STUDENT_PHOTO = "";
-  if (student?.profile && reportType === "print") {
-    STUDENT_PHOTO = await convertImageToBase64(student?.profile);
-  }
-
-  //GET Student Grade
-  const grade = await generateTotalGrade(scores, level?._id);
-  const gradingSystem = await Grade.findById(level?.grades).select("ratings");
-  // console.log("gradingSystem", gradingSystem.ratings);
-
-  const modifiedStudentRecord = {
-    _id,
-    academicYear: term.academicYear,
-    term: term.term,
-    vacationDate: moment(new Date(term.vacationDate)).format("Do MMMM,YYYY"),
-    reOpeningDate: moment(new Date(term.reOpeningDate)).format("Do MMMM,YYYY"),
-    isPromotionTerm: term?.isPromotionTerm,
-    report_id: `${student?.fullName}_${level?.levelName}_${term.term}`,
-    rollNumber: level.noOfStudents,
-    totalLevelAttendance: 0,
-    indexnumber: _.toUpper(student?.indexnumber),
-    phonenumber: student?.phonenumber,
-    fullName: student?.fullName,
-    department: student?.academic?.department?.name,
-    house: student?.academic?.house?.name,
-    email: student?.email,
-    level: `${level?.levelName}`,
-    levelId: level?._id,
-    profile:
-      reportType === "preview" ? student?.profile || null : STUDENT_PHOTO,
-    scores: sortedScores,
-    overallScore,
-    position: position,
-    // position: ordinal(position),
-    grade,
-    comments,
-    gradingSystem: gradingSystem?.ratings || [],
-  };
-
-  return modifiedStudentRecord;
-};
 
 module.exports = router;

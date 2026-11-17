@@ -81,4 +81,15 @@ describe("assertEnv", () => {
     assertEnv(env, silentLog());
     expect(env.REFRESH_TOKEN_EXPIRY).toBe("30d");
   });
+
+  it("warns about a REDIS_URL that is not a redis address, and accepts a proper one", () => {
+    expect(validateEnv({ REDIS_URL: "localhost:6379" }).warnings.join(" ")).toMatch(/REDIS_URL/);
+    expect(validateEnv({ REDIS_URL: "redis://localhost:6379" }).warnings).toEqual([]);
+    expect(validateEnv({ REDIS_URL: "rediss://user:pw@host:6380" }).warnings).toEqual([]);
+  });
+
+  it("warns about a PUBLISH_MAX_STUDENTS that is not a whole number", () => {
+    expect(validateEnv({ PUBLISH_MAX_STUDENTS: "many" }).warnings.join(" ")).toMatch(/PUBLISH_MAX_STUDENTS/);
+    expect(validateEnv({ PUBLISH_MAX_STUDENTS: "0" }).warnings).toEqual([]);
+  });
 });

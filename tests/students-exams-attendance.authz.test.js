@@ -230,6 +230,7 @@ describe("students, results and attendance authorization (finding C-6, teacher s
       expect((await as(request(app).get(`${base}/examinations/${examA._id}`), studentTokA)).status).not.toBe(403);
       expect((await as(request(app).get(`${base}/examinations/${examA2._id}`), studentTokA)).status).toBe(403);
       expect((await as(request(app).get(`${base}/examinations/${examA._id}?publish=true&type=sms`), studentTokA)).status).toBe(403);
+      expect((await as(request(app).post(`${base}/examinations/${examA._id}/publish`), studentTokA).send({ type: "sms" })).status).toBe(403);
       expect((await as(request(app).get(`${base}/examinations/analytics/${studentA2._id}`), studentTokA)).status).toBe(403);
       expect((await as(request(app).get(`${base}/examinations/academic/${studentA2._id}`), studentTokA)).status).toBe(403);
       expect((await as(request(app).get(`${base}/examinations/analytics/${studentA._id}`), studentTokA)).status).not.toBe(403);
@@ -316,7 +317,11 @@ describe("students, results and attendance authorization (finding C-6, teacher s
     it("needs the whole level (class teacher or administrator) for report cards", async () => {
       const q = `sessionId=${oid()}&termId=${termA._id}&levelId=${levelA._id}`;
       expect((await as(request(app).get(`${base}/examinations/reports?${q}`), courseTok)).status).toBe(403);
-      expect((await as(request(app).get(`${base}/examinations/publish?${q}&type=sms`), courseTok)).status).toBe(403);
+      const body = { sessionId: String(oid()), termId: String(termA._id), levelId: String(levelA._id), type: "sms" };
+      expect((await as(request(app).post(`${base}/examinations/publish`), courseTok).send(body)).status).toBe(403);
+      expect((await as(request(app).post(`${base}/examinations/${examA._id}/publish`), courseTok).send({ type: "sms" })).status).toBe(403);
+      expect((await as(request(app).post(`${base}/examinations/publish`), adminBTok).send(body)).status).toBe(403);
+      expect((await as(request(app).get(`${base}/examinations/publications?levelId=${levelA._id}&termId=${termA._id}`), courseTok)).status).toBe(403);
       expect((await as(request(app).get(`${base}/examinations/reports?${q}`), adminBTok)).status).toBe(403);
     });
   });
