@@ -44,7 +44,7 @@ const TeacherAssignLevel = () => {
 
   const { levelsOption, levelLoading } = useLevel();
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: assignTeacherLevel,
   });
   const onSubmit = (values, options) => {
@@ -60,7 +60,7 @@ const TeacherAssignLevel = () => {
           teacher: id,
         };
 
-        mutateAsync(info, {
+        mutate(info, {
           onSettled: () => {
             queryClient.invalidateQueries({
               queryKey: ["levels", session.sessionId, session.termId],

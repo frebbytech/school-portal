@@ -29,7 +29,7 @@ const SubjectTab = () => {
     queryFn: getAllSubjects,
   });
 
-  const { mutateAsync } = useMutation({ mutationFn: deleteSubject });
+  const { mutate } = useMutation({ mutationFn: deleteSubject });
 
   const handleDeleteLevel = (id) => {
     Swal.fire({
@@ -39,9 +39,9 @@ const SubjectTab = () => {
       showCancelButton: true,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(id, {
+        mutate(id, {
           onSettled: () => {
-            queryClient.invalidateQueries(["level"]);
+            queryClient.invalidateQueries({ queryKey: ["level"] });
           },
           onSuccess: () => {
             setMsg({

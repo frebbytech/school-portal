@@ -48,7 +48,7 @@ const AddLevel = ({ open, setOpen }) => {
       })) ?? [],
   });
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: postLevel });
+  const { mutate, isPending } = useMutation({ mutationFn: postLevel });
 
   const {
     control,
@@ -65,7 +65,7 @@ const AddLevel = ({ open, setOpen }) => {
   const typeWatch = watch("type");
   const initialsWatch = watch("initials");
 
-  const onSubmit = async (values) => {
+  const onSubmit = (values) => {
     const newType = `${values.level} ${values.type}`;
     const isMatch = levelsOption.find(
       ({ type }) => type === newType.toUpperCase()
@@ -88,10 +88,10 @@ const AddLevel = ({ open, setOpen }) => {
       ...(values?.teacher?._id && { teacher: values.teacher._id }),
     };
 
-    mutateAsync(newLevel, {
+    mutate(newLevel, {
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));
-        queryClient.invalidateQueries(["levels"]);
+        queryClient.invalidateQueries({ queryKey: ["levels"] });
         reset();
         setOpen(false);
       },

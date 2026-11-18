@@ -34,7 +34,7 @@ function TeacherLevels() {
   }, [levelsOption, id]);
 
   //UNASSIGN Teacher from level
-  const { mutateAsync: unassignTeacher } = useMutation({
+  const { mutate: unassignTeacher } = useMutation({
     mutationFn: unassignTeacherLevel,
   });
   const handleUnassignTeacher = (id) => {

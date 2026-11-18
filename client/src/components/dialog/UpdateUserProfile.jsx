@@ -42,7 +42,7 @@ const UpdateUserProfile = () => {
     setDob(dayjs(user?.dateofbirth));
   }, [user]);
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: putUser,
   });
   const onSubmit = (values, options) => {
@@ -56,9 +56,9 @@ const UpdateUserProfile = () => {
     delete values.confirmPassword;
     values.dateofbirth = dayjs(dob).format("L");
     values._id = user?.id;
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["user"]);
+        queryClient.invalidateQueries({ queryKey: ["user"] });
         options.setSubmitting(false);
       },
       onSuccess: (data) => {
@@ -87,7 +87,7 @@ const UpdateUserProfile = () => {
       user: true,
     };
 
-    changeProfile.mutateAsync(info, {
+    changeProfile.mutate(info, {
       onSuccess: (data) => {
         updateAccessToken(data?.token);
         schoolSessionDispatch(alertSuccess("Profile Updated!"));

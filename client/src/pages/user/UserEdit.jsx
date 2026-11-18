@@ -46,7 +46,7 @@ const UserEdit = () => {
   }, [user?.data]);
 
   //PUT user
-  const { mutateAsync, isPending } = useMutation({ mutationFn: putUser });
+  const { mutate, isPending } = useMutation({ mutationFn: putUser });
   const onSubmit = (values, options) => {
     delete values.profile;
     values.dateofbirth = dayjs(dob).format("L");
@@ -54,9 +54,9 @@ const UserEdit = () => {
 
     // console.log(values);
     // return
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["users"]);
+        queryClient.invalidateQueries({ queryKey: ["users"] });
         queryClient.invalidateQueries({ queryKey: ["user", id] });
         options.setSubmitting(false);
       },
@@ -81,7 +81,7 @@ const UserEdit = () => {
       type: "users",
     };
 
-    changeProfile.mutateAsync(info, {
+    changeProfile.mutate(info, {
       onSettled: () => {
         queryClient.invalidateQueries({ queryKey: ["users"] });
         queryClient.invalidateQueries({ queryKey: ["user", id] });

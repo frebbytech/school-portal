@@ -36,7 +36,7 @@ const Sessions = () => {
   });
 
   ///Delete session by id
-  const { mutateAsync: deleteMutate, isPending } = useMutation({
+  const { mutate: deleteMutate, isPending } = useMutation({
     mutationFn: deleteTerm,
   });
 
@@ -44,20 +44,11 @@ const Sessions = () => {
     Swal.fire({
       title: "Removing Session",
       // text: "Removing session will delete all of its related content.Do you want to remove?",
-      html: ` <div style='text-align:left;display:flex;flex-direction:column;gap:8px;'>
-    <p>  You are about to delete an entire academic term. This action is irreversible and will permanently remove all associated data,including:</p>
-      <ul style='padding-block:8px;'>
- <li style='font-weight:bold;'>Class schedules</li>
-<li style='font-weight:bold;'>Student enrollments</li>
-<li style='font-weight:bold;'>Attendance records</li>
-<li style='font-weight:bold;'>Grades and assignments</li>
-</ul>
-
-         <p>   Please proceed with caution. If you are certain you want to delete
-            this academic year, click &apos;Confirm.&apos; Otherwise, click
-            &apos;Cancel&apos; to keep the academic year intact.</p>
-          <p style='color:var(--secondary);font-weight:bold;'>Are you sure you want to delete this academic term?</p>
-        </div>`,
+      html: `<div style='text-align:left;display:flex;flex-direction:column;gap:8px;'>
+        <p>This removes the term only if it is empty: no enrolled students, scores, payments or attendance.</p>
+        <p>A term that holds records cannot be removed. Archive it instead so its history is kept.</p>
+        <p style='color:var(--secondary);font-weight:bold;'>Remove this academic term?</p>
+      </div>`,
       showCancelButton: true,
       // background: ,
       backdrop: "rgba(0,0,0,0.2)",
@@ -65,7 +56,7 @@ const Sessions = () => {
       if (isConfirmed) {
         deleteMutate(id, {
           onSettled: () => {
-            queryClient.invalidateQueries(["terms"]);
+            queryClient.invalidateQueries({ queryKey: ["terms"] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));
@@ -93,7 +84,7 @@ const Sessions = () => {
   //     if (isConfirmed) {
   //       mutateAsync(sessions, {
   //         onSettled: () => {
-  //           queryClient.invalidateQueries(["terms"]);
+  //           queryClient.invalidateQueries({ queryKey: ["terms"] });
   //         },
   //         onSuccess: (data) => {
   //           schoolSessionDispatch(alertSuccess(data));
@@ -120,7 +111,7 @@ const Sessions = () => {
   };
 
   ///Disable or Enable User Account by id
-  const { mutateAsync: enableMutate } = useMutation({
+  const { mutate: enableMutate } = useMutation({
     mutationFn: disableSessionAccount,
   });
   const handleActivateSession = ({ _id, active }) => {
@@ -140,7 +131,7 @@ const Sessions = () => {
 
         enableMutate(info, {
           onSuccess: (data) => {
-            queryClient.invalidateQueries(["terms"]);
+            queryClient.invalidateQueries({ queryKey: ["terms"] });
             schoolSessionDispatch(alertSuccess(data));
           },
           onError: (error) => {
@@ -151,7 +142,7 @@ const Sessions = () => {
     });
   };
   ///Disable or Enable User Account by id
-  const { mutateAsync: switchMutate } = useMutation({
+  const { mutate: switchMutate } = useMutation({
     mutationFn: switchTerm,
   });
   const handleSwitchSession = ({ _id, status }) => {
@@ -169,13 +160,14 @@ const Sessions = () => {
 
         switchMutate(info, {
           onSuccess: (data) => {
-            queryClient.invalidateQueries(["terms"]);
-            schoolSessionDispatch(alertSuccess(data));
-            if (info?.status === "current") {
-              schoolSessionDispatch(
-                alertSuccess(`Your Current Session has been changed!!!`)
-              );
-            }
+            queryClient.invalidateQueries({ queryKey: ["terms"] });
+            schoolSessionDispatch(
+              alertSuccess(
+                info?.status === "current"
+                  ? "Your current session has been changed."
+                  : data
+              )
+            );
           },
           onError: (error) => {
             schoolSessionDispatch(alertError(error));

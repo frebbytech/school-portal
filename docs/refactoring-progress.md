@@ -467,3 +467,8 @@ See row U5h in `ui-refactor-plan.md` and *Background jobs and live updates* in `
 ## 5u. Students: add, import, list, disable (2026-11-18)
 
 See row U5i in `ui-refactor-plan.md`. Server: `GET /students/index-number` compares trimmed lower-case; `POST /students/many` reports all bad rows at once. Client: add-student draft kept for the tab only; `useLevel` exposes `levelError` and no longer looks loaded before it is. Open: student edit screens still use Formik.
+
+
+## 5v. Terms, sessions and levels (2026-11-18)
+
+See row U5j in `ui-refactor-plan.md`. Client only: term, session and level API calls now throw the server's error instead of returning it (a refused delete or switch looked like success); 12 screens moved to `mutate` with object-form cache refresh; delete-term wording matches the server rule (a term with records is archived, not removed). No server change.

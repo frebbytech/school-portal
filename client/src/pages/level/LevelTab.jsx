@@ -33,7 +33,7 @@ const LevelTab = () => {
 
   const { levelLoading, levelRefetch, levelsOption } = useLevel();
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: deleteLevel });
+  const { mutate, isPending } = useMutation({ mutationFn: deleteLevel });
 
   const handleDelete = (id) => {
     const values = {
@@ -63,9 +63,9 @@ const LevelTab = () => {
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
         Swal.showLoading();
-        mutateAsync(values, {
+        mutate(values, {
           onSettled: () => {
-            queryClient.invalidateQueries(["levels"]);
+            queryClient.invalidateQueries({ queryKey: ["levels"] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));
@@ -82,7 +82,7 @@ const LevelTab = () => {
     setSelectedLevels(rows);
   };
 
-  const { mutateAsync: deleteManyMutateAsync, isPending: deleteManyIsLoading } =
+  const { mutate: deleteManyMutateAsync, isPending: deleteManyIsLoading } =
     useMutation({
       mutationFn: deleteManyLevels,
     });
@@ -98,7 +98,7 @@ const LevelTab = () => {
       if (isConfirmed) {
         deleteManyMutateAsync(levels, {
           onSettled: () => {
-            queryClient.invalidateQueries(["terms"]);
+            queryClient.invalidateQueries({ queryKey: ["terms"] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));

@@ -62,7 +62,7 @@ const AssignTutorLevel = ({ open, setOpen }) => {
   });
 
   // 📌 Mutation
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: assignTeacherLevel,
   });
 
@@ -86,7 +86,7 @@ const AssignTutorLevel = ({ open, setOpen }) => {
         teacher: values.teacher?._id,
       };
 
-      mutateAsync(payload, {
+      mutate(payload, {
         onSettled: () => {
           queryClient.invalidateQueries({ queryKey: ["levels"] });
         },

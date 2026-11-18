@@ -49,17 +49,17 @@ const TeacherEdit = () => {
   }, [teacher?.data]);
 
   //Put teacher
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: putTeacher,
   });
   const onSubmit = (values) => {
     delete values?.profile;
     values.dateofbirth = dayjs(dob).format("L");
 
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["teachers"]);
-        queryClient.invalidateQueries(["teacher", id]);
+        queryClient.invalidateQueries({ queryKey: ["teachers"] });
+        queryClient.invalidateQueries({ queryKey: ["teacher", id] });
       },
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));
@@ -82,7 +82,7 @@ const TeacherEdit = () => {
       type: "teachers",
     };
 
-    changeProfile.mutateAsync(info, {
+    changeProfile.mutate(info, {
       onSettled: () => {
         queryClient.invalidateQueries({ queryKey: ["teachers"] });
         queryClient.invalidateQueries({ queryKey: ["teacher", id] });

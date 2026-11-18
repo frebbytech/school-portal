@@ -169,7 +169,7 @@ export const getAllPreviousLevels = async (session) => {
 
     return res.data;
   } catch (error) {
-    //console.log(error.response.data);
+    throw normalizeApiError(error);
   }
 };
 
@@ -187,7 +187,7 @@ export const getAllStudentsBySession = async (session) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -208,7 +208,7 @@ export const getSubjectsForLevel = async (levelId) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
 
   }
 };
@@ -223,7 +223,7 @@ export const addSubjectsToLevel = async (data) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
 
   }
 };
@@ -252,7 +252,7 @@ export const getDashboardInfo = async (info) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -269,7 +269,7 @@ export const getTeacherLevel = async (assignedLevelDetails) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -283,7 +283,7 @@ export const assignTeacherLevel = async (updatedLevel) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -299,6 +299,6 @@ export const unassignTeacherLevel = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };

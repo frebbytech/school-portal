@@ -120,7 +120,7 @@ export const switchTerm = async ({ id, status }) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 

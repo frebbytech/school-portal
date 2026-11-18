@@ -76,7 +76,7 @@ const AddCurrentSubjects = () => {
     });
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: addSubjectsToLevel,
   });
 
@@ -87,10 +87,10 @@ const AddCurrentSubjects = () => {
       subjects: _.map(subjectList, "_id"),
     };
 
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["subjects"]);
-        queryClient.invalidateQueries(["level", id]);
+        queryClient.invalidateQueries({ queryKey: ["subjects"] });
+        queryClient.invalidateQueries({ queryKey: ["level", id] });
       },
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));

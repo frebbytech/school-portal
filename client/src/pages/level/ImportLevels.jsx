@@ -62,7 +62,7 @@ const ImportLevels = ({ open, onClose }) => {
     term: "",
   });
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: postLevels });
+  const { mutate, isPending } = useMutation({ mutationFn: postLevels });
 
   const previousSessions = useQuery({
     queryKey: ["previous-sessions", inputMethod],
@@ -128,7 +128,7 @@ const ImportLevels = ({ open, onClose }) => {
 
       // return;
       if (isConfirmed) {
-        mutateAsync(
+        mutate(
           {
             session: session?.sessionId,
             term: session?.termId,
@@ -136,7 +136,7 @@ const ImportLevels = ({ open, onClose }) => {
           },
           {
             onSettled: () => {
-              queryClient.invalidateQueries(["levels"]);
+              queryClient.invalidateQueries({ queryKey: ["levels"] });
             },
             onSuccess: (data) => {
               schoolSessionDispatch(alertSuccess(data));
