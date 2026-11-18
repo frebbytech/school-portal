@@ -20,6 +20,7 @@ import { EMPTY_IMAGES } from "@/config/images";
 import CustomDialogTitle from "../dialog/CustomDialogTitle";
 import { ImportExport } from "@mui/icons-material";
 import LoadingSpinner from "../spinners/LoadingSpinner";
+import { importProblem } from "@/pages/student/importCheck";
 function AddStudentFileDialog() {
   const { session } = useContext(UserContext);
 
@@ -51,7 +52,7 @@ function AddStudentFileDialog() {
     });
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postManyStudents,
   });
   const handlePostStudents = () => {
@@ -60,6 +61,14 @@ function AddStudentFileDialog() {
     if (fieldValue._id === "") {
       setFieldError("Please select a level!");
 
+      return;
+    }
+
+    // Mistakes the browser can see (no index number, an index number twice) are shown now
+    // (only for a file: when existing students are being added to a class the rows are ids)
+    const problem = fileData?.type === "file" ? importProblem(fileData?.data) : "";
+    if (problem) {
+      Swal.fire({ title: "Check the file", text: problem, icon: "error", backdrop: false });
       return;
     }
 
@@ -81,21 +90,22 @@ function AddStudentFileDialog() {
       showCancelButton: true,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(studentInfo, {
+        mutate(studentInfo, {
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));
             schoolSessionDispatch({ type: "closeAddStudentFileDialog" });
-            queryClient.invalidateQueries(["all-students"]);
+            // The class lists and the student summary show the new students
+            queryClient.invalidateQueries({ queryKey: ["levels"] });
+            queryClient.invalidateQueries({ queryKey: ["student-details"] });
             setFieldValue({ _id: "", type: "" });
           },
           onError: (error) => {
             if (error?.isDuplicateError) {
+              // Shown as plain text (never as HTML): the ids come from the file
               Swal.fire({
-                title: "Duplicate Student ID",
+                title: "Student ID already in use",
                 icon: "error",
-                html: `<div> ${error?.message} ${JSON.stringify(
-                  error?.data
-                )} </div>`,
+                text: `${error.message} ${(error.data || []).join(", ")}`,
                 showCancelButton: false,
                 backdrop: false,
               });

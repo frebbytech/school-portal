@@ -49,6 +49,8 @@ import { UserContext } from "@/context/providers/UserProvider";
 import FormStep from "@/components/FormStep";
 import { readXLSX } from "@/config/readXLSX";
 import dayjs from "@/lib/dates";
+import { thrownMessage } from "@/lib/formErrors";
+import { clearDraft, readDraft, saveDraft } from "../studentDraft";
 import { validateExcelHeaders } from "@/config/helper";
 import { DATA_HEADERS } from "@/mockup/columns/sessionColumns";
 
@@ -86,9 +88,7 @@ const pages = [
 
 const StudentInfo = () => {
   const [errorState, setErrorState] = useState("");
-  const studentData =
-    JSON.parse(localStorage.getItem("@student-data")) ||
-    newStudentDefaultValues;
+  const studentData = readDraft(newStudentDefaultValues);
   const { session } = useContext(UserContext);
   const [activeStep, setActiveStep] = useLocalStorage("active-add-student", 0);
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
@@ -147,7 +147,7 @@ const StudentInfo = () => {
       getStudentByIndexNumber(watchedValues?.personal?.indexnumber),
   });
 
-  const { mutateAsync, isPending, isSuccess } = useMutation({
+  const { mutate, isPending, isSuccess } = useMutation({
     mutationFn: postNewStudent,
   });
 
@@ -170,7 +170,7 @@ const StudentInfo = () => {
     // });
     // return;
 
-    mutateAsync(
+    mutate(
       {
         photo: photo?.profile,
         details: {
@@ -187,15 +187,17 @@ const StudentInfo = () => {
       },
       {
         onSettled: () => {
-          queryClient.invalidateQueries(["all-students"]);
+          // The class lists and the student summary show the new student
+          queryClient.invalidateQueries({ queryKey: ["levels"] });
+          queryClient.invalidateQueries({ queryKey: ["student-details"] });
         },
         onSuccess: (data) => {
           if (data) {
             schoolSessionDispatch(alertSuccess("New Student Added!"));
             setId(data);
             setHideSaveBtn(true);
-            queryClient.invalidateQueries(["student-profile", data]);
-            localStorage.removeItem("@student-data");
+            queryClient.invalidateQueries({ queryKey: ["student/id", data] });
+            clearDraft();
           }
         },
         onError: (error) => {
@@ -205,15 +207,12 @@ const StudentInfo = () => {
     );
   };
 
-  // Save to localStorage whenever form values change
+  // Keep the draft for this tab whenever form values change
   useEffect(() => {
     if (isSuccess) {
-      localStorage.setItem(
-        "@student-data",
-        JSON.stringify(newStudentDefaultValues)
-      );
+      saveDraft(newStudentDefaultValues);
     } else {
-      localStorage.setItem("@student-data", JSON.stringify(watchedValues));
+      saveDraft(watchedValues);
     }
     // console.log(watchedValues?.personal);
   }, [watchedValues]);
@@ -222,15 +221,18 @@ const StudentInfo = () => {
     if (activeStep === 0) {
       try {
         await doesStudentExist.mutateAsync({});
-        clearErrors("personal.indexnumber");
-        const isValid = await trigger();
-        if (isValid) setActiveStep((prev) => prev + 1);
       } catch (error) {
+        // The server's reason ("Index Number already exist!"), or why it could not be checked.
+        // (The thrown value may be an object; a form field needs text.)
         setError("personal.indexnumber", {
-          message: error,
+          message: thrownMessage(error, "The index number could not be checked. Try again."),
           type: "custom",
         });
+        return;
       }
+      clearErrors("personal.indexnumber");
+      const isValid = await trigger();
+      if (isValid) setActiveStep((prev) => prev + 1);
       return;
     }
 
@@ -251,7 +253,7 @@ const StudentInfo = () => {
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
         navigate("/student/view");
-        localStorage.removeItem("@student-data");
+        clearDraft();
       }
     });
   };

@@ -14,6 +14,7 @@ import CustomTitle from "@/components/custom/CustomTitle";
 import DashboardCard from "@/components/cards/DashboardCard";
 import { Person, Refresh } from "@mui/icons-material";
 import { useAuth } from "@/hooks/useAuth";
+import QueryError from "@/components/QueryError";
 
 const StudentHome = () => {
   const { session } = useAuth();
@@ -44,11 +45,14 @@ const StudentHome = () => {
         img={student_icon}
         color="primary.main"
         right={
-          <IconButton onClick={studentDetails.refetch}>
+          <IconButton aria-label="Refresh" onClick={() => studentDetails.refetch()}>
             <Refresh sx={{ width: 36, height: 36 }} />
           </IconButton>
         }
       />
+      {studentDetails.isError && (
+        <QueryError error={studentDetails.error} onRetry={studentDetails.refetch} what="the student summary" />
+      )}
       <Typography variant="h5" py={2}>
         Student Details Summary
       </Typography>

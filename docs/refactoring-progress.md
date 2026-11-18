@@ -463,3 +463,7 @@ See row U5g in `ui-refactor-plan.md`. New `common/reportDelivery.js`; `/examinat
 ## 5t. Publishing in the background (2026-11-17)
 
 See row U5h in `ui-refactor-plan.md` and *Background jobs and live updates* in `deployment-and-migration.md`. New: `models/reportPublicationModel.js`, `services/reportPublishing.js`, `services/studentReport.js`, `jobs/` (queue, handlers, recovery), `realtime/socket.js`, `config/origins.js`, `worker.js`. API: POST `/examinations/publish`, POST `/examinations/:id/publish`, GET `/examinations/publications`; reference regenerated (202 endpoints). Open: new packages not installed or run here.
+
+## 5u. Students: add, import, list, disable (2026-11-18)
+
+See row U5i in `ui-refactor-plan.md`. Server: `GET /students/index-number` compares trimmed lower-case; `POST /students/many` reports all bad rows at once. Client: add-student draft kept for the tab only; `useLevel` exposes `levelError` and no longer looks loaded before it is. Open: student edit screens still use Formik.

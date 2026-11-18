@@ -102,34 +102,37 @@ const StudentProfile = ({ levelName, student, parents }) => {
     });
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: disableStudentAccount,
   });
-  //DISABLE Student account
+  //DISABLE (or enable) a student account. Students are never deleted: a disabled student cannot
+  //sign in, and their results, fees and attendance are kept.
   const handleDisableAccount = () => {
+    const disabling = Boolean(student?.active);
     Swal.fire({
-      title: `${student?.active ? "Disable" : "Enable"} Student Acoount`,
-      text: `Do you want to ${student?.active ? "disable" : "enable"} account?`,
+      title: `${disabling ? "Disable" : "Enable"} student account`,
+      text: disabling
+        ? "The student will not be able to sign in. Their results, fees and attendance are kept, and you can enable the account again at any time."
+        : "The student will be able to sign in again.",
       showCancelButton: true,
       backdrop: false,
     }).then(({ isConfirmed }) => {
-      if (isConfirmed) {
-        mutateAsync(
-          { id: student?._id, active: student?.active ? "Yes" : "No" },
-          {
-            onSettled: () => {
-              queryClient.invalidateQueries(["student-by-id"]);
-            },
-
-            onSuccess: (data) => {
-              schoolSessionDispatch(alertSuccess(data));
-            },
-            onError: (error) => {
-              schoolSessionDispatch(alertError(error));
-            },
-          }
-        );
-      }
+      if (!isConfirmed) return;
+      mutate(
+        { id: student?._id, active: disabling ? "Yes" : "No" },
+        {
+          onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["student/id"] });
+            queryClient.invalidateQueries({ queryKey: ["levels"] });
+          },
+          onSuccess: (data) => {
+            schoolSessionDispatch(alertSuccess(data));
+          },
+          onError: (error) => {
+            schoolSessionDispatch(alertError(error));
+          },
+        }
+      );
     });
   };
 

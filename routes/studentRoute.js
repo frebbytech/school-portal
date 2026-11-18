@@ -236,13 +236,12 @@ router.get(
   "/index-number",
   requireStaff,
   asyncHandler(async (req, res) => {
-    const { id } = req.query;
+    // Compared the way index numbers are stored (trimmed, lower case); otherwise "ABC1" looked
+    // free here and was refused only when the whole form was submitted.
+    const indexnumber = normalizeIndex(req.query.id);
+    if (!indexnumber) return res.status(400).json("Enter an index number.");
 
-    const student = await Student.findOne({
-      indexnumber: id,
-    });
-
-    if (!_.isEmpty(student)) {
+    if (await Student.exists({ indexnumber })) {
       return res.status(400).json("Index Number already exist!");
     }
     res.sendStatus(204);
@@ -522,9 +521,16 @@ router.post(
 
     if (isFile) {
       rows = students.map((s) => pickFields(s || {}, STUDENT_ROW_FIELDS));
+      // Every problem at once, so a long file is fixed in one go rather than one row per attempt
+      const problems = [];
       for (let i = 0; i < rows.length; i++) {
         const problem = validateStudentRow(rows[i]);
-        if (problem) return res.status(400).json(`Row ${i + 1}: ${problem}`);
+        if (problem) problems.push(`Row ${i + 1}: ${problem}`);
+      }
+      if (problems.length) {
+        const shown = problems.slice(0, 10).join(" ");
+        const more = problems.length > 10 ? ` And ${problems.length - 10} more rows have problems.` : "";
+        return res.status(400).json(`${shown}${more}`);
       }
 
       const indexNumbers = rows.map((r) => normalizeIndex(r.indexnumber));

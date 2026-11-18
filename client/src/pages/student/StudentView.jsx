@@ -8,13 +8,14 @@ import student_icon from "@/assets/images/header/student_ico.svg";
 import { EMPTY_IMAGES } from "@/config/images";
 import CustomTitle from "@/components/custom/CustomTitle";
 import { Refresh } from "@mui/icons-material";
+import QueryError from "@/components/QueryError";
 
 const StudentView = () => {
   const navigate = useNavigate();
   const [currentLevel, setCurrentLevel] = useState({ _id: "", type: "" });
 
   //GET all current academic levels
-  const { students, levelLoading, levelsOption } = useLevel();
+  const { students, levelLoading, levelsOption, levelError, levelRefetch } = useLevel();
 
   const handleRowClick = (rowData) => {
     const id = rowData.levelId;
@@ -27,11 +28,13 @@ const StudentView = () => {
     });
   };
   // console.log(levelsOption)
+  // Clears the class filter and loads the list again from the server
   const handleRefresh = () => {
     setCurrentLevel({
       _id: "",
       type: "",
     });
+    levelRefetch();
   };
 
   const selectedStudents = useMemo(() => {
@@ -55,11 +58,13 @@ const StudentView = () => {
         img={student_icon}
         color="primary.main"
         right={
-          <IconButton>
-            <Refresh sx={{ width: 32, height: 32 }} onClick={handleRefresh} />
+          <IconButton aria-label="Refresh students" onClick={handleRefresh}>
+            <Refresh sx={{ width: 32, height: 32 }} />
           </IconButton>
         }
       />
+
+      {levelError && <QueryError error={levelError} onRetry={levelRefetch} what="the students" />}
 
       <CustomizedMaterialTable
         isPending={levelLoading}

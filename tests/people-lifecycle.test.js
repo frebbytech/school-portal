@@ -95,6 +95,32 @@ describe("people lifecycle (Stage 7)", () => {
       expect(await counts()).toEqual(before);
     });
 
+    it("reports every bad row at once, not just the first", async () => {
+      const before = await counts();
+      const res = await as(
+        request(app).post(`${base}/students/many`).send(
+          importBody([row({ dateofbirth: "nope" }), row(), row({ gender: "" }), row({ firstname: "" })])
+        ),
+        adminTok
+      );
+      expect(res.status).toBe(400);
+      expect(res.body).toMatch(/Row 1:/);
+      expect(res.body).toMatch(/Row 3:/);
+      expect(res.body).toMatch(/Row 4:/);
+      expect(res.body).not.toMatch(/Row 2:/);
+      expect(await counts()).toEqual(before);
+    });
+
+    it("checks an index number the way it is stored (any case, spaces ignored)", async () => {
+      const taken = uniq("chk");
+      await make(Student, { indexnumber: taken, school: schoolB._id, firstname: "Bob" });
+      const check = (id) => as(request(app).get(`${base}/students/index-number`).query({ id }), adminTok);
+      expect((await check(taken)).status).toBe(400);
+      expect((await check(`  ${taken.toUpperCase()} `)).status).toBe(400);
+      expect((await check(uniq("free"))).status).toBe(204);
+      expect((await check("   ")).status).toBe(400);
+    });
+
     it("rejects an index number repeated inside the file, or used in another school", async () => {
       const taken = uniq("taken");
       await make(Student, { indexnumber: taken, school: schoolB._id, firstname: "Bob" });
