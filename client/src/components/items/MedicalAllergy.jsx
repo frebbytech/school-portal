@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import React from 'react';
 
-function MedicalAllergy({ title, value, setValue }) {
+function MedicalAllergy({ title, value, setValue, name = 'status' }) {
   return (
     <Stack
       direction='row'
@@ -26,8 +26,8 @@ function MedicalAllergy({ title, value, setValue }) {
       {/* <Divider orientation='vertical' flexItem /> */}
       <RadioGroup
         row
-        aria-labelledby='attendance-status'
-        name='status'
+        aria-label={title}
+        name={name}
         value={value}
         onChange={setValue}
       >

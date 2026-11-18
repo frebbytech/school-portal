@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 
 import api from './customAxios';
 
@@ -11,7 +12,7 @@ export const getAllParents = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -27,7 +28,7 @@ export const getParentByStudentId = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 export const getParent = async (id) => {
@@ -39,7 +40,7 @@ export const getParent = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -53,7 +54,7 @@ export const postParent = async (newParent) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -67,7 +68,7 @@ export const putParent = async (updatedParent) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -80,6 +81,6 @@ export const deleteParent = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };

@@ -53,6 +53,38 @@ const PARENT_FIELDS = [
   "email", "phonenumber", "address", "residence", "nationality",
 ];
 const MAX_IMPORT_ROWS = 1000;
+
+// Medical record: the six yes/no questions and the emergency contact, nothing else.
+const MEDICAL_CONDITIONS = [
+  "heartDisease",
+  "visualImpairment",
+  "asthma",
+  "hearingImpairment",
+  "siezures",
+  "physicalDisability",
+];
+function cleanMedical(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const out = {};
+  for (const key of MEDICAL_CONDITIONS) {
+    if (input[key] === undefined) continue;
+    if (!["Yes", "No"].includes(input[key])) return null;
+    out[key] = input[key];
+  }
+  const contact = input.emergencyContact;
+  if (contact !== undefined) {
+    if (!contact || typeof contact !== "object") return null;
+    out.emergencyContact = {};
+    for (const key of ["fullname", "phonenumber", "address"]) {
+      const value = contact[key];
+      if (value === undefined || value === null) continue;
+      if (typeof value !== "string" || value.length > 200) return null;
+      out.emergencyContact[key] = value.trim();
+    }
+  }
+  return out;
+}
+
 const MAX_PARENTS_PER_STUDENT = 5;
 const DEFAULT_PHOTO =
   "https://firebasestorage.googleapis.com/v0/b/fir-system-54b99.appspot.com/o/download.png?alt=media&token=c3f23cd6-8973-4681-9900-98dbadc93d2a";
@@ -651,9 +683,15 @@ router.put(
     let updatedStudent = null;
 
     if (modifiedStudent?.type === "medical") {
+      const medical = cleanMedical(modifiedStudent.medical);
+      if (!medical) {
+        return res
+          .status(400)
+          .json("Medical information is not valid: each condition must be Yes or No.");
+      }
       updatedStudent = await Student.findOneAndUpdate(
         scope,
-        { $set: { medical: modifiedStudent.medical } },
+        { $set: { medical } },
         { new: true }
       );
     } else if (modifiedStudent?.type === "academic") {

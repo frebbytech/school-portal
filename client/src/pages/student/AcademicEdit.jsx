@@ -121,20 +121,24 @@ const AcademicEdit = () => {
   };
 
   // Update student mutation
-  const { mutateAsync, isPending } = useMutation({ mutationFn: putStudent });
+  const { mutate, isPending } = useMutation({ mutationFn: putStudent });
 
-  const onSubmit = async (values) => {
+  const onSubmit = (values) => {
     const { level, ...academic } = values;
 
-    await mutateAsync(
+    mutate(
       {
         _id: studentId,
-        academic: academic,
+        type: "academic",
+        academic,
         level: level?._id,
       },
       {
-        onSettled: () => queryClient.invalidateQueries(["student-profile"]),
         onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: ["student-profile"] });
+          queryClient.invalidateQueries({ queryKey: ["student/id"] });
+          queryClient.invalidateQueries({ queryKey: ["student-details"] });
+          queryClient.invalidateQueries({ queryKey: ["levels"] });
           schoolSessionDispatch(alertSuccess(data));
           handleClose();
         },

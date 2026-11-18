@@ -1,235 +1,173 @@
-import React, { useContext } from "react";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import { Formik } from "formik";
-import { Dialog, DialogContent, TextField } from "@mui/material";
+import React, { useContext, useEffect } from "react";
+import { Alert, Button, Dialog, DialogContent, Stack, TextField, Typography } from "@mui/material";
 import { SaveAs } from "@mui/icons-material";
+import { useSearchParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
 import CustomFormControl from "@/components/inputs/CustomFormControl";
 import MedicalAllergy from "@/components/items/MedicalAllergy";
 import { medicalValidationSchema } from "@/config/validationSchema";
-import { useSearchParams } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { putStudent } from "@/api/studentAPI";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
+import { thrownMessage } from "@/lib/formErrors";
+
+// The six yes/no questions, in the order they are shown
+export const CONDITIONS = [
+  ["heartDisease", "1. Heart Disease"],
+  ["visualImpairment", "2. Visual Impairment"],
+  ["asthma", "3. Asthma"],
+  ["hearingImpairment", "4. Hearing Impairment"],
+  ["siezures", "5. Siezures"],
+  ["physicalDisability", "6. Physical Disability"],
+];
+
+// What the form starts with: every field present, so nothing is "uncontrolled"
+export const medicalDefaults = (medical = {}) => {
+  const { id: _id, ...rest } = medical || {};
+  return {
+    ...Object.fromEntries(CONDITIONS.map(([key]) => [key, rest[key] ?? "No"])),
+    emergencyContact: {
+      fullname: rest.emergencyContact?.fullname ?? "",
+      phonenumber: rest.emergencyContact?.phonenumber ?? "",
+      address: rest.emergencyContact?.address ?? "",
+    },
+  };
+};
+
+const row = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" };
 
 const MedicalInformationEdit = ({ medical }) => {
   const queryClient = useQueryClient();
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
-
   const [searchParams, setSearchParams] = useSearchParams();
+  const open = searchParams.get("mi") === "true";
+  const studentId = medical?.id;
 
-  const { mutateAsync, isPending } = useMutation({
-    mutationFn: putStudent,
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm({
+    resolver: yupResolver(medicalValidationSchema),
+    defaultValues: medicalDefaults(medical),
   });
-  const onSubmit = (values, options) => {
-    const { id, ...rest } = values;
 
-    mutateAsync(
+  // Start from what is saved each time the dialog opens (not from an abandoned edit)
+  // (keyed on the content: the parent passes a new object on every render)
+  const saved = JSON.stringify(medicalDefaults(medical));
+  useEffect(() => {
+    if (open) reset(JSON.parse(saved));
+  }, [open, saved, reset]);
+
+  const handleClose = () =>
+    setSearchParams((params) => {
+      params.delete("mi");
+      return params;
+    });
+
+  const { mutate, isPending } = useMutation({ mutationFn: putStudent });
+
+  const onSubmit = (values) => {
+    clearErrors("root.server");
+    mutate(
+      { _id: studentId, type: "medical", medical: values },
       {
-        _id: id,
-        medical: {
-          ...rest,
-        },
-      },
-      {
-        onSettled: () => {
-          queryClient.invalidateQueries(["student-by-id"]);
-          options.setSubmitting(false);
-        },
         onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: ["student-profile"] });
+          queryClient.invalidateQueries({ queryKey: ["student/id"] });
           schoolSessionDispatch(alertSuccess(data));
           handleClose();
         },
         onError: (error) => {
+          setError("root.server", { type: "server", message: thrownMessage(error) });
           schoolSessionDispatch(alertError(error));
         },
       }
     );
   };
 
-  const handleClose = () =>
-    setSearchParams((params) => {
-      params.delete("mi");
-
-      return params;
-    });
+  const contact = (name, label, extra = {}) => (
+    <Controller
+      name={`emergencyContact.${name}`}
+      control={control}
+      render={({ field }) => (
+        <TextField
+          {...field}
+          label={label}
+          fullWidth
+          size="small"
+          error={!!errors.emergencyContact?.[name]}
+          helperText={errors.emergencyContact?.[name]?.message}
+          {...extra}
+        />
+      )}
+    />
+  );
 
   return (
-    <Dialog
-      open={searchParams.get("mi") === "true"}
-      maxWidth="sm"
-      fullWidth
-      onClose={handleClose}
-    >
+    <Dialog open={open} maxWidth="sm" fullWidth onClose={handleClose}>
       <CustomDialogTitle title="Medical History" onClose={handleClose} />
       <DialogContent sx={{ p: 1 }}>
-        <Formik
-          initialValues={medical}
-          onSubmit={onSubmit}
-          enableReinitialize={true}
-          validationSchema={medicalValidationSchema}
-        >
-          {({
-            values,
-            errors,
-            touched,
-            handleChange,
-            handleSubmit,
-            isSubmitting,
-          }) => {
-            return (
-              <Stack padding={2} spacing={1}>
-                <Stack direction="row" justifyContent="flex-end" spacing={2}>
-                  <Button
-                    loading={isSubmitting || isPending}
-                    variant="contained"
-                    color="primary"
-                    onClick={handleSubmit}
-                    endIcon={<SaveAs />}
-                  >
-                    Save Changes
-                  </Button>
-                </Stack>
-                {/* <Typography
-                  variant='body2'
-                  color='primary.main'
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  Medical Records
-                </Typography>
-                <Typography variant='body2' color='primary.main'>
-                  (Kindly note that this section, even though required, will not
-                  affect your child’s admission into the school).
-                </Typography> */}
-                <Stack width={{ xs: "100%", md: "80%" }} py={5}>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-                    }}
-                  >
-                    <MedicalAllergy
-                      title="1. Heart Disease"
-                      value={values?.heartDisease}
-                      setValue={handleChange("heartDisease")}
-                    />
-                    <MedicalAllergy
-                      title="2. Visual Impairment"
-                      value={values?.visualImpairment}
-                      setValue={handleChange("visualImpairment")}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-                    }}
-                  >
-                    <MedicalAllergy
-                      title="3. Asthma"
-                      value={values?.asthma}
-                      setValue={handleChange("asthma")}
-                    />
-                    <MedicalAllergy
-                      title="4. Hearing Impairment"
-                      value={values?.hearingImpairment}
-                      setValue={handleChange("hearingImpairment")}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-                    }}
-                  >
-                    <MedicalAllergy
-                      title="5. Siezures"
-                      value={values?.siezures}
-                      setValue={handleChange("siezures")}
-                    />
-                    <MedicalAllergy
-                      title="6. Physical Disability"
-                      value={values?.physicalDisability}
-                      setValue={handleChange("physicalDisability")}
-                    />
-                  </div>
-                </Stack>
-                <Stack py={2} spacing={1}>
-                  <Typography
-                    variant="body2"
-                    color="primary.main"
-                    sx={{ fontWeight: "bold" }}
-                  >
-                    Emergency Contact
-                  </Typography>
-                  <CustomFormControl>
-                    <TextField
-                      label="Fullname"
-                      type="text"
-                      fullWidth
-                      size="small"
-                      value={values?.emergencyContact?.fullname}
-                      onChange={handleChange("emergencyContact.fullname")}
-                      error={Boolean(
-                        touched?.emergencyContact?.fullname &&
-                          errors?.emergencyContact?.fullname
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <Stack padding={2} spacing={1}>
+            {errors.root?.server && (
+              <Alert severity="error" role="alert">
+                {errors.root.server.message}
+              </Alert>
+            )}
+            <Stack direction="row" justifyContent="flex-end" spacing={2}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={isPending || !studentId}
+                endIcon={<SaveAs />}
+              >
+                {isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </Stack>
+            <Stack width={{ xs: "100%", md: "80%" }} py={5}>
+              {[0, 2, 4].map((i) => (
+                <div key={i} style={row}>
+                  {CONDITIONS.slice(i, i + 2).map(([key, title]) => (
+                    <Controller
+                      key={key}
+                      name={key}
+                      control={control}
+                      render={({ field }) => (
+                        <MedicalAllergy
+                          title={title}
+                          name={key}
+                          value={field.value}
+                          setValue={(e) => field.onChange(e.target.value)}
+                        />
                       )}
-                      helperText={
-                        touched?.emergencyContact?.fullname &&
-                        errors?.emergencyContact?.fullname
-                      }
                     />
-                    <TextField
-                      label="Telephone No."
-                      inputMode="tel"
-                      type="tel"
-                      fullWidth
-                      size="small"
-                      value={values?.emergencyContact?.phonenumber}
-                      onChange={handleChange("emergencyContact.phonenumber")}
-                      error={Boolean(
-                        touched?.emergencyContact?.phonenumber &&
-                          errors?.emergencyContact?.phonenumber
-                      )}
-                      helperText={
-                        touched?.emergencyContact?.phonenumber &&
-                        errors?.emergencyContact?.phonenumber
-                      }
-                    />
-                  </CustomFormControl>
-
-                  <CustomFormControl>
-                    <TextField
-                      label="Address"
-                      fullWidth
-                      size="small"
-                      row={3}
-                      maxRows={3}
-                      value={values?.emergencyContact?.address}
-                      onChange={handleChange("emergencyContact.address")}
-                      error={Boolean(
-                        touched?.emergencyContact?.address &&
-                          errors?.emergencyContact?.address
-                      )}
-                      helperText={
-                        touched?.emergencyContact?.address &&
-                        errors?.emergencyContact?.address
-                      }
-                    />
-                  </CustomFormControl>
-                </Stack>
-              </Stack>
-            );
-          }}
-        </Formik>
+                  ))}
+                </div>
+              ))}
+            </Stack>
+            <Stack py={2} spacing={1}>
+              <Typography variant="body2" color="primary.main" sx={{ fontWeight: "bold" }}>
+                Emergency Contact
+              </Typography>
+              <CustomFormControl>
+                {contact("fullname", "Fullname")}
+                {contact("phonenumber", "Telephone No.", { type: "tel", inputMode: "tel" })}
+              </CustomFormControl>
+              <CustomFormControl>{contact("address", "Address")}</CustomFormControl>
+            </Stack>
+          </Stack>
+        </form>
       </DialogContent>
     </Dialog>
   );
 };
-
-MedicalInformationEdit.propTypes = {};
 
 export default MedicalInformationEdit;

@@ -204,6 +204,32 @@ describe("people lifecycle (Stage 7)", () => {
       }),
     });
 
+    it("saves only the medical questions and the emergency contact, and refuses anything else", async () => {
+      const personal = row();
+      await as(request(app).post(`${base}/students`).send(details(personal)), adminTok);
+      const saved = await Student.findOne({ indexnumber: personal.indexnumber });
+      const put = (medical) =>
+        as(request(app).put(`${base}/students`).send({ _id: String(saved._id), type: "medical", medical }), adminTok);
+
+      const ok = await put({
+        asthma: "Yes",
+        heartDisease: "No",
+        emergencyContact: { fullname: " Kofi Mensah ", phonenumber: "0240000000", address: "Accra" },
+        isAdmin: true,
+      });
+      expect(ok.status).toBe(200);
+      const medical = (await Student.findById(saved._id)).medical;
+      expect(medical).toEqual({
+        asthma: "Yes",
+        heartDisease: "No",
+        emergencyContact: { fullname: "Kofi Mensah", phonenumber: "0240000000", address: "Accra" },
+      });
+
+      expect((await put({ asthma: "Maybe" })).status).toBe(400);
+      expect((await put("asthma")).status).toBe(400);
+      expect((await Student.findById(saved._id)).medical.asthma).toBe("Yes");
+    });
+
     it("creates the student with parents, flagged login and records", async () => {
       const personal = row();
       const res = await as(request(app).post(`${base}/students`).send(details(personal)), adminTok);

@@ -472,3 +472,7 @@ See row U5i in `ui-refactor-plan.md`. Server: `GET /students/index-number` compa
 ## 5v. Terms, sessions and levels (2026-11-18)
 
 See row U5j in `ui-refactor-plan.md`. Client only: term, session and level API calls now throw the server's error instead of returning it (a refused delete or switch looked like success); 12 screens moved to `mutate` with object-form cache refresh; delete-term wording matches the server rule (a term with records is archived, not removed). No server change.
+
+## 5w. Student edit screens (2026-11-18)
+
+See row U5k in `ui-refactor-plan.md`. Server: `PUT /students` with `type: "medical"` keeps only the six Yes/No answers and the emergency contact (400 on a bad value). Client: medical and academic edits now send their `type` (before, they saved nothing but answered success); parent API throws; parent and medical dialogs on React Hook Form. Open: class change does not remove the student from the old class list; previous-school report stored as a data URL.
