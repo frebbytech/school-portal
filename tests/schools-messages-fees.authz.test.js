@@ -188,6 +188,8 @@ describe("schools, messages and fees authorization (finding C-6)", () => {
     let cfA, cfB;
     beforeAll(async () => {
       // This term's fee for the class, so a payment of 50 is within what is owed (no advance payments).
+      // (An earlier test already created a 1.00 fee for this class and term: replace it.)
+      await Fee.deleteMany({ level: levelA._id, term: termA._id });
       await make(Fee, { school: schoolA._id, level: levelA._id, term: termA._id, amount: [{ name: "Tuition", amount: 100 }] });
       cfA = await make(CurrentFee, { term: termA._id, level: levelA._id, student: studentA._id, payment: [] });
       cfB = await make(CurrentFee, { term: termB._id, level: levelB._id, student: studentB._id, payment: [{ paid: 10 }] });

@@ -140,7 +140,7 @@ describe("fees ledger (Stage 8)", () => {
 
     beforeAll(async () => {
       // A fresh student: this term's fee is 100, no earlier terms.
-      lvl = await make(Level, { school: school._id, session: session._id, term: term2._id, name: "NA1" });
+      lvl = await make(Level, { school: school._id, session: session._id, term: term2._id, level: { name: "NA1" } });
       s2 = await make(Student, { indexnumber: uniq("na"), school: school._id, firstname: "Esi", level: lvl._id });
       await make(Fee, { school: school._id, session: session._id, term: term2._id, level: lvl._id, amount: [{ name: "Tuition", amount: 100 }] });
       rec = await make(CurrentFee, { school: school._id, session: session._id, term: term2._id, level: lvl._id, student: s2._id, payment: [] });

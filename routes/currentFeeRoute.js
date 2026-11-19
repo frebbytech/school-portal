@@ -317,7 +317,7 @@ router.get(
     const target = [...owned].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
     const [student, level] = await Promise.all([
       Student.findById(target.student).select("firstname surname othername"),
-      Level.findById(target.level).select("name type"),
+      Level.findById(target.level).select("level"),
     ]);
 
     const paidNow = entry.receiptTotal ?? sumAmounts(entries, "paid");
@@ -330,7 +330,7 @@ router.get(
       feePaid: entry.paidBefore ?? 0,
       paidThisTerm: entry.paidThisTerm,
       studentName: student?.fullName || "",
-      levelName: `${level?.name ?? ""}${level?.type ?? ""}`.trim(),
+      levelName: level?.levelName || "",
     });
   })
 );
