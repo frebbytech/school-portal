@@ -480,3 +480,7 @@ See row U5k in `ui-refactor-plan.md`. Server: `PUT /students` with `type: "medic
 ## 5x. Errors returned as results, and user screens (2026-11-19)
 
 See row U5l in `ui-refactor-plan.md`. Client only. Every API module now throws the normalised error; a test guards it. 44 screens use `mutate`; user role options match the server (administrator, teacher). Open: User Add/Edit/password reset still Formik.
+
+## 5y. User forms and administrator safety (2026-11-19)
+
+See row U5m in `ui-refactor-plan.md`. Server (`routes/userRoute.js`): a school keeps at least one active administrator and nobody disables, demotes or removes themself (409); both admin password-reset routes require 8 to 128 characters and set `mustChangePassword`; new users created by an administrator are flagged; own-profile password changes need 8 characters. Client: Add/Edit/Reset on React Hook Form.

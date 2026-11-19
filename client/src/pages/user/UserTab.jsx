@@ -6,6 +6,7 @@ import { USERS_COLUMNS } from "@/mockup/columns/sessionColumns";
 import users_icon from "@/assets/images/header/users_ico.svg";
 import { EMPTY_IMAGES } from "@/config/images";
 import { useNavigate } from "react-router-dom";
+import QueryError from "@/components/QueryError";
 function UserTab() {
   const navigate = useNavigate();
 
@@ -25,13 +26,17 @@ function UserTab() {
   };
 
   return (
+    <>
+    {users.isError && (
+      <QueryError what="the users" error={users.error} onRetry={() => users.refetch()} />
+    )}
     <CustomizedMaterialTable
       isPending={users.isPending}
       title="Users"
       icon={users_icon}
       search={true}
       columns={USERS_COLUMNS}
-      data={users.data}
+      data={users.data ?? []}
       actions={[]}
       showAddButton={true}
       addButtonText="New User"
@@ -42,6 +47,7 @@ function UserTab() {
       showRowShadow={true}
       handleRefresh={users?.refetch}
     />
+    </>
   );
 }
 

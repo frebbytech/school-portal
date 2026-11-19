@@ -1,129 +1,113 @@
-import { useContext } from "react";
-import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
+import { useContext, useEffect } from "react";
+import { Alert, Button, Dialog, DialogActions, DialogContent, Stack, TextField } from "@mui/material";
 import Swal from "sweetalert2";
-import { Formik } from "formik";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams } from "react-router-dom";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+
+import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { userResetPasswordValidationSchema } from "@/config/validationSchema";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
-import { updateUserPassword } from "@/api/userAPI";
-import { useParams } from "react-router-dom";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
+import { updateUserPassword } from "@/api/userAPI";
+import { thrownMessage } from "@/lib/formErrors";
+
+const EMPTY = { password: "", confirmPassword: "" };
 
 function UserUpdatePassword({ open, setOpen }) {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
 
-  const iniitalValues = {
-    id,
-    password: "",
-    confirmPassword: "",
-  };
-
-  const { mutate, isPending } = useMutation({
-    mutationFn: updateUserPassword,
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm({
+    resolver: yupResolver(userResetPasswordValidationSchema),
+    defaultValues: EMPTY,
   });
 
-  const onSubmit = (values, options) => {
-    delete values.confirmPassword;
+  // A password must never linger in the form after the dialog is closed
+  useEffect(() => {
+    if (!open) reset(EMPTY);
+  }, [open, reset]);
 
+  const { mutate, isPending } = useMutation({ mutationFn: updateUserPassword });
+
+  const handleClose = () => setOpen(false);
+
+  const onSubmit = ({ password }) => {
+    clearErrors("root.server");
     Swal.fire({
       title: "Updating Password",
-      text: "Do you wish to proceed?",
+      text: "The user will be asked to choose a new password when they next sign in. Do you wish to proceed?",
       showCancelButton: true,
       allowOutsideClick: false,
-    }).then(({ isConfirmed, isDenied, isDismissed }) => {
-      if (isConfirmed) {
-        mutate(values, {
+    }).then(({ isConfirmed }) => {
+      if (!isConfirmed) return;
+      mutate(
+        { id, password },
+        {
           onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ["user", id] });
             schoolSessionDispatch(alertSuccess(data));
-            options.setSubmitting(false);
             handleClose();
-            schoolSessionDispatch({
-              type: "viewUser",
-              payload: {
-                open: false,
-                data: {},
-              },
-            });
           },
           onError: (error) => {
+            setError("root.server", { type: "server", message: thrownMessage(error) });
             schoolSessionDispatch(alertError(error));
           },
-        });
-      }
-      if ((isDenied, isDismissed)) {
-        options.setSubmitting(false);
-      }
+        }
+      );
     });
   };
 
-  //CLOSE view User Info
-  const handleClose = () => setOpen(false);
+  const field = (name, label) => (
+    <Controller
+      name={name}
+      control={control}
+      render={({ field: f }) => (
+        <TextField
+          {...f}
+          type="password"
+          label={label}
+          fullWidth
+          size="small"
+          autoComplete="new-password"
+          error={!!errors[name]}
+          helperText={errors[name]?.message}
+        />
+      )}
+    />
+  );
 
   return (
-    <Dialog open={open} maxWidth="xs" fullWidth>
+    <Dialog open={open} maxWidth="xs" fullWidth onClose={handleClose}>
       <CustomDialogTitle title="Password Reset" onClose={handleClose} />
-      <Formik
-        initialValues={iniitalValues}
-        onSubmit={onSubmit}
-        enableReinitialize={true}
-        validationSchema={userResetPasswordValidationSchema}
-      >
-        {({ values, errors, touched, handleChange, handleSubmit }) => {
-          return (
-            <>
-              <DialogContent sx={{ p: 1 }}>
-                <Stack padding={2} spacing={1}>
-                  <TextField
-                    type="password"
-                    label="Password"
-                    fullWidth
-                    size="small"
-                    autoComplete="no"
-                    value={values.password}
-                    onChange={handleChange("password")}
-                    error={Boolean(touched.password && errors.password)}
-                    helperText={touched.password && errors.password}
-                  />
-                  <TextField
-                    type="password"
-                    label="Confirm Password"
-                    fullWidth
-                    size="small"
-                    value={values.confirmPassword}
-                    onChange={handleChange("confirmPassword")}
-                    error={Boolean(
-                      touched.confirmPassword && errors.confirmPassword
-                    )}
-                    helperText={
-                      touched.confirmPassword && errors.confirmPassword
-                    }
-                  />
-                </Stack>
-              </DialogContent>
-              <DialogActions>
-                <Button
-                  loading={isPending}
-                  variant="contained"
-                  color="primary"
-                  onClick={handleSubmit}
-                >
-                  Update Password
-                </Button>
-              </DialogActions>
-            </>
-          );
-        }}
-      </Formik>
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <DialogContent sx={{ p: 1 }}>
+          <Stack padding={2} spacing={1}>
+            {errors.root?.server && (
+              <Alert severity="error" role="alert">
+                {errors.root.server.message}
+              </Alert>
+            )}
+            {field("password", "Password")}
+            {field("confirmPassword", "Confirm Password")}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button type="submit" variant="contained" color="primary" disabled={isPending}>
+            Update Password
+          </Button>
+        </DialogActions>
+      </form>
       {isPending && <LoadingSpinner value="Updating Password.Please wait..." />}
     </Dialog>
   );

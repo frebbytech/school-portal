@@ -156,19 +156,19 @@ export const userValidationSchema = object().shape({
   residence: string().required("Required*"),
   password: string()
     .required("Required*")
-    .min(8, "Password should be between 8-15 characters long"),
+    .min(8, "Password must be at least 8 characters"),
   confirmPassword: string()
     .required("Required*")
-    .min(8, "Password should be between 8-15 characters long")
+    .min(8, "Password must be at least 8 characters")
     .oneOf([ref("password"), null], "Passwords do not match"),
 });
 export const userResetPasswordValidationSchema = object().shape({
   password: string()
     .required("Required*")
-    .min(8, "Password should be between 8-15 characters long"),
+    .min(8, "Password must be at least 8 characters"),
   confirmPassword: string()
     .required("Required*")
-    .min(8, "Password should be between 8-15 characters long")
+    .min(8, "Password must be at least 8 characters")
     .oneOf([ref("password"), null], "Passwords do not match"),
 });
 export const updateProfileValidationSchema = object().shape({
@@ -180,7 +180,7 @@ export const updateProfileValidationSchema = object().shape({
   phonenumber: string()
     .required("Required*")
     .matches(phoneRegex, "Invalid Phone number"),
-  password: string().min(8, "Password should be between 8-15 characters long"),
+  password: string().min(8, "Password must be at least 8 characters"),
   confirmPassword: string().oneOf(
     [ref("password"), null],
     "Passwords do not match"

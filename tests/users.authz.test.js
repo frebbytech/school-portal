@@ -73,6 +73,7 @@ describe("users router authorization (finding C-5)", () => {
       const created = await User.findOne({ username: `new${num}` });
       expect(String(created.school)).toBe(String(schoolA._id));
       expect(await bcrypt.compare("secret123", created.password)).toBe(true);
+      expect(created.mustChangePassword).toBe(true);
     });
 
     it("rejects roles other than administrator and teacher, and weak passwords", async () => {
@@ -184,6 +185,25 @@ describe("users router authorization (finding C-5)", () => {
       expect(await bcrypt.compare("newpass123", (await User.findById(me._id)).password)).toBe(true);
     });
 
+    it("an administrator's password reset needs a real password and makes the person choose their own", async () => {
+      const target = await createUser(schoolA, "teacher", { mustChangePassword: false });
+      const id = String(target._id);
+      for (const bad of [undefined, "", "short", 12345678, "x".repeat(200)]) {
+        expect((await as(request(app).put(`${base}/reset-password`), adminToken).send({ id, password: bad })).status).toBe(400);
+        expect((await as(request(app).patch(`${base}/admin/reset-password`), adminToken).send({ id, password: bad })).status).toBe(400);
+      }
+      expect((await User.findById(target._id)).mustChangePassword).toBe(false);
+
+      expect((await as(request(app).put(`${base}/reset-password`), adminToken).send({ id, password: "new-password-1" })).status).toBe(200);
+      expect((await User.findById(target._id)).mustChangePassword).toBe(true);
+
+      await User.updateOne({ _id: target._id }, { mustChangePassword: false });
+      expect((await as(request(app).patch(`${base}/admin/reset-password`), adminToken).send({ id, password: " spaced pass " })).status).toBe(200);
+      const stored = await User.findById(target._id);
+      expect(stored.mustChangePassword).toBe(true);
+      expect(await bcrypt.compare(" spaced pass ", stored.password)).toBe(true);
+    });
+
     it("/reset-password and /admin/reset-password are administrator-only and school-scoped", async () => {
       const target = await createUser(schoolA, "teacher");
       const body = { id: String(target._id), password: "reset-by-admin" };
@@ -196,6 +216,38 @@ describe("users router authorization (finding C-5)", () => {
 
       expect((await as(request(app).put(`${base}/reset-password`), adminToken).send(body)).status).toBe(200);
       expect(await bcrypt.compare("reset-by-admin", (await User.findById(target._id)).password)).toBe(true);
+    });
+
+    it("a school always keeps an active administrator, and nobody removes themself", async () => {
+      const school = await createSchool();
+      const only = await createUser(school, "administrator");
+      const tok = staffToken(only);
+      const id = String(only._id);
+
+      // alone: cannot disable, demote or delete yourself
+      expect((await as(request(app).put(`${base}/account`), tok).send({ id, active: false })).status).toBe(409);
+      expect((await as(request(app).put(base), tok).send({ _id: id, role: "teacher" })).status).toBe(409);
+      expect((await as(request(app).delete(`${base}/${id}`), tok)).status).toBe(409);
+      expect((await User.findById(id)).active).not.toBe(false);
+      expect((await User.findById(id)).role).toBe("administrator");
+
+      // a second administrator can be disabled by the first, but not the other way round once alone
+      const second = await createUser(school, "administrator");
+      const secondTok = staffToken(second);
+      expect((await as(request(app).put(`${base}/account`), tok).send({ id: String(second._id), active: false })).status).toBe(200);
+      // the only active administrator cannot be removed by the disabled one (they are not active), nor by themselves
+      expect((await as(request(app).put(`${base}/account`), tok).send({ id, active: false })).status).toBe(409);
+      expect((await as(request(app).put(`${base}/account`), tok).send({ id: String(second._id), active: true })).status).toBe(200);
+      expect((await as(request(app).delete(`${base}/${String(second._id)}`), tok)).status).toBe(200);
+      expect((await as(request(app).put(`${base}/account`), secondTok).send({ id, active: false })).status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("refuses a short password sent through PUT or PATCH and leaves the old one", async () => {
+      const me = await createUser(schoolA, "teacher");
+      const before = (await User.findById(me._id)).password;
+      expect((await as(request(app).put(base), staffToken(me)).send({ _id: String(me._id), password: "short" })).status).toBe(400);
+      expect((await as(request(app).patch(base), staffToken(me)).send({ id: String(me._id), password: "short" })).status).toBe(400);
+      expect((await User.findById(me._id)).password).toBe(before);
     });
 
     it("/account is administrator-only and school-scoped", async () => {

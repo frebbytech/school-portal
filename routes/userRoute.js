@@ -43,6 +43,8 @@ const SELF_EDITABLE_FIELDS = [
   "residence",
   "nationality",
 ];
+// A password an administrator sets for someone else: text, at least 8 characters.
+const validNewPassword = (value) => typeof value === "string" && value.length >= 8 && value.length <= 128;
 const ADMIN_EDITABLE_FIELDS = [...SELF_EDITABLE_FIELDS, "role", "permissions", "active"];
 const CREATABLE_FIELDS = [...SELF_EDITABLE_FIELDS, "role", "permissions", "password"];
 const CREATABLE_ROLES = ["administrator", "teacher"];
@@ -72,7 +74,7 @@ const NOT_ALLOWED = "You do not have permission to perform this action.";
 const resolveEditableUser = async (req, id) => {
   if (!isValidObjectId(id)) return { status: 404, message: "Error updating user info.Try Again Later." };
   const principal = getPrincipal(req);
-  const target = await User.findById(id).select("school role");
+  const target = await User.findById(id).select("school role active");
   if (!target) return { status: 404, message: "Error updating user info.Try Again Later." };
 
   const isAdmin = principal.role === "administrator" && isSameSchool(req, target.school);
@@ -85,11 +87,50 @@ const resolveEditableUser = async (req, id) => {
   return { status: 403, message: NOT_ALLOWED };
 };
 
+/**
+ * A school must always keep one active administrator, and nobody locks themself out by
+ * disabling or removing their own account. Returns a message when the change is refused.
+ * `leaving` is true when the account stops being an active administrator.
+ */
+const adminSafetyProblem = async (req, target, { removing }) => {
+  if (!removing) return null;
+  if (isSelf(req, String(target._id))) {
+    return "You cannot disable, demote or remove your own account. Ask another administrator.";
+  }
+  const wasActiveAdmin = target.role === "administrator" && target.active !== false;
+  if (!wasActiveAdmin) return null;
+  const others = await User.countDocuments({
+    school: target.school,
+    role: "administrator",
+    active: { $ne: false },
+    _id: { $ne: target._id },
+  });
+  return others === 0 ? "A school must keep at least one active administrator." : null;
+};
+
+const hasPassword = (body) => body.password !== undefined && body.password !== null && body.password !== "";
+const isDisabling = (value) => [false, 0, "0", "false"].includes(value);
+
+// Shared by PUT and PATCH /users: refuse a bad password, or a change that would leave the
+// school without an active administrator. Returns { status, message } or null.
+const userChangeProblem = async (req, access) => {
+  const body = req.body || {};
+  if (hasPassword(body) && !validNewPassword(body.password)) {
+    return { status: 400, message: "Password must be at least 8 characters." };
+  }
+  if (access.isAdmin) {
+    const demoting = body.role !== undefined && body.role !== "administrator";
+    const message = await adminSafetyProblem(req, access.target, {
+      removing: isDisabling(body.active) || demoting,
+    });
+    if (message) return { status: 409, message };
+  }
+  return null;
+};
+
 const buildUserUpdate = async (body, isAdmin) => {
   const update = pickFields(body, isAdmin ? ADMIN_EDITABLE_FIELDS : SELF_EDITABLE_FIELDS);
-  if (typeof body.password === "string" && body.password.length > 0) {
-    update.password = await bcrypt.hash(body.password, 10);
-  }
+  if (hasPassword(body)) update.password = await bcrypt.hash(body.password, 10);
   return update;
 };
 
@@ -320,6 +361,8 @@ router.post(
     const user = await User.create({
       ...newUser,
       school: req.user.school,
+      // The administrator chose this password: the person picks their own at first sign-in.
+      mustChangePassword: true,
     });
     // await knex('users').insert(newUser);
 
@@ -340,6 +383,9 @@ router.put(
 
     const access = await resolveEditableUser(req, _id);
     if (!access.target) return res.status(access.status).json(access.message);
+
+    const problem = await userChangeProblem(req, access);
+    if (problem) return res.status(problem.status).json(problem.message);
 
     const update = await buildUserUpdate(req.body, access.isAdmin);
 
@@ -501,6 +547,9 @@ router.put(
   requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
     const { id, password } = req.body;
+    if (!validNewPassword(password)) {
+      return res.status(400).json("Password must be at least 8 characters.");
+    }
 
     const target = isValidObjectId(id) ? await User.findById(id).select("school") : null;
     if (!target || !isSameSchool(req, target.school)) {
@@ -513,6 +562,8 @@ router.put(
       id,
       {
         password: hashedPassword,
+        // Someone else chose this password, so they must pick their own at next sign-in.
+        mustChangePassword: true,
       },
       {
         new: true,
@@ -546,13 +597,16 @@ router.patch(
   requireRoleEnforced("administrator"),
   asyncHandler(async (req, res) => {
     const { id, password } = req.body;
+    if (!validNewPassword(password)) {
+      return res.status(400).json("Password must be at least 8 characters.");
+    }
     const user = isValidObjectId(id) ? await User.findById(id) : null;
 
     if (_.isEmpty(user) || !isSameSchool(req, user.school)) {
       return res.status(404).json("User does not exist");
     }
 
-    const hashedPassword = await bcrypt.hash(password?.trim(), 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const updatedUser = await User.findByIdAndUpdate(id, {
       password: hashedPassword,
@@ -573,6 +627,9 @@ router.patch(
   asyncHandler(async (req, res) => {
     const access = await resolveEditableUser(req, req.body.id);
     if (!access.target) return res.status(access.status).json(access.message);
+
+    const problem = await userChangeProblem(req, access);
+    if (problem) return res.status(problem.status).json(problem.message);
 
     const update = await buildUserUpdate(req.body, access.isAdmin);
 
@@ -598,10 +655,12 @@ router.put(
   asyncHandler(async (req, res) => {
     const { id, active } = req.body;
 
-    const target = isValidObjectId(id) ? await User.findById(id).select("school") : null;
+    const target = isValidObjectId(id) ? await User.findById(id).select("school role active") : null;
     if (!target || !isSameSchool(req, target.school)) {
       return res.status(404).json("Error updating user info");
     }
+    const refusal = await adminSafetyProblem(req, target, { removing: isDisabling(active) });
+    if (refusal) return res.status(409).json(refusal);
 
     const updatedUser = await User.findByIdAndUpdate(
       id,
@@ -635,13 +694,15 @@ router.delete(
       return res.status(401).json("Invalid User information");
     }
 
-    const target = await User.findById(id).select("school");
+    const target = await User.findById(id).select("school role active");
 
     // Same response for "missing" and "other school" so ids of other schools
     // cannot be probed.
     if (_.isEmpty(target) || !isSameSchool(req, target.school)) {
       return res.status(403).json("No User with such id");
     }
+    const refusal = await adminSafetyProblem(req, target, { removing: true });
+    if (refusal) return res.status(409).json(refusal);
 
     await User.findByIdAndDelete(id);
 

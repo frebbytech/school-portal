@@ -1,339 +1,140 @@
-import Button from "@mui/material/Button";
-import { Box } from "@mui/material";
-import Autocomplete from "@mui/material/Autocomplete";
-import Avatar from "@mui/material/Avatar";
-import MenuItem from "@mui/material/MenuItem";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Formik } from "formik";
-import dayjs from "@/lib/dates";
 import React, { useContext, useState } from "react";
+import { Alert, Avatar, Box, Button, Stack, TextField } from "@mui/material";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { mixed } from "yup";
+
+import dayjs from "@/lib/dates";
 import { postUser } from "@/api/userAPI";
-import CustomDatePicker from "@/components/inputs/CustomDatePicker";
+import Back from "@/components/Back";
+import CustomTitle from "@/components/custom/CustomTitle";
 import CustomFormControl from "@/components/inputs/CustomFormControl";
 import CustomImageChooser from "@/components/inputs/CustomImageChooser";
-import { userInitialValues } from "@/config/initialValues";
+import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import { userValidationSchema } from "@/config/validationSchema";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
-import { NATIONALITY } from "@/mockup/data/nationality";
-import { TOWNS } from "@/mockup/data/towns";
-import CustomTitle from "@/components/custom/CustomTitle";
-import { SchoolRounded } from "@mui/icons-material";
-import Back from "@/components/Back";
-import LoadingSpinner from "@/components/spinners/LoadingSpinner";
-import { useNavigate } from "react-router-dom";
+import { thrownMessage } from "@/lib/formErrors";
+import UserFields, { USER_DEFAULTS } from "./UserFields";
+
+export const dobRule = mixed().test(
+  "dob",
+  "Required*",
+  (value) => !!value && dayjs(value).isValid()
+);
+
+const schema = userValidationSchema.shape({ dateofbirth: dobRule });
 
 function UserAdd() {
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [preview, setPreview] = useState(null);
 
-  //states
-  const [profileImg, setProfieImg] = useState(null);
-  const [dob, setDob] = useState(null);
-  const [initValues] = useState(userInitialValues);
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm({
+    resolver: yupResolver(schema),
+    defaultValues: { ...USER_DEFAULTS, password: "", confirmPassword: "", profile: null },
+  });
 
-  //Post teacher
   const { mutate, isPending } = useMutation({ mutationFn: postUser });
-  const onSubmit = (values, options) => {
-    if (!dob || !dayjs(dob).isValid()) {
-      options.setFieldTouched("dateofbirth", true, false);
-      options.setFieldError("dateofbirth", "Required*");
-      options.setSubmitting(false);
-      return;
-    }
-    values.dateofbirth = dayjs(dob).format("L");
-    values.fullname = `${values?.firstname} ${values?.lastname}`;
-    // console.log(values);
-    // return;
 
-    mutate(values, {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: ["users"] });
-        options.setSubmitting(false);
+  const onSubmit = (values) => {
+    clearErrors("root.server");
+    const { confirmPassword: _confirm, ...rest } = values;
+    mutate(
+      {
+        ...rest,
+        dateofbirth: dayjs(values.dateofbirth).format("L"),
+        fullname: `${values.firstname} ${values.lastname}`.trim(),
       },
-      onSuccess: (data) => {
-        schoolSessionDispatch(alertSuccess(data));
-        navigate(`/users`);
-        options.resetForm();
-        setProfieImg(null);
-      },
-      onError: (error) => {
-        schoolSessionDispatch(alertError(error));
-      },
+      {
+        onSettled: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+        onSuccess: (data) => {
+          schoolSessionDispatch(alertSuccess(data));
+          navigate("/users");
+        },
+        onError: (error) => {
+          // Keep everything typed, and say why it was refused (for example, a taken username)
+          setError("root.server", { type: "server", message: thrownMessage(error) });
+          schoolSessionDispatch(alertError(error));
+        },
+      }
+    );
+  };
+
+  const choosePhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setValue("profile", file);
+    setPreview((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return URL.createObjectURL(file);
     });
   };
+
+  const password = (name, label) => (
+    <Controller
+      name={name}
+      control={control}
+      render={({ field }) => (
+        <TextField
+          {...field}
+          type="password"
+          label={label}
+          fullWidth
+          size="small"
+          autoComplete="new-password"
+          error={!!errors[name]}
+          helperText={errors[name]?.message}
+        />
+      )}
+    />
+  );
 
   return (
     <>
       <Back color="#012e54" />
       <CustomTitle
         title="New User"
-        subtitle="Add a new user to the system by filling out the form below."
-        icon={<SchoolRounded color="primary" sx={{ width: 50, height: 50 }} />}
+        subtitle="Add a new user to the system by filling out the form below. They will be asked to choose their own password the first time they sign in."
         color="primary.main"
       />
-
-      <Formik
-        initialValues={initValues}
-        onSubmit={onSubmit}
-        enableReinitialize={true}
-        validationSchema={userValidationSchema}
-      >
-        {({
-          values,
-          errors,
-          touched,
-          setFieldValue,
-          handleChange,
-          handleSubmit,
-          isSubmitting,
-        }) => {
-          const handleLoadFile = (e) => {
-            setFieldValue("profile", e.target.files[0]);
-            setProfieImg(URL.createObjectURL(e.target.files[0]));
-          };
-
-          return (
-            <Box bgcolor="#fff" p={2}>
-              <Stack padding={2} spacing={2}>
-                <Stack alignSelf="center">
-                  <CustomImageChooser handleImageUpload={handleLoadFile}>
-                    <Avatar
-                      srcSet={profileImg}
-                      sx={{ width: 100, height: 100, alignSelf: "center" }}
-                    />
-                  </CustomImageChooser>
-                </Stack>
-                <Typography
-                  variant="body2"
-                  color="primary.main"
-                  sx={{ fontWeight: "bold" }}
-                >
-                  Personal information
-                </Typography>
-
-                <Typography variant="caption" color="text.secondary">
-                  Enter the user&apos;s personal details.
-                </Typography>
-                <CustomFormControl>
-                  <TextField
-                    label="Firstname"
-                    type="text"
-                    fullWidth
-                    size="small"
-                    value={values.firstname}
-                    onChange={handleChange("firstname")}
-                    error={Boolean(touched.firstname && errors.firstname)}
-                    helperText={touched.firstname && errors.firstname}
-                  />
-                  <TextField
-                    label="Lastname"
-                    type="text"
-                    fullWidth
-                    size="small"
-                    value={values.lastname}
-                    onChange={handleChange("lastname")}
-                    error={Boolean(touched.lastname && errors.lastname)}
-                    helperText={touched.lastname && errors.lastname}
-                  />
-                </CustomFormControl>
-                <TextField
-                  label="Username"
-                  type="text"
-                  fullWidth
-                  size="small"
-                  value={values.username}
-                  onChange={handleChange("username")}
-                  error={Boolean(touched.username && errors.username)}
-                  helperText={touched.username && errors.username}
-                />
-                <CustomFormControl>
-                  <CustomDatePicker
-                    label="Date of Birth"
-                    date={dob}
-                    setDate={setDob}
-                    disableFuture={true}
-                    touched={Boolean(touched.dateofbirth && errors.dateofbirth)}
-                    error={touched.dateofbirth && errors.dateofbirth}
-                  />
-
-                  <TextField
-                    label="Gender"
-                    select
-                    fullWidth
-                    size="small"
-                    value={values.gender}
-                    onChange={handleChange("gender")}
-                    error={Boolean(touched.gender && errors.gender)}
-                    helperText={touched.gender && errors.gender}
-                  >
-                    <MenuItem value="male">Male</MenuItem>
-                    <MenuItem value="female">Female</MenuItem>
-                  </TextField>
-                </CustomFormControl>
-                <TextField
-                  label="Role"
-                  select
-                  fullWidth
-                  size="small"
-                  value={values.role}
-                  onChange={handleChange("role")}
-                  error={Boolean(touched.role && errors.role)}
-                  helperText={touched.role && errors.role}
-                >
-                  <MenuItem value="administrator">Administrator</MenuItem>
-                  <MenuItem value="teacher">Teacher</MenuItem>
-                </TextField>
-                <Typography
-                  variant="body2"
-                  color="primary.main"
-                  sx={{ fontWeight: "bold" }}
-                >
-                  Contact information
-                </Typography>
-
-                <Typography variant="caption" color="text.secondary">
-                  Enter the user&apos;s contact details.
-                </Typography>
-                <CustomFormControl>
-                  <TextField
-                    label="Email"
-                    fullWidth
-                    size="small"
-                    row={3}
-                    maxRows={3}
-                    value={values.email}
-                    onChange={handleChange("email")}
-                    error={Boolean(touched.email && errors.email)}
-                    helperText={touched.email && errors.email}
-                  />
-                  <TextField
-                    label="Telephone No."
-                    inputMode="tel"
-                    type="tel"
-                    fullWidth
-                    size="small"
-                    value={values.phonenumber}
-                    onChange={handleChange("phonenumber")}
-                    error={Boolean(touched.phonenumber && errors.phonenumber)}
-                    helperText={touched.phonenumber && errors.phonenumber}
-                  />
-                </CustomFormControl>
-                <TextField
-                  label="Address"
-                  fullWidth
-                  size="small"
-                  row={3}
-                  maxRows={3}
-                  value={values.address}
-                  onChange={handleChange("address")}
-                  error={Boolean(touched.address && errors.address)}
-                  helperText={touched.address && errors.address}
-                />
-                <CustomFormControl>
-                  <Autocomplete
-                    freeSolo
-                    fullWidth
-                    size="small"
-                    options={TOWNS}
-                    loadingText="Please wait...."
-                    noOptionsText="No Town available"
-                    getOptionLabel={(option) => option || ""}
-                    value={values.residence}
-                    onInputChange={(e, value) =>
-                      setFieldValue("residence", value)
-                    }
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Residence"
-                        fullWidth
-                        size="small"
-                        error={Boolean(touched.residence && errors.residence)}
-                        helperText={touched.residence && errors.residence}
-                      />
-                    )}
-                  />
-
-                  <Autocomplete
-                    freeSolo
-                    fullWidth
-                    size="small"
-                    loadingText="Please wait...."
-                    options={NATIONALITY}
-                    noOptionsText="No Nationality available"
-                    getOptionLabel={(option) => option || ""}
-                    value={values.nationality}
-                    onInputChange={(e, value) =>
-                      setFieldValue("nationality", value)
-                    }
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Nationality"
-                        fullWidth
-                        size="small"
-                        error={Boolean(
-                          touched.nationality && errors.nationality
-                        )}
-                        helperText={touched.nationality && errors.nationality}
-                      />
-                    )}
-                  />
-                </CustomFormControl>
-                <CustomFormControl>
-                  <TextField
-                    type="password"
-                    label="Password"
-                    fullWidth
-                    size="small"
-                    autoComplete="no"
-                    value={values.password}
-                    onChange={handleChange("password")}
-                    error={Boolean(touched.password && errors.password)}
-                    helperText={touched.password && errors.password}
-                  />
-                  <TextField
-                    type="password"
-                    label="Confirm Password"
-                    fullWidth
-                    autoComplete="no"
-                    size="small"
-                    value={values.confirmPassword}
-                    onChange={handleChange("confirmPassword")}
-                    error={Boolean(
-                      touched.confirmPassword && errors.confirmPassword
-                    )}
-                    helperText={
-                      touched.confirmPassword && errors.confirmPassword
-                    }
-                  />
-                </CustomFormControl>
-                <Stack
-                  direction="row"
-                  justifyContent="flex-end"
-                  alignItems="center"
-                  spacing={2}
-                  paddingY={2}
-                >
-                  <Button
-                    loading={isSubmitting || isPending}
-                    variant="contained"
-                    color="primary"
-                    onClick={handleSubmit}
-                  >
-                    Save User
-                  </Button>
-                </Stack>
-              </Stack>
-            </Box>
-          );
-        }}
-      </Formik>
+      <Box bgcolor="#fff" p={2}>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <Stack padding={2} spacing={2}>
+            {errors.root?.server && (
+              <Alert severity="error" role="alert">
+                {errors.root.server.message}
+              </Alert>
+            )}
+            <Stack alignSelf="center">
+              <CustomImageChooser handleImageUpload={choosePhoto}>
+                <Avatar srcSet={preview} sx={{ width: 100, height: 100, alignSelf: "center" }} />
+              </CustomImageChooser>
+            </Stack>
+            <UserFields control={control} errors={errors}>
+              <CustomFormControl>
+                {password("password", "Password")}
+                {password("confirmPassword", "Confirm Password")}
+              </CustomFormControl>
+            </UserFields>
+            <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={2} paddingY={2}>
+              <Button type="submit" variant="contained" color="primary" disabled={isPending}>
+                {isPending ? "Saving..." : "Save User"}
+              </Button>
+            </Stack>
+          </Stack>
+        </form>
+      </Box>
       {isPending && <LoadingSpinner value="Creating New User..." />}
     </>
   );

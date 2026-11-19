@@ -20,6 +20,7 @@ import Swal from "sweetalert2";
 import React, { useContext, useEffect, useState } from "react";
 import ProfileItem from "@/components/typo/ProfileItem";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import QueryError from "@/components/QueryError";
 import { deleteUser, enableOrDisableAccount, getUser } from "@/api/userAPI";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
@@ -70,7 +71,9 @@ const UserView = () => {
       title: user?.data?.active
         ? "Do you want to disable this account?"
         : "Do you want to enable this account?",
-      text: user?.data?.active ? "Disabling Account" : "Enabling Account",
+      text: user?.data?.active
+        ? "They will not be able to sign in until the account is enabled again."
+        : "They will be able to sign in again.",
       showCancelButton: true,
       backdrop: false,
     }).then((data) => {
@@ -104,8 +107,8 @@ const UserView = () => {
 
   const handleDelete = () => {
     Swal.fire({
-      title: "Deleting User",
-      text: "Do you want to delete?",
+      title: "Delete this user?",
+      text: "This removes the account for good and cannot be undone. To stop someone signing in but keep their records, disable the account instead.",
       showCancelButton: true,
     }).then((data) => {
       if (data.isConfirmed) {
@@ -152,6 +155,9 @@ const UserView = () => {
           subtitle="Track,manage and control courses assigned to you"
           color="primary.main"
         />
+        {user.isError && !user.data && (
+          <QueryError what="this user" error={user.error} onRetry={() => user.refetch()} />
+        )}
 
         <Box sx={{ bgcolor: "white", borderRadius: "12px", p: 2 }}>
           <Stack width="100%" justifyContent="flex-end" alignItems="flex-end">

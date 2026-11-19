@@ -13,6 +13,7 @@ import {
 import Swal from "sweetalert2";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import QueryError from "@/components/QueryError";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
@@ -144,6 +145,9 @@ function UserPermissions() {
         title="Roles & Permissions"
         subtitle="Manage how each user interacts with various school system modules."
       />
+        {user.isError && !user.data && (
+          <QueryError what="this user" error={user.error} onRetry={() => user.refetch()} />
+        )}
 
       <Divider sx={{ my: 2 }} />
 
