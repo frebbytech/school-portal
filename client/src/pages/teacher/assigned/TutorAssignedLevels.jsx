@@ -7,11 +7,12 @@ import { TEACHER_ASSIGNED_LEVELS_COLUMNS } from "@/mockup/columns/teacherColumn"
 import _ from "lodash";
 
 import AssignTutorLevel from "./AssignTutorLevel";
+import QueryError from "@/components/QueryError";
 import { EMPTY_IMAGES } from "@/config/images";
 const TutorAssignedLevels = () => {
   const [open, setOpen] = useState(false);
   //GET All Courses Assigned to Teacher
-  const { levelsOption, levelLoading, levelRefetch } = useLevel();
+  const { levelsOption, levelLoading, levelRefetch, levelError } = useLevel();
 
   const levels = levelsOption?.map((level) => {
     if (_.isEmpty(level?.teacher)) return;
@@ -37,6 +38,10 @@ const TutorAssignedLevels = () => {
         // img={teacher_icon}
         color="primary.main"
       />
+
+      {levelError && (
+        <QueryError what="the classes" error={levelError} onRetry={levelRefetch} />
+      )}
 
       <CustomizedMaterialTable
         title="Assigned Levels"

@@ -73,7 +73,7 @@ export const TEACHERS_COLUMN = [
           />
         }
       >
-        {active ? "Active" : "Disabled"}
+        {active ? "Active" : "Deactivated"}
       </Button>
     ),
   },
@@ -321,9 +321,9 @@ export const TEACHER_ASSIGNED_LEVELS_COLUMNS = [
     title: "Action",
     export: false,
     render: (rowData) => (
-      <Link to={`/teacher/${rowData?.teacher?._id}/levels`} title="View Course">
-        <IconButton title="View Course">
-          <Edit titleAccess="View Course" />
+      <Link to={`/teacher/${rowData?.teacher?._id}/levels`} title="View classes">
+        <IconButton title="View classes">
+          <Edit titleAccess="View classes" />
         </IconButton>
       </Link>
     ),

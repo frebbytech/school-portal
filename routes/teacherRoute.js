@@ -117,9 +117,10 @@ router.get(
   AsyncHandler(async (req, res) => {
     const id = req.params.id;
     const teacher = mongoose.isValidObjectId(id)
-      ? await User.findOne({ _id: id, school: getPrincipal(req).schoolId }).select("-password")
+      ? await User.findOne({ _id: id, school: getPrincipal(req).schoolId, role: "teacher" }).select("-password")
       : null;
 
+    if (!teacher) return res.status(404).json("No teacher with that id in this school.");
     res.status(200).json(teacher);
   })
 );

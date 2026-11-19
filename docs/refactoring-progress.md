@@ -488,3 +488,7 @@ See row U5m in `ui-refactor-plan.md`. Server (`routes/userRoute.js`): a school k
 ## 5z. Teacher screens (2026-11-19)
 
 See row U5n in `ui-refactor-plan.md`. Server: teacher username edit checked globally (400); a deactivated teacher cannot be assigned a class (`PUT /levels/assign-teacher`, 400) or a course (`POST`/`PUT /courses`, 403) (`staffInSchool(..., { activeOnly: true })` in `middlewares/tenant.js`). Client: teacher add/edit on React Hook Form; deactivate and reactivate; assign screens without Formik.
+
+## 5aa. Teacher lists and the assign dialog (2026-11-19)
+
+See row U5o in `ui-refactor-plan.md`. Server: `GET /teachers/:id` is 404 when the teacher is not in this school (or is not a teacher). Client: Assign Teacher to Class offers only active teachers and classes without a class teacher and shows the server's reason; teacher list and assigned lists show *Try again* and no longer put the photo in the address.

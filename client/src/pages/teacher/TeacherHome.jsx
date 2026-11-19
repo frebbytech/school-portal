@@ -11,6 +11,7 @@ import { EMPTY_IMAGES } from "@/config/images";
 import teacher_icon from "@/assets/images/header/teacher_ico.svg";
 import CustomTitle from "@/components/custom/CustomTitle";
 import { useNavigate } from "react-router-dom";
+import QueryError from "@/components/QueryError";
 
 const TeacherHome = () => {
   const [tab, setTab] = useState("1");
@@ -20,16 +21,13 @@ const TeacherHome = () => {
   const teachers = useQuery({
     queryKey: ["teachers"],
     queryFn: getAllTeachers,
-    refetchOnMount: false,
   });
 
   const isNotTeacher = teachers?.data?.length === 0;
 
   //VIEW Teacher Info
   const viewTeacherInfo = (data) => {
-    navigate(
-      `/teacher/${data?._id}?profile=${data?.profile}&fullname=${data?.fullname}`
-    );
+    navigate(`/teacher/${data?._id}`);
   };
 
   return (
@@ -58,12 +56,15 @@ const TeacherHome = () => {
         </TabList>
 
         <TabPanel value="1" sx={{ px: 0 }}>
+          {teachers.isError && !teachers.data && (
+            <QueryError what="the teachers" error={teachers.error} onRetry={teachers.refetch} />
+          )}
           <CustomizedMaterialTable
             title="Teachers"
             icon={teacher_icon}
             isPending={teachers.isPending || teachers.isLoading}
             columns={TEACHERS_COLUMN}
-            data={teachers.data}
+            data={teachers.data || []}
             actions={[]}
             onRowClick={viewTeacherInfo}
             showAddButton={true}

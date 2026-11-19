@@ -52,13 +52,13 @@ export const AssignTeacherValidationSchema = object().shape({
 });
 export const AssignTutorValidationSchema = object().shape({
   teacher: object({
-    _id: string().required("Required*"),
-    fullName: string().required("Required*"),
-  }),
+    _id: string().required("Choose a teacher"),
+    fullName: string().required("Choose a teacher"),
+  }).typeError("Choose a teacher"),
   level: object({
-    _id: string().required("Required*"),
-    levelName: string().required("Required*"),
-  }),
+    _id: string().required("Choose a class"),
+    levelName: string().required("Choose a class"),
+  }).typeError("Choose a class"),
 });
 
 export const currentLevelValidationSchema = object().shape({

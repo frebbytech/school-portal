@@ -1,5 +1,6 @@
 import React, { useContext, useMemo } from "react";
 import {
+  Alert,
   Stack,
   Dialog,
   DialogContent,
@@ -20,37 +21,45 @@ import { assignTeacherLevel } from "@/api/levelAPI";
 import { getAllTeachers } from "@/api/teacherAPI";
 import useLevel from "@/components/hooks/useLevel";
 import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
+import { thrownMessage } from "@/lib/formErrors";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 
 const AssignTutorLevel = ({ open, setOpen }) => {
   const queryClient = useQueryClient();
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
 
-  const { levelsOption } = useLevel();
+  const { levelsOption, levelError, levelRefetch } = useLevel();
 
+  // Only classes without a class teacher: the server refuses one that already has one
   const memoizedLevelsOption = useMemo(() => {
-    return levelsOption.map(({ _id, level }) => ({
-      _id,
-      levelName: `${level?.name} ${level?.type}`,
-    }));
+    return (levelsOption || [])
+      .filter((l) => !l?.teacher?._id)
+      .map(({ _id, type }) => ({ _id, levelName: type || "" }));
   }, [levelsOption]);
+  const everyClassHasATeacher = (levelsOption || []).length > 0 && memoizedLevelsOption.length === 0;
 
-  // 📌 Load Teachers
-  const { data: teachers = [], isPending: loadingTeachers } = useQuery({
+  // Only active teachers can be given a class
+  const teachersQuery = useQuery({
     queryKey: ["teachers"],
     queryFn: getAllTeachers,
-    select: (teachers) =>
-      teachers?.map((t) => ({
-        _id: t._id,
-        fullName: t.fullname,
-      })),
+    enabled: open,
   });
+  const loadingTeachers = teachersQuery.isPending;
+  const teachers = useMemo(
+    () =>
+      (teachersQuery.data || [])
+        .filter((t) => t.active !== false)
+        .map((t) => ({ _id: t._id, fullName: t.fullname })),
+    [teachersQuery.data]
+  );
 
   // 📌 React Hook Form Setup
   const {
     handleSubmit,
     control,
     reset,
+    setError,
+    clearErrors,
     formState: { errors, isValid },
   } = useForm({
     resolver: yupResolver(AssignTutorValidationSchema),
@@ -68,6 +77,7 @@ const AssignTutorLevel = ({ open, setOpen }) => {
 
   const handleClose = () => {
     reset();
+    clearErrors("root.server");
     setOpen(false);
   };
 
@@ -75,7 +85,7 @@ const AssignTutorLevel = ({ open, setOpen }) => {
   const onSubmit = async (values) => {
     Swal.fire({
       title: "Assign Teacher",
-      text: `Assign ${values.teacher?.fullName} to ${values.level?.type}`,
+      text: `Make ${values.teacher?.fullName} the class teacher of ${values.level?.levelName}?`,
       showCancelButton: true,
       backdrop: false,
     }).then((result) => {
@@ -86,6 +96,7 @@ const AssignTutorLevel = ({ open, setOpen }) => {
         teacher: values.teacher?._id,
       };
 
+      clearErrors("root.server");
       mutate(payload, {
         onSettled: () => {
           queryClient.invalidateQueries({ queryKey: ["levels"] });
@@ -95,6 +106,7 @@ const AssignTutorLevel = ({ open, setOpen }) => {
           handleClose();
         },
         onError: (error) => {
+          setError("root.server", { type: "server", message: thrownMessage(error) });
           schoolSessionDispatch(alertError(error));
         },
       });
@@ -105,12 +117,28 @@ const AssignTutorLevel = ({ open, setOpen }) => {
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
       <CustomDialogTitle
         onClose={handleClose}
-        title="Assign Teacher to Level"
+        title="Assign Teacher to Class"
       />
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <DialogContent sx={{ p: 2 }}>
           <Stack spacing={2}>
+            {errors.root?.server?.message && (
+              <Alert severity="error" role="alert">{errors.root.server.message}</Alert>
+            )}
+            {teachersQuery.isError && (
+              <Alert severity="error" role="alert" action={<Button color="inherit" size="small" onClick={() => teachersQuery.refetch()}>Try again</Button>}>
+                Could not load the teachers.
+              </Alert>
+            )}
+            {levelError && (
+              <Alert severity="error" role="alert" action={<Button color="inherit" size="small" onClick={() => levelRefetch()}>Try again</Button>}>
+                Could not load the classes.
+              </Alert>
+            )}
+            {everyClassHasATeacher && (
+              <Alert severity="info">Every class already has a class teacher.</Alert>
+            )}
             {/* 📌 TEACHER FIELD */}
             <Controller
               name="teacher"
@@ -150,10 +178,10 @@ const AssignTutorLevel = ({ open, setOpen }) => {
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="Level"
+                      label="Class"
                       size="small"
                       error={!!errors.level}
-                      helperText={errors.level?._id?.message}
+                      helperText={errors.level?._id?.message || errors.level?.message}
                     />
                   )}
                 />

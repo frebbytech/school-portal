@@ -259,8 +259,11 @@ describe("remaining routers: roles, school scope and allow-lists (Stage 4d)", ()
 
     it("does not read another school's teacher by id", async () => {
       const res = await as(request(app).get(`${base}/teachers/${teacherB._id}`), adminTok);
-      expect(res.status).toBe(200);
-      expect(res.body).toBeNull();
+      expect(res.status).toBe(404);
+      expect(res.body).toBe("No teacher with that id in this school.");
+      expect((await as(request(app).get(`${base}/teachers/not-an-id`), adminTok)).status).toBe(404);
+      expect((await as(request(app).get(`${base}/teachers/${adminA._id}`), adminTok)).status).toBe(404);
+      expect((await as(request(app).get(`${base}/teachers/${teacherA._id}`), adminTok)).status).toBe(200);
     });
 
     it("update is allow-listed, never upserts, and cannot reach other schools or admins", async () => {
