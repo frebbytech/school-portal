@@ -10,6 +10,7 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Chip,
   Container,
   Divider,
   IconButton,
@@ -23,7 +24,8 @@ import Swal from "sweetalert2";
 import React, { useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { deleteTeacher, getTeacher } from "@/api/teacherAPI";
+import { deleteTeacher, getTeacher, putTeacher } from "@/api/teacherAPI";
+import QueryError from "@/components/QueryError";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 
@@ -63,30 +65,39 @@ const TeacherView = () => {
     mutationFn: deleteTeacher,
   });
 
+  const isActive = teacher?.data?.active !== false;
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["teachers"] });
+    queryClient.invalidateQueries({ queryKey: ["teacher", id] });
+  };
+
+  const reactivate = useMutation({ mutationFn: putTeacher });
+
+  // Teachers are never deleted: the account is deactivated so results, attendance and
+  // class history stay, and it can be switched back on.
   const handleDelete = () => {
     Swal.fire({
-      title: "Deleting Teacher",
-      text: "Do you want to delete?",
+      title: isActive ? "Deactivate this teacher?" : "Reactivate this teacher?",
+      text: isActive
+        ? "They will not be able to sign in. Their records, and the classes and courses they were given, are kept. You can reactivate the account later."
+        : "They will be able to sign in again.",
       showCancelButton: true,
       backdrop: false,
     }).then((data) => {
-      if (data.isConfirmed) {
-        mutate(id, {
-          onSuccess: (data) => {
-            navigate(`/teachers`);
-            queryClient.invalidateQueries({ queryKey: ["teachers"] });
-            schoolSessionDispatch(alertSuccess(data));
-          },
-          onError: (error) => {
-            schoolSessionDispatch(alertError(error));
-          },
-        });
-      }
+      if (!data.isConfirmed) return;
+      const done = {
+        onSuccess: (message) => {
+          refresh();
+          schoolSessionDispatch(alertSuccess(message));
+        },
+        onError: (error) => schoolSessionDispatch(alertError(error)),
+      };
+      if (isActive) mutate(id, done);
+      else reactivate.mutate({ _id: id, active: true }, done);
     });
   };
 
-  //OPEN Quick Message
-  //CLOSE
   const openQuickMessage = () => {
     schoolSessionDispatch({
       type: "sendQuickMessage",
@@ -118,6 +129,9 @@ const TeacherView = () => {
           subtitle="Manage teachers profile and assigned levels and courses"
           color="primary.main"
         />
+        {teacher.isError && !teacher.data && (
+          <QueryError what="this teacher" error={teacher.error} onRetry={() => teacher.refetch()} />
+        )}
 
         <Box
           sx={{
@@ -165,6 +179,7 @@ const TeacherView = () => {
               </Box>
 
               <Typography variant="h5">{teacher?.data?.fullname}</Typography>
+              {!isActive && <Chip size="small" color="warning" label="Deactivated" />}
               <Button startIcon={<MessageRounded />} onClick={openQuickMessage}>
                 Send Message
               </Button>
@@ -215,12 +230,13 @@ const TeacherView = () => {
               <TeacherProfile teacher={teacher?.data} />
               <Divider />
               <Button
-                color="error"
+                color={isActive ? "error" : "primary"}
                 variant="contained"
                 endIcon={<DeleteRounded />}
+                disabled={isPending || reactivate.isPending}
                 onClick={handleDelete}
               >
-                Remove Account
+                {isActive ? "Deactivate Account" : "Reactivate Account"}
               </Button>
             </Stack>
           </Box>

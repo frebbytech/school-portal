@@ -17,6 +17,7 @@ import { RefreshRounded } from "@mui/icons-material";
 import useLevel from "@/components/hooks/useLevel";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
+import QueryError from "@/components/QueryError";
 import { unassignTeacherLevel } from "@/api/levelAPI";
 import { UserContext } from "@/context/providers/UserProvider";
 
@@ -27,7 +28,7 @@ function TeacherLevels() {
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const queryClient = useQueryClient();
   const { id } = useParams();
-  const { levelsOption } = useLevel();
+  const { levelsOption, levelError } = useLevel();
 
   const assigned = useMemo(() => {
     return levelsOption?.filter((level) => level?.teacher?._id === id);
@@ -63,6 +64,8 @@ function TeacherLevels() {
   };
 
   return (
+    <>
+    {levelError && <QueryError what="the levels" error={levelError} />}
     <List
       subheader={
         <ListSubheader
@@ -118,6 +121,7 @@ function TeacherLevels() {
         <Typography>No data available</Typography>
       )}
     </List>
+    </>
   );
 }
 

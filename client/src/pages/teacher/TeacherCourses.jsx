@@ -18,6 +18,7 @@ import {  RefreshRounded } from "@mui/icons-material";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { useParams } from "react-router-dom";
+import QueryError from "@/components/QueryError";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 
 function TeacherCourses() {
@@ -75,6 +76,9 @@ function TeacherCourses() {
 
   return (
     <>
+      {courses.isError && (
+        <QueryError what="the courses" error={courses.error} onRetry={() => courses.refetch()} />
+      )}
       <List
         subheader={
           <ListSubheader

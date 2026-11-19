@@ -36,11 +36,13 @@ const subjectInSchool = async (req, id) => {
 };
 
 /** A staff member (any role) of the caller's school; with `role` it must match. */
-const staffInSchool = async (req, id, role) => {
+const staffInSchool = async (req, id, role, { activeOnly = false } = {}) => {
   const school = schoolOf(req);
   if (!school || !id || !isValidObjectId(id)) return false;
   const filter = { _id: id, school };
   if (role) filter.role = role;
+  // a deactivated account cannot be given new work
+  if (activeOnly) filter.active = { $ne: false };
   return Boolean(await User.exists(filter));
 };
 

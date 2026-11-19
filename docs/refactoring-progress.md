@@ -484,3 +484,7 @@ See row U5l in `ui-refactor-plan.md`. Client only. Every API module now throws t
 ## 5y. User forms and administrator safety (2026-11-19)
 
 See row U5m in `ui-refactor-plan.md`. Server (`routes/userRoute.js`): a school keeps at least one active administrator and nobody disables, demotes or removes themself (409); both admin password-reset routes require 8 to 128 characters and set `mustChangePassword`; new users created by an administrator are flagged; own-profile password changes need 8 characters. Client: Add/Edit/Reset on React Hook Form.
+
+## 5z. Teacher screens (2026-11-19)
+
+See row U5n in `ui-refactor-plan.md`. Server: teacher username edit checked globally (400); a deactivated teacher cannot be assigned a class (`PUT /levels/assign-teacher`, 400) or a course (`POST`/`PUT /courses`, 403) (`staffInSchool(..., { activeOnly: true })` in `middlewares/tenant.js`). Client: teacher add/edit on React Hook Form; deactivate and reactivate; assign screens without Formik.

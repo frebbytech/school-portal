@@ -252,6 +252,19 @@ router.put(
     }
 
     const update = pickFields(req.body, TEACHER_EDITABLE_FIELDS);
+
+    // usernames are unique across every school: say so instead of a database error
+    if (update.username !== undefined) {
+      if (typeof update.username !== "string" || !update.username.trim()) {
+        return res.status(400).json("Username is required.");
+      }
+      update.username = update.username.trim();
+      const taken = await User.exists({ username: update.username, _id: { $ne: _id } });
+      if (taken) {
+        return res.status(400).json(`Teacher with username '${update.username}' already exists! `);
+      }
+    }
+
     if (update.firstname !== undefined || update.lastname !== undefined) {
       const current = await teacherInSchool(req, _id);
       if (current) {

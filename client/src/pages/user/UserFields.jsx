@@ -1,10 +1,15 @@
 import React from "react";
 import { Autocomplete, MenuItem, TextField, Typography } from "@mui/material";
 import { Controller } from "react-hook-form";
+import { mixed } from "yup";
+import dayjs from "@/lib/dates";
 import CustomDatePicker from "@/components/inputs/CustomDatePicker";
 import CustomFormControl from "@/components/inputs/CustomFormControl";
 import { NATIONALITY } from "@/mockup/data/nationality";
 import { TOWNS } from "@/mockup/data/towns";
+
+// A date of birth is required and must be a real date
+export const dobRule = mixed().test("dob", "Required*", (value) => !!value && dayjs(value).isValid());
 
 // Roles the server accepts for staff accounts.
 export const USER_ROLES = [
@@ -38,7 +43,7 @@ const Heading = ({ children, hint }) => (
 );
 
 /** The personal and contact fields shared by the Add and Edit user screens (React Hook Form). */
-const UserFields = ({ control, errors, children }) => {
+const UserFields = ({ control, errors, children, showRole = true }) => {
   const text = (name, label, extra = {}) => (
     <Controller
       name={name}
@@ -125,7 +130,7 @@ const UserFields = ({ control, errors, children }) => {
           { value: "female", label: "Female" },
         ])}
       </CustomFormControl>
-      {select("role", "Role", USER_ROLES)}
+      {showRole && select("role", "Role", USER_ROLES)}
 
       <Heading hint="Enter the user's contact details.">Contact information</Heading>
       <CustomFormControl>

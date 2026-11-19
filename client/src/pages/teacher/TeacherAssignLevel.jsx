@@ -1,5 +1,6 @@
 import React, { useContext, useState } from "react";
 import {
+  Alert,
   Autocomplete,
   Box,
   Container,
@@ -9,15 +10,14 @@ import {
 import Button from "@mui/material/Button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Formik } from "formik";
 import { assignTeacherLevel } from "@/api/levelAPI";
-import { currentLevelValidationSchema } from "@/config/validationSchema";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import useLevel from "@/components/hooks/useLevel";
 import CustomTitle from "@/components/custom/CustomTitle";
 import Back from "@/components/Back";
 import TeacherLevels from "./TeacherLevels";
+import QueryError from "@/components/QueryError";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 import Swal from "sweetalert2";
 import { UserContext } from "@/context/providers/UserProvider";
@@ -27,10 +27,7 @@ const TeacherAssignLevel = () => {
   const { session } = useContext(UserContext);
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const queryClient = useQueryClient();
-  const [currentLevel, setCurrentLevel] = useState({
-    _id: "",
-    type: "",
-  });
+  const [currentLevel, setCurrentLevel] = useState(null);
   const { id } = useParams();
 
   const teacher = useQuery({
@@ -47,38 +44,36 @@ const TeacherAssignLevel = () => {
   const { mutate, isPending } = useMutation({
     mutationFn: assignTeacherLevel,
   });
-  const onSubmit = (values, options) => {
+  const deactivated = teacher?.data?.active === false;
+
+  const onSubmit = () => {
+    if (!currentLevel?._id) return;
     Swal.fire({
       title: "Assign Level",
-      text: "Proceed with Level Assignment?",
+      text: `Make ${teacher?.data?.fullname || "this teacher"} the class teacher of ${currentLevel?.type}?`,
       showCancelButton: true,
       backdrop: false,
     }).then((data) => {
-      if (data.isConfirmed) {
-        const info = {
-          _id: values?._id,
-          teacher: id,
-        };
-
-        mutate(info, {
+      if (!data.isConfirmed) return;
+      mutate(
+        { _id: currentLevel._id, teacher: id },
+        {
           onSettled: () => {
             queryClient.invalidateQueries({
               queryKey: ["levels", session.sessionId, session.termId],
             });
-            options.setSubmitting(false);
           },
-          onSuccess: (data) => {
-            schoolSessionDispatch(alertSuccess(data));
+          onSuccess: (message) => {
+            setCurrentLevel(null);
+            schoolSessionDispatch(alertSuccess(message));
           },
           onError: (error) => {
             schoolSessionDispatch(alertError(error));
           },
-        });
-      }
+        }
+      );
     });
   };
-
-  // const handleClose = () => setOpen(false);
 
   return (
     <Container>
@@ -90,64 +85,40 @@ const TeacherAssignLevel = () => {
         img={teacher?.data?.profile}
       />
 
-      <Formik
-        initialValues={currentLevel}
-        validationSchema={currentLevelValidationSchema}
-        onSubmit={onSubmit}
-        enableReinitialize={true}
-      >
-        {({ errors, touched, handleSubmit, handleReset }) => {
-          return (
-            <>
-              <Box
-                sx={{
-                  mt: 4,
-                  py: 4,
-                  px: 2,
-                  // border: "1px solid lightgray",
-                  borderRadius: "12px",
-                  bgcolor: "#fff",
-                }}
-              >
-                <Autocomplete
-                  size="small"
-                  options={levelsOption}
-                  loading={levelLoading}
-                  loadingText="Loading levels.Please wait..."
-                  getOptionLabel={(option) => option?.type || ""}
-                  isOptionEqualToValue={(option, value) =>
-                    value._id === undefined ||
-                    value._id === "" ||
-                    value._id === option._id
-                  }
-                  value={currentLevel}
-                  onChange={(e, value) => setCurrentLevel(value)}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Select a level"
-                      error={Boolean(touched.type && errors.type)}
-                      helperText={touched.type && errors.type}
-                    />
-                  )}
-                  sx={{ marginY: 2 }}
-                />
-                <DialogActions>
-                  <Button onClick={handleReset}>Cancel</Button>
-                  <Button
-                    loading={isPending}
-                    variant="contained"
-                    onClick={handleSubmit}
-                    disabled={currentLevel?._id === ""}
-                  >
-                    Assign Level
-                  </Button>
-                </DialogActions>
-              </Box>
-            </>
-          );
-        }}
-      </Formik>
+      {teacher.isError && !teacher.data && (
+        <QueryError what="this teacher" error={teacher.error} onRetry={() => teacher.refetch()} />
+      )}
+      {deactivated && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          This teacher is deactivated. Reactivate the account before giving them a class.
+        </Alert>
+      )}
+      <Box sx={{ mt: 4, py: 4, px: 2, borderRadius: "12px", bgcolor: "#fff" }}>
+        <Autocomplete
+          size="small"
+          options={levelsOption}
+          loading={levelLoading}
+          loadingText="Loading levels.Please wait..."
+          getOptionLabel={(option) => option?.type || ""}
+          isOptionEqualToValue={(option, value) => value?._id === option?._id}
+          value={currentLevel}
+          onChange={(e, value) => setCurrentLevel(value)}
+          renderInput={(params) => <TextField {...params} label="Select a level" />}
+          sx={{ marginY: 2 }}
+        />
+        <DialogActions>
+          <Button onClick={() => setCurrentLevel(null)} disabled={!currentLevel}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={onSubmit}
+            disabled={!currentLevel?._id || isPending || deactivated}
+          >
+            Assign Level
+          </Button>
+        </DialogActions>
+      </Box>
 
       <TeacherLevels />
       {isPending && <LoadingSpinner value="Assigning Level.Please wait..." />}

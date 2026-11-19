@@ -226,6 +226,37 @@ describe("remaining routers: roles, school scope and allow-lists (Stage 4d)", ()
       expect(String(saved.school)).toBe(String(schoolA._id));
     });
 
+    it("refuses a username that is already taken (in any school) when editing a teacher", async () => {
+      const res = await as(
+        request(app).put(`${base}/teachers`).send({ _id: String(teacherA._id), username: teacherB.username }),
+        adminTok
+      );
+      expect(res.status).toBe(400);
+      expect(res.body).toMatch(/already exists/);
+      // keeping their own username is fine
+      const same = await as(
+        request(app).put(`${base}/teachers`).send({ _id: String(teacherA._id), username: teacherA.username }),
+        adminTok
+      );
+      expect(same.status).toBe(201);
+    });
+
+    it("deactivating keeps the account and its records; a deactivated teacher gets no new class", async () => {
+      const t = await createUser(schoolA, "teacher");
+      expect((await as(request(app).delete(`${base}/teachers/${t._id}`), adminTok)).status).toBe(200);
+      expect((await User.findById(t._id)).active).toBe(false);
+
+      const level = await make(Level, { school: schoolA._id, session: sessionA._id, term: termA._id, level: { name: "Z", type: "1" }, initials: "Z1" });
+      const assign = await as(request(app).put(`${base}/levels/assign-teacher`).send({ _id: String(level._id), teacher: String(t._id) }), adminTok);
+      expect(assign.status).toBe(400);
+      expect((await Level.findById(level._id)).teacher).toBeFalsy();
+
+      // switched back on, they can be given the class again
+      expect((await as(request(app).put(`${base}/teachers`).send({ _id: String(t._id), active: true }), adminTok)).status).toBe(201);
+      const again = await as(request(app).put(`${base}/levels/assign-teacher`).send({ _id: String(level._id), teacher: String(t._id) }), adminTok);
+      expect(again.status).toBe(201);
+    });
+
     it("does not read another school's teacher by id", async () => {
       const res = await as(request(app).get(`${base}/teachers/${teacherB._id}`), adminTok);
       expect(res.status).toBe(200);

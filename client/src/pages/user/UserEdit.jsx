@@ -17,8 +17,7 @@ import { userEditValidationSchema } from "@/config/validationSchema";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { thrownMessage } from "@/lib/formErrors";
-import UserFields, { USER_DEFAULTS } from "./UserFields";
-import { dobRule } from "./UserAdd";
+import UserFields, { USER_DEFAULTS, dobRule } from "./UserFields";
 
 const schema = userEditValidationSchema.shape({ dateofbirth: dobRule });
 

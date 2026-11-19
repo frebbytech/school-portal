@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { mixed } from "yup";
 
 import dayjs from "@/lib/dates";
 import { postUser } from "@/api/userAPI";
@@ -17,13 +16,7 @@ import { userValidationSchema } from "@/config/validationSchema";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { thrownMessage } from "@/lib/formErrors";
-import UserFields, { USER_DEFAULTS } from "./UserFields";
-
-export const dobRule = mixed().test(
-  "dob",
-  "Required*",
-  (value) => !!value && dayjs(value).isValid()
-);
+import UserFields, { USER_DEFAULTS, dobRule } from "./UserFields";
 
 const schema = userValidationSchema.shape({ dateofbirth: dobRule });
 

@@ -863,7 +863,7 @@ router.put(
   asyncHandler(async (req, res) => {
     const { _id, teacher } = req.body || {};
 
-    if (!(await staffInSchool(req, teacher, "teacher"))) {
+    if (!(await staffInSchool(req, teacher, "teacher", { activeOnly: true }))) {
       return res.status(400).json("Error assigning Level.Try again later");
     }
 

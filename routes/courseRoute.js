@@ -234,7 +234,7 @@ router.post(
       (await termInSchool(req, term)) &&
       (await levelInSchool(req, level)) &&
       (await subjectInSchool(req, subject)) &&
-      (teacher === undefined || teacher === null || (await staffInSchool(req, teacher, "teacher")));
+      (teacher === undefined || teacher === null || (await staffInSchool(req, teacher, "teacher", { activeOnly: true })));
     if (!referencesOk) return res.status(403).json(FORBIDDEN);
 
     const courses = await Course.find({
@@ -295,7 +295,7 @@ router.put(
 
     if (
       !isValidObjectId(id) ||
-      (update.teacher && !(await staffInSchool(req, update.teacher, "teacher")))
+      (update.teacher && !(await staffInSchool(req, update.teacher, "teacher", { activeOnly: true })))
     ) {
       return res.status(404).json("Error updating course info.Try again later");
     }

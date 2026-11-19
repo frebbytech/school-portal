@@ -43,7 +43,7 @@ export const getAllCourseAssignedToTeacher = async () => {
 export const postTeacher = async (teacher) => {
   const formData = new FormData();
   //Teacher
-  formData.append("profile", teacher.profile);
+  if (teacher.profile instanceof Blob) formData.append("profile", teacher.profile);
   formData.append("firstname", teacher.firstname);
   formData.append("lastname", teacher.lastname);
   formData.append("username", teacher.username);
