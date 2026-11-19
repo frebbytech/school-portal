@@ -49,7 +49,7 @@ function AttendanceHistory() {
     enabled: !!id,
   });
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: deleteAttendance,
   });
 
@@ -61,7 +61,7 @@ function AttendanceHistory() {
       showCancelButton: true,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(attendanceId, {
+        mutate(attendanceId, {
           onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ["attendance-history", levelId] });
           },

@@ -53,10 +53,10 @@ export default function EditSessionForm() {
   });
 
   const onSubmit = (values) => {
-    postMutate.mutateAsync(values, {
+    postMutate.mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["terms"]);
-        queryClient.invalidateQueries(["terms/:id", id]);
+        queryClient.invalidateQueries({ queryKey: ["terms"] });
+        queryClient.invalidateQueries({ queryKey: ["terms/:id", id] });
       },
       onSuccess: () => {
         schoolSessionDispatch(alertSuccess("Changes Saved"));

@@ -27,7 +27,7 @@ function UserUpdatePassword({ open, setOpen }) {
     confirmPassword: "",
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: updateUserPassword,
   });
 
@@ -41,9 +41,9 @@ function UserUpdatePassword({ open, setOpen }) {
       allowOutsideClick: false,
     }).then(({ isConfirmed, isDenied, isDismissed }) => {
       if (isConfirmed) {
-        mutateAsync(values, {
+        mutate(values, {
           onSuccess: (data) => {
-            queryClient.invalidateQueries(["user", id]);
+            queryClient.invalidateQueries({ queryKey: ["user", id] });
             schoolSessionDispatch(alertSuccess(data));
             options.setSubmitting(false);
             handleClose();

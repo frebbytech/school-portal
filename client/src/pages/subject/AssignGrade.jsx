@@ -66,7 +66,7 @@ const AssignGrade = () => {
     });
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: assignGradeToLevel,
   });
 
@@ -85,9 +85,9 @@ const AssignGrade = () => {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(info, {
+        mutate(info, {
           onSettled: () => {
-            queryClient.invalidateQueries(["levels"]);
+            queryClient.invalidateQueries({ queryKey: ["levels"] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));

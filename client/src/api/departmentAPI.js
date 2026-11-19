@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Departments
@@ -10,7 +11,7 @@ export const getAllDepartments = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -23,7 +24,7 @@ export const getDepartment = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -37,7 +38,7 @@ export const postDepartment = async (newDepartment) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -51,7 +52,7 @@ export const putDepartment = async (id, department) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -64,7 +65,7 @@ export const deleteDepartment = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const deleteDepartments = async (departments) => {
@@ -77,6 +78,6 @@ export const deleteDepartments = async (departments) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };

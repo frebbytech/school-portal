@@ -31,7 +31,7 @@ const AddSchoolSession = ({ open, setOpen }) => {
   const queryClient = useQueryClient();
 
   //ADD New Session
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postTerm,
   });
 
@@ -53,7 +53,7 @@ const AddSchoolSession = ({ open, setOpen }) => {
     // console.log(values);
     // return;
 
-    mutateAsync(
+    mutate(
       {
         core: {
           ...values,
@@ -66,7 +66,7 @@ const AddSchoolSession = ({ open, setOpen }) => {
       },
       {
         onSettled: () => {
-          queryClient.invalidateQueries(["terms"]);
+          queryClient.invalidateQueries({ queryKey: ["terms"] });
         },
         onSuccess: () => {
           schoolSessionDispatch(alertSuccess('New Session Created!'));

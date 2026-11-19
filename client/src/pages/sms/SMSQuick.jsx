@@ -33,10 +33,10 @@ const SMSQuick = () => {
     [radioValue]
   );
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: postMessage });
+  const { mutate, isPending } = useMutation({ mutationFn: postMessage });
   const onSubmit = (values, options) => {
     values.rate = "quick";
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
         options.setSubmitting(false);
       },

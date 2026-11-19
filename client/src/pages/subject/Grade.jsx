@@ -60,7 +60,7 @@ function Grade() {
       return params;
     });
   };
-  const { isPending, mutateAsync } = useMutation({
+  const { isPending, mutate } = useMutation({
     mutationFn: deleteGrade,
   });
 
@@ -72,9 +72,9 @@ function Grade() {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(id, {
+        mutate(id, {
           onSettled: () => {
-            queryClient.invalidateQueries(["grades"]);
+            queryClient.invalidateQueries({ queryKey: ["grades"] });
           },
           onSuccess: () => {
             schoolSessionDispatch(alertSuccess("Grade Removed!"));

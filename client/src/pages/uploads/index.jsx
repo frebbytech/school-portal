@@ -238,7 +238,7 @@ const Uploads = () => {
     //   });
   }
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: putBulkData,
   });
 
@@ -292,7 +292,7 @@ const Uploads = () => {
           };
         }
 
-        mutateAsync(
+        mutate(
           {
             ...payload,
             onProgress: setUploadProgress,

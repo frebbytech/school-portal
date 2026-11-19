@@ -57,14 +57,14 @@ export const getUser = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
 export const postUser = async (user) => {
   const formData = new FormData();
   //User
-  formData.append("profile", user.profile);
+  if (user.profile instanceof Blob) formData.append("profile", user.profile);
   formData.append("firstname", user.firstname);
   formData.append("lastname", user.lastname);
   formData.append("fullname", user.fullname);
@@ -91,7 +91,7 @@ export const postUser = async (user) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -113,7 +113,7 @@ export const updateUserProfileImage = async ({ _id, profile }) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -127,7 +127,7 @@ export const updateUserPassword = async (passwordInfo) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -168,7 +168,7 @@ export const logOut = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -182,7 +182,7 @@ export const enableOrDisableAccount = async (info) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -195,7 +195,7 @@ export const deleteUser = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 

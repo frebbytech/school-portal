@@ -49,7 +49,7 @@ function EventHome() {
     handleDeleteEvents();
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: deleteEvents,
   });
 
@@ -62,11 +62,11 @@ function EventHome() {
       const events = _.map(selectedEvents, "_id");
 
       if (isConfirmed) {
-        mutateAsync(
+        mutate(
           { events },
           {
             onSettled: () => {
-              queryClient.invalidateQueries(["events"]);
+              queryClient.invalidateQueries({ queryKey: ["events"] });
             },
             onSuccess: (data) => {
               schoolSessionDispatch(alertSuccess(data));

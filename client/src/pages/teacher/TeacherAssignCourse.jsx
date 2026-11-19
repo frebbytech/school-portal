@@ -61,7 +61,7 @@ const TeacherAssignCourse = () => {
     enabled: !!id,
   });
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postCourse,
   });
 
@@ -83,9 +83,9 @@ const TeacherAssignCourse = () => {
           subjectName: values?.subject?.name,
         };
 
-        mutateAsync(info, {
+        mutate(info, {
           onSettled: () => {
-            queryClient.invalidateQueries(["courses", id]);
+            queryClient.invalidateQueries({ queryKey: ["courses", id] });
             options.setSubmitting(false);
           },
           onSuccess: (data) => {

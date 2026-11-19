@@ -112,7 +112,7 @@ const MoreAnnouncements = () => {
     );
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: deleteAnnouncement,
   });
 
@@ -127,9 +127,9 @@ const MoreAnnouncements = () => {
       // const announcements = _.map(selectedAnnouncements, "_id");
 
       if (isConfirmed) {
-        mutateAsync(id, {
+        mutate(id, {
           onSettled: () => {
-            queryClient.invalidateQueries(["announcements"]);
+            queryClient.invalidateQueries({ queryKey: ["announcements"] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));
@@ -152,13 +152,13 @@ const MoreAnnouncements = () => {
       showCancelButton: true,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        multipleDeleteAnnouncements.mutateAsync(
+        multipleDeleteAnnouncements.mutate(
           {
             announcements: selectedAnnouncements,
           },
           {
             onSettled: () => {
-              queryClient.invalidateQueries(["announcements"]);
+              queryClient.invalidateQueries({ queryKey: ["announcements"] });
             },
             onSuccess: (data) => {
               schoolSessionDispatch(alertSuccess(data));

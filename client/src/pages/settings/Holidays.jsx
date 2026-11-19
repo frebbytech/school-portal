@@ -68,7 +68,7 @@ const Holidays = () => {
   const createHoliday = useMutation({
     mutationFn: postHoliday,
     onSuccess: () => {
-      queryClient.invalidateQueries(["holidays"]);
+      queryClient.invalidateQueries({ queryKey: ["holidays"] });
       handleClose();
       schoolSessionDispatch(alertSuccess("New Holiday Added!"));
     },
@@ -80,7 +80,7 @@ const Holidays = () => {
   const deleteHolidays = useMutation({
     mutationFn: deleteHoliday,
     onSuccess: () => {
-      queryClient.invalidateQueries(["holidays"]);
+      queryClient.invalidateQueries({ queryKey: ["holidays"] });
       // queryClient.removeQueries(["holiday", deletedId]);
       schoolSessionDispatch(alertSuccess("Holiday Removed"));
     },
@@ -92,7 +92,7 @@ const Holidays = () => {
   const updateHoliday = useMutation({
     mutationFn: putHoliday,
     onSuccess: (data) => {
-      queryClient.invalidateQueries(["holidays"]);
+      queryClient.invalidateQueries({ queryKey: ["holidays"] });
       queryClient.setQueryData(["holidays", data._id], data);
       handleClose();
       schoolSessionDispatch(alertSuccess("Changes Saved!"));
@@ -121,7 +121,7 @@ const Holidays = () => {
       recurring: isRecurring,
     };
 
-    await createHoliday.mutateAsync(newHoliday);
+    createHoliday.mutate(newHoliday);
   };
 
   const handleEditHoliday = async () => {
@@ -132,11 +132,11 @@ const Holidays = () => {
       recurring: isRecurring,
     };
 
-    await updateHoliday.mutateAsync(newHoliday);
+    updateHoliday.mutate(newHoliday);
   };
 
   const handleDeleteHoliday = async (id) => {
-    await deleteHolidays.mutateAsync(id);
+    deleteHolidays.mutate(id);
   };
 
   const resetForm = () => {

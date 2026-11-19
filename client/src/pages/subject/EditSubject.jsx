@@ -30,13 +30,13 @@ function EditSubject() {
   } = useContext(SchoolSessionContext);
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: putSubject,
   });
   const onSubmit = (values) => {
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["subjects"]);
+        queryClient.invalidateQueries({ queryKey: ["subjects"] });
       },
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));

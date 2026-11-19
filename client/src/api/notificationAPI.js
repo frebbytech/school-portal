@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students
@@ -10,7 +11,7 @@ export const getAllNotifications = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -23,7 +24,7 @@ export const getNotification = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -37,7 +38,7 @@ export const postNotification = async (newNotification) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -51,7 +52,7 @@ export const putNotification = async (notification) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -64,7 +65,7 @@ export const markNotificationAsRead = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -77,7 +78,7 @@ export const markAllNotificationAsRead = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -90,7 +91,7 @@ export const deleteNotification = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const deleteNotifications = async (id) => {
@@ -102,6 +103,6 @@ export const deleteNotifications = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };

@@ -53,10 +53,10 @@ const AddStudentModal = () => {
     levelName: levelName,
     session: session,
   };
-  const { mutateAsync } = useMutation(postStudent);
+  const { mutate } = useMutation(postStudent);
   const onSubmit = (values, options) => {
     // //console.log(values);
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
         options.setSubmitting(false);
       },

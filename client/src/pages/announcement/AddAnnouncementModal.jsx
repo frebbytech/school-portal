@@ -44,7 +44,7 @@ const AddAnnouncementModal = ({ open, onClose }) => {
   const { session } = React.useContext(UserContext);
   const { schoolSessionDispatch } = React.useContext(SchoolSessionContext);
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postAnnouncement,
   });
 
@@ -81,7 +81,7 @@ const AddAnnouncementModal = ({ open, onClose }) => {
   const onSubmit = async (values) => {
     // console.log(values);
     // return;
-    await mutateAsync(
+    mutate(
       {
         ...values,
         bgColor: getPriorityColor(values.priority),
@@ -90,7 +90,7 @@ const AddAnnouncementModal = ({ open, onClose }) => {
       },
       {
         onSettled: () => {
-          queryClient.invalidateQueries(["announcements"]);
+          queryClient.invalidateQueries({ queryKey: ["announcements"] });
         },
         onSuccess: () => {
           schoolSessionDispatch(alertSuccess("Announcement Created"));
@@ -289,7 +289,7 @@ export default AddAnnouncementModal;
 //   const { session } = use(UserContext);
 //   const { schoolSessionDispatch } = use(SchoolSessionContext);
 
-//   const { mutateAsync, isPending } = useMutation({
+//   const { mutate, isPending } = useMutation({
 //     mutationFn: postAnnouncement,
 //   });
 
@@ -301,7 +301,7 @@ export default AddAnnouncementModal;
 //     },
 //     validationSchema: validationSchema,
 //     onSubmit: (values) => {
-//       mutateAsync(
+//       mutate(
 //         {
 //           ...values,
 //           bgColor: getPriorityColor(values.priority),
@@ -310,7 +310,7 @@ export default AddAnnouncementModal;
 //         },
 //         {
 //           onSettled: () => {
-//             queryClient.invalidateQueries(["announcements"]);
+//             queryClient.invalidateQueries({ queryKey: ["announcements"] });
 //           },
 //           onSuccess: () => {
 //             schoolSessionDispatch(alertSuccess("Announcement Created"));

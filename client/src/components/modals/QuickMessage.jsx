@@ -1,4 +1,5 @@
 import React, { useContext, useMemo, useState } from "react";
+import { thrownMessage } from "@/lib/formErrors";
 import {
   Stack,
   TextField,
@@ -104,7 +105,7 @@ const QuickMessage = () => {
     } catch (error) {
       schoolSessionDispatch({
         type: "showAlert",
-        payload: { severity: "error", message: error },
+        payload: { severity: "error", message: thrownMessage(error) },
       });
     }
   };
@@ -360,7 +361,7 @@ export default QuickMessage;
 //           type: "showAlert",
 //           payload: {
 //             severity: "error",
-//             message: error,
+//             message: thrownMessage(error),
 //           },
 //         });
 //       },

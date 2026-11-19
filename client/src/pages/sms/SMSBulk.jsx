@@ -31,13 +31,13 @@ const SMSBulk = () => {
   const [radioValue, setRadioValue] = useState("sms");
   const [group, setGroup] = useState("students");
 
-  const { mutateAsync, isPending } = useMutation(postMessage);
+  const { mutate, isPending } = useMutation(postMessage);
   const onSubmit = (values, options) => {
     values.rate = "bulk";
     values.group = group;
     values.type = radioValue;
 
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
         options.setSubmitting(false);
       },

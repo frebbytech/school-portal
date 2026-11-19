@@ -76,9 +76,9 @@ function NewEvent() {
     },
   });
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postEvent,
-    onSettled: () => queryClient.invalidateQueries(["events"]),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
     onSuccess: () => {
       schoolSessionDispatch(alertSuccess("Event Created"));
       navigate("/events");
@@ -89,7 +89,7 @@ function NewEvent() {
   });
 
   const onSubmit = (values) => {
-    mutateAsync({
+    mutate({
       ...values,
       session: session?.sessionId,
       term: session?.termId,

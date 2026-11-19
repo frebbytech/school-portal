@@ -55,7 +55,7 @@ function AddGrade({ open, setOpen }) {
     setGrades(filteredGrades);
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postGrades,
   });
 
@@ -67,9 +67,9 @@ function AddGrade({ open, setOpen }) {
       ratings: grades,
     };
 
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["grades"]);
+        queryClient.invalidateQueries({ queryKey: ["grades"] });
       },
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));

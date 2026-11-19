@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from './customAxios';
 
 //Get all Students
@@ -13,7 +14,7 @@ export const getGrades = async (session, term) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -26,7 +27,7 @@ export const getGrade = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -40,7 +41,7 @@ export const postGrades = async (newGrade) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -54,7 +55,7 @@ export const putGrade = async (updatedGrade) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -68,6 +69,6 @@ export const deleteGrade = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };

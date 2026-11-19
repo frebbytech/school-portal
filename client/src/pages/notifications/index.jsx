@@ -49,7 +49,7 @@ function Notifications() {
     handleDeleteNotifications();
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: deleteNotifications,
   });
 
@@ -62,11 +62,11 @@ function Notifications() {
       const notifications = _.map(selectedNotifications, "_id");
 
       if (isConfirmed) {
-        mutateAsync(
+        mutate(
           { notifications },
           {
             onSettled: () => {
-              queryClient.invalidateQueries(["notifications"]);
+              queryClient.invalidateQueries({ queryKey: ["notifications"] });
             },
             onSuccess: (data) => {
               schoolSessionDispatch(alertSuccess(data));

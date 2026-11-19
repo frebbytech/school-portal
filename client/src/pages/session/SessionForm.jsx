@@ -1,4 +1,5 @@
 import React, { useContext, useEffect } from "react";
+import { thrownMessage } from "@/lib/formErrors";
 import { useForm } from "react-hook-form";
 import _ from "lodash";
 import {
@@ -139,7 +140,7 @@ function SessionForm() {
         if (isValid) setActiveStep((prev) => prev + 1);
       } catch (error) {
         setError("core.term", {
-          message: error,
+          message: thrownMessage(error),
           type: "custom",
         });
       }

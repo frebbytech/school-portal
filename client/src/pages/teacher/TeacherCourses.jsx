@@ -39,7 +39,7 @@ function TeacherCourses() {
   });
 
   //Delete Course
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: deleteCourse,
   });
 
@@ -51,9 +51,9 @@ function TeacherCourses() {
       backdrop:false
     }).then((data) => {
       if (data.isConfirmed) {
-        mutateAsync(_id, {
+        mutate(_id, {
           onSettled: () => {
-            queryClient.invalidateQueries(["courses", id]);
+            queryClient.invalidateQueries({ queryKey: ["courses", id] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));

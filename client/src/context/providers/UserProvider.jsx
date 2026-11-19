@@ -188,7 +188,7 @@ const UserProvider = ({ children }) => {
 
   //LOG OUT from System
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: logOut,
   });
 
@@ -200,7 +200,7 @@ const UserProvider = ({ children }) => {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(
+        mutate(
           {},
           {
             onSettled: () => {

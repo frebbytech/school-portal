@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from './customAxios';
 
 
@@ -11,7 +12,7 @@ export const getAllHolidays = async (year) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -25,7 +26,7 @@ export const getHoliday = async (id) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -39,7 +40,7 @@ export const postHoliday = async (newHoliday) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -55,7 +56,7 @@ export const putHoliday = async (holiday) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -68,7 +69,7 @@ export const deleteHoliday = async (id) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 export const deleteHolidays = async (holidays) => {
@@ -81,6 +82,6 @@ export const deleteHolidays = async (holidays) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };

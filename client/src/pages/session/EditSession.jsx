@@ -62,15 +62,15 @@ const EditSession = () => {
     });
   }, [session.data, reset]);
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: putTerm,
   });
 
   const onSubmit = (values) => {
-    mutateAsync(values, {
+    mutate(values, {
       onSettled: () => {
-        queryClient.invalidateQueries(["terms"]);
-        queryClient.invalidateQueries(["terms/:id", searchParams.get("_id")]);
+        queryClient.invalidateQueries({ queryKey: ["terms"] });
+        queryClient.invalidateQueries({ queryKey: ["terms/:id", searchParams.get("_id")] });
       },
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));

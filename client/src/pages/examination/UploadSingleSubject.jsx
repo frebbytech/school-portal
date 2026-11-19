@@ -142,7 +142,7 @@ const UploadSingleSubject = () => {
     }
   }
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postBulkExams,
   });
 
@@ -164,9 +164,9 @@ const UploadSingleSubject = () => {
           results: data,
         };
 
-        mutateAsync(students, {
+        mutate(students, {
           onSettled: () => {
-            queryClient.invalidateQueries(["all-results"]);
+            queryClient.invalidateQueries({ queryKey: ["all-results"] });
             queryClient.invalidateQueries([
               "subject-score",
               levelId,

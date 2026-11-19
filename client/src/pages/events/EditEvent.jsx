@@ -90,13 +90,13 @@ function EditEvent() {
     },
   });
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: putEvent,
   });
 
   const onSubmit = (values) => {
-    mutateAsync(values, {
-      onSettled: () => queryClient.invalidateQueries(["events"]),
+    mutate(values, {
+      onSettled: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));
         navigate("/events");

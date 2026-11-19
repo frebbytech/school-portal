@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from './customAxios';
 
 //Get all Students
@@ -10,7 +11,7 @@ export const getAllCourses = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -26,7 +27,7 @@ export const getCourse = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -42,7 +43,7 @@ export const getCourseDashboardInfo = async (session) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -58,7 +59,7 @@ export const getCourseByTeacher = async (session) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -72,7 +73,7 @@ export const postCourse = async (newCourse) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -86,7 +87,7 @@ export const putCourse = async (updatedCourse) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -99,6 +100,6 @@ export const deleteCourse = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };

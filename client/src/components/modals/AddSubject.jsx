@@ -65,13 +65,13 @@ const AddSubject = ({ open, setOpen }) => {
     });
   };
 
-  const { mutateAsync } = useMutation(putCurrentSujectsByCurrentLevel);
+  const { mutate } = useMutation(putCurrentSujectsByCurrentLevel);
 
   const handleSaveSubjects = () => {
     setMsg({ text: "" });
     const values = _.difference(subjectList, currentSubjects.data);
 
-    mutateAsync(values, {
+    mutate(values, {
       onSuccess: () => {
         setSubjectList([]);
         currentSubjects.refetch();

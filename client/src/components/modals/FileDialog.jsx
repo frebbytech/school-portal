@@ -63,7 +63,7 @@ function FileDialog() {
     });
   };
 
-  const { mutateAsync } = useMutation({
+  const { mutate } = useMutation({
     mutationFn: postManyStudents,
   });
   const handlePostStudents = () => {
@@ -85,9 +85,9 @@ function FileDialog() {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(data, {
+        mutate(data, {
           onSettled: () => {
-            queryClient.invalidateQueries(['current-students']);
+            queryClient.invalidateQueries({ queryKey: ['current-students'] });
             setIsLoading(false);
           },
           onSuccess: (data) => {

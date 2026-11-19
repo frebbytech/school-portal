@@ -53,7 +53,7 @@ const EditLevel = () => {
   });
 
   // Update mutation
-  const { mutateAsync, isPending } = useMutation({ mutationFn: putLevel });
+  const { mutate, isPending } = useMutation({ mutationFn: putLevel });
 
   // Setup React Hook Form
   const {
@@ -116,10 +116,10 @@ const EditLevel = () => {
 
   
 
-    mutateAsync(updatedLevel, {
+    mutate(updatedLevel, {
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));
-        queryClient.invalidateQueries(["levels"]);
+        queryClient.invalidateQueries({ queryKey: ["levels"] });
         handleClose();
       },
       onError: (error) => {

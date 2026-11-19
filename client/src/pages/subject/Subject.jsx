@@ -41,7 +41,7 @@ function Subject() {
     });
   };
 
-  const { isPending, mutateAsync } = useMutation({
+  const { isPending, mutate } = useMutation({
     mutationFn: deleteSubject,
   });
   const removeSubject = (id) => {
@@ -53,9 +53,9 @@ function Subject() {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(id, {
+        mutate(id, {
           onSettled: () => {
-            queryClient.invalidateQueries(["subjects"]);
+            queryClient.invalidateQueries({ queryKey: ["subjects"] });
           },
           onSuccess: () => {
             schoolSessionDispatch(alertSuccess("Subject Removed!"));

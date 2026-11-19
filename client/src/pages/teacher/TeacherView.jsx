@@ -59,7 +59,7 @@ const TeacherView = () => {
 
   //DELETE Teacher Info
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: deleteTeacher,
   });
 
@@ -71,7 +71,7 @@ const TeacherView = () => {
       backdrop: false,
     }).then((data) => {
       if (data.isConfirmed) {
-        mutateAsync(id, {
+        mutate(id, {
           onSuccess: (data) => {
             navigate(`/teachers`);
             queryClient.invalidateQueries({ queryKey: ["teachers"] });

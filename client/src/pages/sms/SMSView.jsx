@@ -29,7 +29,7 @@ function SMSView() {
     schoolSessionDispatch,
   } = useContext(SchoolSessionContext);
 
-  const { mutateAsync, isPending } = useMutation({ mutationFn: resendMessage });
+  const { mutate, isPending } = useMutation({ mutationFn: resendMessage });
   const onSend = () => {
     const message = {
       id: data?._id,
@@ -38,9 +38,9 @@ function SMSView() {
       recipient: data?.recipient,
     };
 
-    mutateAsync(message, {
+    mutate(message, {
       onSettled: () => {
-        queryClient.invalidateQueries(["messages"]);
+        queryClient.invalidateQueries({ queryKey: ["messages"] });
       },
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));
@@ -52,7 +52,7 @@ function SMSView() {
     });
   };
 
-  const { mutateAsync: deleteMutateAsync, isPending: dLoading } = useMutation({
+  const { mutate: deleteMutateAsync, isPending: dLoading } = useMutation({
     mutationFn: deleteMessage,
   });
   const handleDelete = () => {
@@ -65,7 +65,7 @@ function SMSView() {
       if (isConfirmed) {
         deleteMutateAsync(data?._id, {
           onSettled: () => {
-            queryClient.invalidateQueries(["messages"]);
+            queryClient.invalidateQueries({ queryKey: ["messages"] });
           },
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));

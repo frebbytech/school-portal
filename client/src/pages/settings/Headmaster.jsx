@@ -56,7 +56,7 @@ const Headmaster = () => {
     });
   }, [session, reset]);
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: updateTermDetails,
   });
 
@@ -67,10 +67,10 @@ const Headmaster = () => {
       headmaster: values,
     };
 
-    mutateAsync(details, {
+    mutate(details, {
       onSettled: () => {
-        queryClient.invalidateQueries(["terms"]);
-        queryClient.invalidateQueries(["terms/:id"]);
+        queryClient.invalidateQueries({ queryKey: ["terms"] });
+        queryClient.invalidateQueries({ queryKey: ["terms/:id"] });
       },
       onSuccess: (data) => {
         updateSession({

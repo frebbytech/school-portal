@@ -40,7 +40,7 @@ const ParentNew = ({ open, setOpen }) => {
   const queryClient = useQueryClient();
   const { studentId } = useParams();
 
-  const { isPending, mutateAsync } = useMutation({ mutationFn: postParent });
+  const { isPending, mutate } = useMutation({ mutationFn: postParent });
 
   const {
     control,
@@ -76,9 +76,9 @@ const ParentNew = ({ open, setOpen }) => {
       })),
     };
 
-    await mutateAsync(payload, {
+    mutate(payload, {
       onSettled: () => {
-        queryClient.invalidateQueries(["student-profile", studentId]);
+        queryClient.invalidateQueries({ queryKey: ["student-profile", studentId] });
       },
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));

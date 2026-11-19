@@ -35,7 +35,7 @@ function AddStudentRecord() {
   } = useContext(SchoolSessionContext);
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: updateExams,
   });
   const onSubmit = (values) => {
@@ -58,7 +58,7 @@ function AddStudentRecord() {
       ],
     };
 
-    mutateAsync(result, {
+    mutate(result, {
       onSettled: () => {
         queryClient.invalidateQueries({
           queryKey: ["subject-score", levelId, searchParams.get("_id")],

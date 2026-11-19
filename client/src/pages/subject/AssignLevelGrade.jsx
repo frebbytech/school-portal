@@ -39,7 +39,7 @@ const AssignLevelGrade = ({ levelName }) => {
     enabled: !!session?.sessionId && !!session?.termId,
   });
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: assignGradeToLevel,
   });
 
@@ -56,7 +56,7 @@ const AssignLevelGrade = ({ levelName }) => {
       backdrop: false,
     }).then(({ isConfirmed }) => {
       if (isConfirmed) {
-        mutateAsync(info, {
+        mutate(info, {
           onSettled: () => {
             queryClient.invalidateQueries({
               queryKey: ["exams-details", levelId],

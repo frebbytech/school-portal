@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 
 import api from './customAxios';
 
@@ -12,7 +13,7 @@ export const getAllMessages = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -28,7 +29,7 @@ export const getMessage = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -42,7 +43,7 @@ export const postMessage = async (newMessage) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -70,7 +71,7 @@ export const putMessage = async (updatedMessage) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };
 
@@ -83,6 +84,6 @@ export const deleteMessage = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data
+    throw normalizeApiError(error);
   }
 };

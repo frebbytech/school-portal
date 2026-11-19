@@ -36,14 +36,14 @@ const TeacherAdd = ({ setTab }) => {
   const [initValues] = useState(teacherInitialValues);
 
   //Post teacher
-  const { isPending, mutateAsync } = useMutation({
+  const { isPending, mutate } = useMutation({
     mutationFn: postTeacher,
   });
   const onSubmit = (values, options) => {
     values.dateofbirth = dayjs(dob).format("L");
-    mutateAsync(values, {
+    mutate(values, {
       onSuccess: (data) => {
-        queryClient.invalidateQueries(["teachers"]);
+        queryClient.invalidateQueries({ queryKey: ["teachers"] });
         schoolSessionDispatch(alertSuccess(data));
         options.resetForm();
         setProfieImg(null);

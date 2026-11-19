@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Students
@@ -11,7 +12,7 @@ export const getAllAnnouncements = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -24,7 +25,7 @@ export const getAnnouncement = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -38,7 +39,7 @@ export const postAnnouncement = async (newAnnouncement) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -52,7 +53,7 @@ export const putAnnouncement = async (announcement) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -65,7 +66,7 @@ export const deleteAnnouncement = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const deleteAnnouncements = async (announcements) => {
@@ -78,6 +79,6 @@ export const deleteAnnouncements = async (announcements) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };

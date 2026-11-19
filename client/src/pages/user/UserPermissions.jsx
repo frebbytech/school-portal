@@ -107,7 +107,7 @@ function UserPermissions() {
   };
 
   // ✅ Mutation logic
-  const { mutateAsync, isLoading } = useMutation({
+  const { mutate, isLoading } = useMutation({
     mutationFn: putUser,
   });
 
@@ -119,10 +119,10 @@ function UserPermissions() {
       confirmButtonText: "Yes, Save",
     }).then(async ({ isConfirmed }) => {
       if (isConfirmed) {
-        await mutateAsync(
+        mutate(
           { _id: id, permissions: values.permissions },
           {
-            onSettled: () => queryClient.invalidateQueries(["user", id]),
+            onSettled: () => queryClient.invalidateQueries({ queryKey: ["user", id] }),
             onSuccess: () => {
               // if (data?.token) {
               //   updateAccessToken(data?.token);
@@ -340,7 +340,7 @@ export default UserPermissions;
 //   };
 
 //   // ✅ Submit handler
-//   const { mutateAsync, isLoading } = useMutation({
+//   const { mutate, isLoading } = useMutation({
 //     mutationFn: putUser,
 //   });
 
@@ -353,10 +353,10 @@ export default UserPermissions;
 //       confirmButtonText: "Yes, Save",
 //     }).then(async ({ isConfirmed }) => {
 //       if (isConfirmed) {
-//         await mutateAsync(
+//         mutate(
 //           { _id: id, permissions: values.permissions },
 //           {
-//             onSettled: () => queryClient.invalidateQueries(["employee", id]),
+//             onSettled: () => queryClient.invalidateQueries({ queryKey: ["employee", id] }),
 //             onSuccess: (data) => schoolSessionDispatch(alertSuccess(data)),
 //             onError: (error) => schoolSessionDispatch(alertError(error)),
 //           }
@@ -542,7 +542,7 @@ export default UserPermissions;
 //     );
 //   };
 
-//   const { mutateAsync, isLoading } = useMutation({
+//   const { mutate, isLoading } = useMutation({
 //     mutationFn: putUser,
 //   });
 //   const handleSavePermissions = () => {
@@ -557,9 +557,9 @@ export default UserPermissions;
 //       showCancelButton: true,
 //     }).then(({ isConfirmed }) => {
 //       if (isConfirmed) {
-//         mutateAsync(values, {
+//         mutate(values, {
 //           onSettled: () => {
-//             queryClient.invalidateQueries(["employee", id]);
+//             queryClient.invalidateQueries({ queryKey: ["employee", id] });
 //           },
 //           onSuccess: (data) => {
 //             schoolSessionDispatch(alertSuccess(data));

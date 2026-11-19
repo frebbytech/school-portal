@@ -105,9 +105,9 @@ function NewAttendance({ to }) {
   };
 
   // Mutations
-  const { mutateAsync: saveAttendance, isPending: isPostingAttendance } =
+  const { mutate: saveAttendance, isPending: isPostingAttendance } =
     useMutation({ mutationFn: postAttendance });
-  const { mutateAsync: saveStudentAttendance, isPending } = useMutation({
+  const { mutate: saveStudentAttendance, isPending } = useMutation({
     mutationFn: postStudentAttendance,
   });
 

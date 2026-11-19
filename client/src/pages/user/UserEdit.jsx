@@ -42,13 +42,20 @@ const UserEdit = () => {
   });
 
   useEffect(() => {
-    setDob(dayjs(user?.data?.dateofbirth));
+    const born = user?.data?.dateofbirth ? dayjs(user.data.dateofbirth) : null;
+    setDob(born?.isValid() ? born : null);
   }, [user?.data]);
 
   //PUT user
   const { mutate, isPending } = useMutation({ mutationFn: putUser });
   const onSubmit = (values, options) => {
     delete values.profile;
+    if (!dob || !dayjs(dob).isValid()) {
+      options.setFieldTouched("dateofbirth", true, false);
+      options.setFieldError("dateofbirth", "Required*");
+      options.setSubmitting(false);
+      return;
+    }
     values.dateofbirth = dayjs(dob).format("L");
     values.isOnlyUpdate = true;
 
@@ -217,9 +224,6 @@ const UserEdit = () => {
                     helperText={touched.role && errors.role}
                   >
                     <MenuItem value="administrator">Administrator</MenuItem>
-                    <MenuItem value="director">Director</MenuItem>
-                    <MenuItem value="secretary">Secretary</MenuItem>
-                    <MenuItem value="coordinator">Exams Coordinator</MenuItem>
                     <MenuItem value="teacher">Teacher</MenuItem>
                   </TextField>
                   <Typography

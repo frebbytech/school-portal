@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from './customAxios';
 
 
@@ -11,7 +12,7 @@ export const getAllSchools = async () => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -25,7 +26,7 @@ export const getSchool = async ({ code }) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -39,7 +40,7 @@ export const postSchool = async (newSchool) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -55,7 +56,7 @@ export const putSchool = async (school) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -68,7 +69,7 @@ export const deleteSchool = async (id) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 export const deleteSchools = async (schools) => {
@@ -81,7 +82,7 @@ export const deleteSchools = async (schools) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
     }
 };
 
@@ -103,7 +104,7 @@ export const updateSchoolLogo = async (data) => {
 
         return res.data;
     } catch (error) {
-        return error.response.data
+        throw normalizeApiError(error);
 
     }
 };

@@ -46,7 +46,7 @@ const SchoolSessionDropdown = () => {
     },
   });
 
-  // const { isPending, mutateAsync } = useMutation({
+  // const { isPending, mutate } = useMutation({
   //   mutationFn: switchTerm,
   // });
 

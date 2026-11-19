@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 //Get all Houses
@@ -10,7 +11,7 @@ export const getAllHouses = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -23,7 +24,7 @@ export const getHouse = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -37,7 +38,7 @@ export const postHouse = async (newHouse) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -51,7 +52,7 @@ export const putHouse = async (id, house) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -64,7 +65,7 @@ export const deleteHouse = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const deleteHouses = async (houses) => {
@@ -77,6 +78,6 @@ export const deleteHouses = async (houses) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };

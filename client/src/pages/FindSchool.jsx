@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { thrownMessage } from "@/lib/formErrors";
 import { SchoolRounded, Search } from "@mui/icons-material";
 import Button from "@mui/material/Button";
 import {
@@ -27,7 +28,7 @@ const FindSchool = () => {
     name: "",
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: getSchool,
   });
 
@@ -40,7 +41,7 @@ const FindSchool = () => {
   });
 
   const onSubmit = async (values) => {
-    await mutateAsync(values, {
+    mutate(values, {
       onSuccess: (data) => {
         if (data?._id) {
           setSchoolDetails(data);
@@ -55,7 +56,7 @@ const FindSchool = () => {
       onError: (error) => {
         setError("code", {
           type: "custom",
-          message: error,
+          message: thrownMessage(error),
         });
       },
     });

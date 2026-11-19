@@ -61,7 +61,7 @@ const UserView = () => {
 
   //DISABLE User Account
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: enableOrDisableAccount,
   });
 
@@ -80,10 +80,10 @@ const UserView = () => {
           active: user?.data?.active ? 0 : 1,
         };
 
-        mutateAsync(info, {
+        mutate(info, {
           onSuccess: (data) => {
-            queryClient.invalidateQueries(["users"]);
-            queryClient.invalidateQueries(["user", id]);
+            queryClient.invalidateQueries({ queryKey: ["users"] });
+            queryClient.invalidateQueries({ queryKey: ["user", id] });
             schoolSessionDispatch(alertSuccess(data));
           },
           onError: (error) => {
@@ -96,7 +96,7 @@ const UserView = () => {
 
   //DELETE User Info
 
-  const { mutateAsync: deleteMutate, isPending: deleteIsLoading } = useMutation(
+  const { mutate: deleteMutate, isPending: deleteIsLoading } = useMutation(
     {
       mutationFn: deleteUser,
     }
@@ -113,7 +113,7 @@ const UserView = () => {
           onSuccess: (data) => {
             schoolSessionDispatch(alertSuccess(data));
             navigate(`/users`);
-            queryClient.invalidateQueries(["users"]);
+            queryClient.invalidateQueries({ queryKey: ["users"] });
           },
           onError: (error) => {
             schoolSessionDispatch(alertError(error));

@@ -89,7 +89,7 @@ const AddSubject = ({ open, setOpen }) => {
     setSubjectList(newSubjects);
   };
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: postSubjects,
   });
 
@@ -99,7 +99,7 @@ const AddSubject = ({ open, setOpen }) => {
     // console.log(subjectList);
     // return;
 
-    mutateAsync(
+    mutate(
       {
         session: session?.sessionId,
         term: session?.termId,
@@ -107,7 +107,7 @@ const AddSubject = ({ open, setOpen }) => {
       },
       {
         onSettled: () => {
-          queryClient.invalidateQueries(["subjects"]);
+          queryClient.invalidateQueries({ queryKey: ["subjects"] });
         },
         onSuccess: (data) => {
           schoolSessionDispatch(alertSuccess(data));
