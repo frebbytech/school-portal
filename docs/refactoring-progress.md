@@ -476,3 +476,7 @@ See row U5j in `ui-refactor-plan.md`. Client only: term, session and level API c
 ## 5w. Student edit screens (2026-11-18)
 
 See row U5k in `ui-refactor-plan.md`. Server: `PUT /students` with `type: "medical"` keeps only the six Yes/No answers and the emergency contact (400 on a bad value). Client: medical and academic edits now send their `type` (before, they saved nothing but answered success); parent API throws; parent and medical dialogs on React Hook Form. Open: class change does not remove the student from the old class list; previous-school report stored as a data URL.
+
+## 5x. Errors returned as results, and user screens (2026-11-19)
+
+See row U5l in `ui-refactor-plan.md`. Client only. Every API module now throws the normalised error; a test guards it. 44 screens use `mutate`; user role options match the server (administrator, teacher). Open: User Add/Edit/password reset still Formik.
