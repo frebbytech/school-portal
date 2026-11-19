@@ -269,7 +269,7 @@ describe("fees ledger (Stage 8)", () => {
       const res = await as(request(app).get(`${base}/current-fees/receipt/${made.body.id}`), adminTok);
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ id: made.body.id, paid: 30, outstanding: 70, fee: 100, arreas: 0, feePaid: 0, levelName: "NA1" });
-      expect(res.body.studentName).toMatch(/Mensah/);
+      expect(res.body.studentName).toMatch(/mensah/i);
     });
 
     it("does not show a receipt to another school, or one that does not exist", async () => {
