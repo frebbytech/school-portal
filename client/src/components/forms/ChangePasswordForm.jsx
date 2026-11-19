@@ -13,7 +13,11 @@ export const changePasswordSchema = yup.object({
     .string()
     .required("Enter a new password")
     .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters`)
-    .notOneOf([yup.ref("oldPassword")], "The new password must be different from the current one"),
+    .test(
+      "different-from-current",
+      "The new password must be different from the current one",
+      (value, ctx) => !value || value !== ctx.parent.oldPassword
+    ),
   confirmPassword: yup
     .string()
     .required("Type the new password again")

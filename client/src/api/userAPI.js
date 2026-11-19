@@ -84,9 +84,6 @@ export const postUser = async (user) => {
       method: "POST",
       url: `/users`,
       data: formData,
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
     });
 
     return res.data;
@@ -106,9 +103,6 @@ export const updateUserProfileImage = async ({ _id, profile }) => {
       method: "PUT",
       url: `/users/profile`,
       data: formData,
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
     });
 
     return res.data;
@@ -141,7 +135,7 @@ export const putUser = async (updatedUser) => {
 
     return res.data;
   } catch (error) {
-    return error?.response?.data;
+    throw normalizeApiError(error);
   }
 };
 

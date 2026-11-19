@@ -28,8 +28,8 @@ function useLevel() {
   const session = readSession();
 
   const {
-    isLoading,
     isFetching,
+    isPlaceholderData,
     refetch,
     error,
     data,
@@ -57,7 +57,7 @@ function useLevel() {
 
   return {
     // True only while the first load is actually under way (not when there is no session yet)
-    levelLoading: isLoading,
+    levelLoading: isFetching && isPlaceholderData,
     levelIsFetching: isFetching,
     levelRefetch: refetch,
     levelError: error,

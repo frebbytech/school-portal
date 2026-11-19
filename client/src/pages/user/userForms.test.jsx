@@ -160,6 +160,7 @@ describe("Password reset dialog", () => {
     mount();
     await userEvent.type(screen.getByLabelText("Password"), "secret-typed-1");
     await userEvent.click(screen.getByRole("button", { name: "shut", hidden: true }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await userEvent.click(screen.getByRole("button", { name: "reopen" }));
     expect(await screen.findByLabelText("Password")).toHaveValue("");
   });

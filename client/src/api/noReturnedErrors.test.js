@@ -13,7 +13,7 @@ describe("API modules report failures by throwing", () => {
     const offenders = fs
       .readdirSync(dir)
       .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js"))
-      .filter((f) => /return\s+error\.response/.test(fs.readFileSync(path.join(dir, f), "utf8")));
+      .filter((f) => /return\s+(error|err)\??\.response/.test(fs.readFileSync(path.join(dir, f), "utf8")));
     expect(offenders).toEqual([]);
   });
 

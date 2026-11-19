@@ -67,8 +67,7 @@ const UpdateUserProfile = () => {
         handleClose();
       },
       onError: (error) => {
-        console.log(error);
-        schoolSessionDispatch(alertError("An unknown error has occurred!"));
+        schoolSessionDispatch(alertError(error));
       },
     });
 
@@ -94,8 +93,7 @@ const UpdateUserProfile = () => {
         setProfileImage(URL.createObjectURL(profile));
       },
       onError: (error) => {
-        console.log(error);
-        schoolSessionDispatch(alertError("An unknown error has occurred!"));
+        schoolSessionDispatch(alertError(error));
       },
     });
   };
