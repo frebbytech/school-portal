@@ -110,21 +110,21 @@ function CustomNotificationItem({
         </Typography>
         <Stack direction="row">
           {active ? (
-            <Tooltip title="Mark as unread">
-              <IconButton onClick={handleMarkAsRead}>
+            <Tooltip title="Mark as read">
+              <IconButton onClick={handleMarkAsRead} aria-label="Mark as read">
                 <LocalLibraryRoundedIcon />
               </IconButton>
             </Tooltip>
           ) : (
-            <Tooltip title="Mark as read">
-              <IconButton>
+            <Tooltip title="Read">
+              <IconButton aria-label="Already read" disableRipple>
                 <LocalLibraryOutlinedIcon />
               </IconButton>
             </Tooltip>
           )}
 
           <Tooltip title="Remove">
-            <IconButton onClick={handleRemove}>
+            <IconButton onClick={handleRemove} aria-label="Remove notification">
               <DeleteRounded />
             </IconButton>
           </Tooltip>

@@ -633,6 +633,34 @@ describe("remaining routers: roles, school scope and allow-lists (Stage 4d)", ()
       expect(String(res.body.user)).toBe(String(teacherA._id));
     });
 
+    it("the board order is saved for the caller, and only for their own notes", async () => {
+      const mk = (title, user = teacherA._id) => make(Note, { user, title, content: "c", color: "#ffc09f" });
+      const a = await mk("First");
+      const b = await mk("Second");
+      const c = await mk("Third");
+      const theirs = await mk("Theirs", teacherB._id);
+
+      const ids = [c, a, b].map((n) => String(n._id));
+      expect((await as(request(app).put(`${base}/notes/order`).send({ ids }), teacherTok)).status).toBe(200);
+      const list = await as(request(app).get(`${base}/notes`), teacherTok);
+      expect(list.body.map((n) => String(n._id))).toEqual(ids);
+
+      // someone else's note, a repeat, a bad id: refused, and the saved order is untouched
+      expect((await as(request(app).put(`${base}/notes/order`).send({ ids: [String(theirs._id), ids[0]] }), teacherTok)).status).toBe(404);
+      expect((await as(request(app).put(`${base}/notes/order`).send({ ids: [ids[0], ids[0]] }), teacherTok)).status).toBe(400);
+      expect((await as(request(app).put(`${base}/notes/order`).send({ ids: ["nope"] }), teacherTok)).status).toBe(400);
+      const again = await as(request(app).get(`${base}/notes`), teacherTok);
+      expect(again.body.map((n) => String(n._id))).toEqual(ids);
+      expect((await Note.findById(theirs._id)).position.x).toBe(0);
+    });
+
+    it("a refused note edit says why in `message`", async () => {
+      const note = await make(Note, { user: teacherA._id, title: "Mine", content: "c", color: "#ffc09f" });
+      const res = await as(request(app).put(`${base}/notes/${note._id}`).send({ title: "", content: "c", color: "#ffc09f" }), teacherTok);
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Title is required");
+    });
+
     it("a user cannot read, change or delete someone else's notifications", async () => {
       const base_ = { school: schoolB._id, session: sessionB._id, term: termB._id, type: "Info", title: "For B", createdBy: adminB._id };
       const n1 = await make(Notification, { ...base_, user: teacherB._id });

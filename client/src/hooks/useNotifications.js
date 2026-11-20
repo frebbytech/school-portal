@@ -17,17 +17,15 @@ export const useNotifications = () => {
   const notifications = useQuery({
     queryKey: ["notifications", user?._id],
     queryFn: getAllNotifications,
-    initialData: [],
     enabled: !!user?._id,
     refetchOnMount: true,
   });
 
+  // `data` is a list while loading and when loading failed; use isPending / isError to
+  // tell "nothing yet" from "nothing to show".
   return {
     ...notifications,
-    data:
-      notifications.data === "Unauthorized Access.Please contact administrator"
-        ? []
-        : notifications?.data,
+    data: Array.isArray(notifications.data) ? notifications.data : [],
   };
 };
 
@@ -38,11 +36,11 @@ export const useMarkAsRead = () => {
   return useMutation({
     mutationFn: (id) => markNotificationAsRead(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(["notifications"]);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
       // schoolSessionDispatch(alertSuccess("Marked As Read"));
     },
-    onError: () => {
-      schoolSessionDispatch(alertError("An unknown error has occurred!"));
+    onError: (error) => {
+      schoolSessionDispatch(alertError(error));
     },
   });
 };
@@ -53,11 +51,11 @@ export const useMarkAll = () => {
   return useMutation({
     mutationFn: (id) => markAllNotificationAsRead(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(["notifications"]);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
       schoolSessionDispatch(alertSuccess("Marked As Read"));
     },
-    onError: () => {
-      schoolSessionDispatch(alertError("An unknown error has occurred!"));
+    onError: (error) => {
+      schoolSessionDispatch(alertError(error));
     },
   });
 };
@@ -69,11 +67,11 @@ export const useDeleteNotification = () => {
   return useMutation({
     mutationFn: (id) => deleteNotification(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(["notifications"]);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
       // schoolSessionDispatch(alertSuccess("Notification Removed"));
     },
-    onError: () => {
-      schoolSessionDispatch(alertError("An unknown error has occurred!"));
+    onError: (error) => {
+      schoolSessionDispatch(alertError(error));
     },
   });
 };
@@ -85,11 +83,11 @@ export const useDeleteAllNotifications = () => {
   return useMutation({
     mutationFn: (id) => deleteNotifications(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(["notifications"]);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
       schoolSessionDispatch(alertSuccess("Notifications Removed"));
     },
-    onError: () => {
-      schoolSessionDispatch(alertError("An unknown error has occurred!"));
+    onError: (error) => {
+      schoolSessionDispatch(alertError(error));
     },
   });
 };

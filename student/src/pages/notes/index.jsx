@@ -4,7 +4,9 @@ import {
   useCreateNote,
   useUpdateNote,
   useDeleteNote,
+  useReorderNotes,
 } from "@/hooks/useNotes";
+import { errorMessage } from "@/lib/errorMessage";
 import NoteFormModal from "@/components/notes/NoteForm";
 import {
   Box,
@@ -17,6 +19,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Stack,
+  Alert,
 } from "@mui/material";
 import level_ico from "@/assets/images/header/level_ico.svg";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -25,7 +28,6 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { useState } from "react";
 import CustomTitle from "@/components/custom/CustomTitle";
 import { Add, RefreshRounded } from "@mui/icons-material";
-import { useQueryClient } from "@tanstack/react-query";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import EmptyDataContainer from "@/components/EmptyDataContainer";
 import NotesSkeleton from "@/components/skeleton/NoteSkeleton";
@@ -36,42 +38,49 @@ export default function NotesBoard() {
     "#333"
   );
 
-  const queryClient = useQueryClient();
-  const { data: notes, isPending, error, refetch } = useNotes();
+  const { data: notes, isPending, isError, error, refetch } = useNotes();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
   const createNote = useCreateNote();
   const updateNote = useUpdateNote();
+  const reorderNotes = useReorderNotes();
   const deleteNote = useDeleteNote();
 
-  const handleSubmit = async (data) => {
+  // `done` closes the form; it is called only when the save worked.
+  const handleSubmit = (data, done) => {
     if (editingNote) {
-      updateNote.mutate({ id: editingNote._id, ...data });
+      updateNote.mutate({ id: editingNote._id, ...data }, { onSuccess: done });
     } else {
-     
-      createNote.mutateAsync({ ...data });
+      createNote.mutate(data, { onSuccess: done });
     }
   };
 
   const handleDragEnd = (result) => {
-    if (!result.destination) return;
+    if (!result.destination || result.destination.index === result.source.index) return;
 
     const newNotes = [...notes];
     const [movedItem] = newNotes.splice(result.source.index, 1);
     newNotes.splice(result.destination.index, 0, movedItem);
 
-    // setNotes(newNotes);
-    queryClient.setQueryData(["notes"], newNotes);
+    reorderNotes.mutate({ notes: newNotes });
   };
 
   if (isPending) return <NotesSkeleton />;
-  if (error) return <div>Error: {error.message}</div>;
+  if (isError) {
+    return (
+      <Container>
+        <Alert severity="error" role="alert" action={<Button color="inherit" size="small" onClick={() => refetch()}>Try again</Button>}>
+          {`Could not load your notes. ${errorMessage(error, "")}`.trim()}
+        </Alert>
+      </Container>
+    );
+  }
   return (
     <Container>
       <CustomTitle
         title="Notes Board"
-        subtitle="Manage user accounts, roles, and permissions to ensure secure and appropriate access to the system."
+        subtitle="Keep private notes. Drag them into the order you like; only you can see them."
         img={level_ico}
          color="primary.main"
         right={
@@ -84,7 +93,7 @@ export default function NotesBoard() {
             >
               New Note
             </Button>
-            <IconButton onClick={refetch} size="large">
+            <IconButton onClick={() => refetch()} size="large" aria-label="Refresh notes">
               <RefreshRounded sx={{ width: 32, height: 32 }} />
             </IconButton>
           </>

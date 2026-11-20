@@ -72,6 +72,20 @@ export const deleteNote = async (id) => {
     throw normalizeApiError(error);
   }
 };
+// Save the order of the board: the ids of the person's notes, first to last.
+export const putNoteOrder = async (ids) => {
+  try {
+    const res = await api({
+      method: 'PUT',
+      url: `/notes/order`,
+      data: { ids },
+    });
+
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+};
 export const deleteNotes = async (notes) => {
   try {
     const res = await api({

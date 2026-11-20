@@ -17,11 +17,12 @@ import {
   useNotifications,
 } from "@/hooks/useNotifications";
 import PropTypes from "prop-types";
+import QueryError from "@/components/QueryError";
 
 const NotificationDrawer = ({ open, setOpen }) => {
   const { user } = useContext(UserContext);
   // console.log(user);
-  const { data, refetch, isPending } = useNotifications();
+  const { data, refetch, isPending, isError, error } = useNotifications();
   const markAllAsRead = useMarkAll();
   const deleteNotification = useDeleteAllNotifications();
   const handleClose = () => setOpen(false);
@@ -33,7 +34,6 @@ const NotificationDrawer = ({ open, setOpen }) => {
     deleteNotification.mutate(user?.id);
   };
 
-  if (isPending) return <p>Please Wait..</p>;
   return (
     <Drawer
       open={open}
@@ -70,8 +70,8 @@ const NotificationDrawer = ({ open, setOpen }) => {
           </Stack>
 
           <Tooltip title="Refresh Notifications">
-            <IconButton>
-              <Refresh onClick={refetch} />
+            <IconButton onClick={() => refetch()} aria-label="Refresh notifications">
+              <Refresh />
             </IconButton>
           </Tooltip>
           <Tooltip title="Close">
@@ -86,20 +86,28 @@ const NotificationDrawer = ({ open, setOpen }) => {
           alignItems="center"
           spacing={1}
         >
-          <Tooltip title="Mark all">
-            <Button size="small" onClick={handleMarkAllAsRead}>
+          <span>
+            <Button size="small" onClick={handleMarkAllAsRead} disabled={!data?.some((n) => n?.active) || markAllAsRead.isPending}>
               Mark all as read
             </Button>
-          </Tooltip>
+          </span>
 
-          <Tooltip title="Clear All">
-            <Button size="small" onClick={handleRemoveAll}>
+          <span>
+            <Button size="small" onClick={handleRemoveAll} disabled={!data?.length || deleteNotification.isPending}>
               Clear All
             </Button>
-          </Tooltip>
+          </span>
         </Stack>
 
-        {data?.length === 0 ? (
+        {isError ? (
+          <Stack px={1.5}>
+            <QueryError what="your notifications" error={error} onRetry={refetch} />
+          </Stack>
+        ) : isPending ? (
+          <Stack height="80svh" justifyContent="center" alignItems="center">
+            <Typography>Loading notifications...</Typography>
+          </Stack>
+        ) : data?.length === 0 ? (
           <Stack
             spacing={2}
             height="80svh"

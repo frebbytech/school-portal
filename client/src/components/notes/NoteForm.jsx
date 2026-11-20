@@ -96,10 +96,9 @@ const NoteFormModal = ({ open, onClose, defaultValues, onSubmit }) => {
         </Box>
 
         <form
-          onSubmit={handleSubmit((data) => {
-            onSubmit(data);
-            handleClose();
-          })}
+          // The form closes only once the save has worked (`done`), so a refused note
+          // keeps what was typed.
+          onSubmit={handleSubmit((data) => onSubmit(data, handleClose))}
         >
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <Input

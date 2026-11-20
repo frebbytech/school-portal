@@ -34,8 +34,8 @@ function Header() {
   const handleOpenBar = () => setOpenMiniBar(true);
   const handleOpenNotificationDrawer = () => setOpenNotificationDrawer(true);
 
-  const handleSubmit = (data) => {
-    createNote.mutate(data);
+  const handleSubmit = (data, done) => {
+    createNote.mutate(data, { onSuccess: done });
   };
 
   const activeNotifications = data?.filter((notif) => notif?.active);
@@ -132,7 +132,7 @@ function Header() {
         onClose={() => {
           setModalOpen(false);
         }}
-        onSubmit={handleSubmit}
+        onSubmitData={handleSubmit}
       />
     </>
   );

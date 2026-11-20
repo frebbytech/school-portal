@@ -34,7 +34,7 @@ import { SCHOOL_PERMISSION, USER_ROLE } from "@/mockup/columns/sessionColumns";
 function Header() {
   const { palette } = useTheme();
   const { user, school_info } = useAuth();
-  const { data, isError, isPending } = useNotifications();
+  const { data } = useNotifications();
   const [modalOpen, setModalOpen] = useState(false);
   const [openMiniBar, setOpenMiniBar] = useState(false);
   const [openNotificationDrawer, setOpenNotificationDrawer] = useState(false);
@@ -57,16 +57,12 @@ function Header() {
     });
   };
 
-  const handleSubmit = (data) => {
-    createNote.mutate(data);
+  const handleSubmit = (data, done) => {
+    createNote.mutate(data, { onSuccess: done });
   };
 
-  if (isPending) {
-    return <Alert severity="info">Loading notifications...</Alert>;
-  }
-  if (isError) {
-    return <Alert severity="error">Failed to load notifications</Alert>;
-  }
+  // A slow or failed notification request must not replace the whole header: the bell
+  // simply shows no number until the list has loaded (the drawer explains a failure).
 
   const activeNotifications =
     _.isArray(data) && data?.filter((notif) => notif?.active);

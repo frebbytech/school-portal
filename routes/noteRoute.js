@@ -5,20 +5,46 @@ const { body, validationResult } = require("express-validator");
 const { isValidObjectId } = require("mongoose");
 const Note = require("../models/noteModel");
 const { requireMember, getPrincipal, pickFields } = require("../middlewares/authorize");
+const { validate, objectIdList } = require("../common/validation");
 
 // Notes are private: every query below is limited to the caller's own notes.
 const NOTE_FIELDS = ["title", "content", "color", "position"];
 
 router.use(requireMember);
 
+// Notes appear in the order the person arranged them (position.x); notes that were never
+// moved all have 0 and keep the old newest-first order.
 router.get(
   "/",
   asyncHandler(async (req, res) => {
     const notes = await Note.find({
       user: getPrincipal(req).id,
-    }).sort({ createdAt: -1 });
+    }).sort({ "position.x": 1, createdAt: -1, _id: -1 });
 
     res.json(notes);
+  })
+);
+
+// Save the order of the board: `ids` lists the caller's note ids, first to last.
+router.put(
+  "/order",
+  validate(objectIdList("body", "ids", { max: 500 })),
+  asyncHandler(async (req, res) => {
+    const ids = req.body.ids;
+    if (new Set(ids).size !== ids.length) {
+      return res.status(400).json({ message: "A note is listed more than once" });
+    }
+
+    const user = getPrincipal(req).id;
+    const owned = await Note.countDocuments({ _id: { $in: ids }, user });
+    if (owned !== ids.length) return res.status(404).json({ message: "Note not found" });
+
+    await Note.bulkWrite(
+      ids.map((id, index) => ({
+        updateOne: { filter: { _id: id, user }, update: { $set: { "position.x": index } } },
+      }))
+    );
+    res.json({ message: "Order saved" });
   })
 );
 
@@ -59,7 +85,7 @@ router.put(
   asyncHandler(async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ message: errors.array()[0].msg, errors: errors.array() });
     }
 
     try {

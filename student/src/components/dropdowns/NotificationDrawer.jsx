@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Alert,
   Button,
   Drawer,
   IconButton,
@@ -17,12 +18,12 @@ import {
   useNotifications,
 } from "@/hooks/useNotifications";
 import { useAuth } from "@/context/AuthProvider";
-import GlobalSpinner from "../spinners/GlobalSpinner";
+import { errorMessage } from "@/lib/errorMessage";
 
 const NotificationDrawer = ({ open, setOpen }) => {
   const { user } = useAuth();
   // console.log(user);
-  const { data, refetch, isPending } = useNotifications();
+  const { data, refetch, isPending, isError, error } = useNotifications();
   const markAllAsRead = useMarkAll();
   const deleteNotification = useDeleteAllNotifications();
   const handleClose = () => setOpen(false);
@@ -34,9 +35,6 @@ const NotificationDrawer = ({ open, setOpen }) => {
     deleteNotification.mutate(user?.id);
   };
 
-  if (isPending) {
-    return <GlobalSpinner />;
-  }
 
   return (
     <Drawer
@@ -75,7 +73,7 @@ const NotificationDrawer = ({ open, setOpen }) => {
 
           <Tooltip title="Refresh Notifications">
             <IconButton>
-              <Refresh onClick={refetch} />
+              <Refresh onClick={() => refetch()} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Close">
@@ -103,7 +101,25 @@ const NotificationDrawer = ({ open, setOpen }) => {
           </Tooltip>
         </Stack>
 
-        {data?.length === 0 ? (
+        {isError ? (
+          <Stack px={1.5}>
+            <Alert
+              severity="error"
+              role="alert"
+              action={
+                <Button color="inherit" size="small" onClick={() => refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              {`Could not load your notifications. ${errorMessage(error, "")}`.trim()}
+            </Alert>
+          </Stack>
+        ) : isPending ? (
+          <Stack height="80svh" justifyContent="center" alignItems="center">
+            <Typography>Loading notifications...</Typography>
+          </Stack>
+        ) : data?.length === 0 ? (
           <Stack
             spacing={2}
             height="80svh"

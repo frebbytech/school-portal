@@ -1,3 +1,4 @@
+import { normalizeApiError } from "./apiError";
 import api from "./customAxios";
 
 
@@ -11,7 +12,7 @@ export const getAllNotes = async () => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -24,7 +25,7 @@ export const getNote = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -39,7 +40,7 @@ export const postNote = async (newNote) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -53,7 +54,7 @@ export const putNote = async (id, note) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 
@@ -66,7 +67,7 @@ export const deleteNote = async (id) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
   }
 };
 export const deleteNotes = async (notes) => {
@@ -79,6 +80,21 @@ export const deleteNotes = async (notes) => {
 
     return res.data;
   } catch (error) {
-    return error.response.data;
+    throw normalizeApiError(error);
+  }
+};
+
+// Save the order of the board: the ids of the student's notes, first to last.
+export const putNoteOrder = async (ids) => {
+  try {
+    const res = await api({
+      method: "PUT",
+      url: `/notes/order`,
+      data: { ids },
+    });
+
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
   }
 };
