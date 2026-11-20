@@ -211,10 +211,34 @@ export const downloadTemplate = async (templateName) => {
 
     document.body.appendChild(link);
     link.click();
+    link.remove();
 
-    window.URL.revokeObjectURL(url);
+    // revoking at once can cancel the download in some browsers
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     return true;
   } catch (error) {
-    console.log(error);
+    // a failed blob request holds the server's message inside the blob: read it
+    const blob = error?.response?.data;
+    if (typeof Blob !== "undefined" && blob instanceof Blob) {
+      try {
+        const text =
+          typeof blob.text === "function"
+            ? await blob.text()
+            : await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = reject;
+                reader.readAsText(blob);
+              });
+        try {
+          error.response.data = JSON.parse(text);
+        } catch {
+          error.response.data = text;
+        }
+      } catch {
+        // keep the generic message
+      }
+    }
+    throw normalizeApiError(error);
   }
 };

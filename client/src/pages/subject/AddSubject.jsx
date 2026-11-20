@@ -174,7 +174,11 @@ const AddSubject = ({ open, setOpen }) => {
   };
 
   const handleDownloadTemplate = async () => {
-    await downloadTemplate("subjects");
+    try {
+      await downloadTemplate("subjects");
+    } catch (error) {
+      schoolSessionDispatch(alertError(error));
+    }
   };
 
   return (

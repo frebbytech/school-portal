@@ -25,7 +25,7 @@ import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { thrownMessage } from "@/lib/formErrors";
 import TextEditor from "@/components/custom/TextEditor";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
-import { bulkWarning, messageSchema, TYPE_LABEL } from "./messageRules";
+import { bulkWarning, messageSchema, smsLength, smsLengthText } from "./messageRules";
 
 const GROUPS = { students: "Students", parents: "Parents", teachers: "Teachers" };
 
@@ -38,6 +38,7 @@ const SMSBulk = () => {
   const {
     control,
     handleSubmit,
+    watch,
     setError,
     clearErrors,
     formState: { errors },
@@ -45,6 +46,9 @@ const SMSBulk = () => {
     resolver: yupResolver(messageSchema(null)),
     defaultValues: { type: "sms", group: "students", title: "", message: "" },
   });
+
+  const [type, title, message] = watch(["type", "title", "message"]);
+  const length = type !== "email" ? smsLengthText(smsLength(title, message)) : "";
 
   const { mutate, isPending } = useMutation({ mutationFn: postMessage });
 
@@ -135,6 +139,12 @@ const SMSBulk = () => {
             <TextEditor label="Message" value={field.value} setValue={field.onChange} touched={Boolean(errors.message)} errors={errors.message?.message} />
           )}
         />
+
+        {length && (
+          <Typography variant="caption" color="text.secondary" aria-live="polite" sx={{ mt: "-16px !important" }}>
+            {length}
+          </Typography>
+        )}
 
         <Button type="submit" variant="contained" disabled={isPending} endIcon={<SendRounded />} sx={{ alignSelf: "flex-end", py: 1.5 }}>
           Send Message

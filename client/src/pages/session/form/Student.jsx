@@ -1,4 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useContext, useState, useRef } from "react";
+import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
+import { alertError } from "@/context/actions/globalAlertActions";
 import _ from "lodash";
 import {
   FormControl,
@@ -39,6 +41,7 @@ import { validateExcelHeaders } from "@/config/helper";
 import { DATA_HEADERS } from "@/mockup/columns/sessionColumns";
 
 const Student = ({ watch, setValue, errors, setError, handleNext }) => {
+  const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const students = watch("students");
   const levels = watch("levels");
   // const [error, setError] = useState("");
@@ -224,7 +227,11 @@ const Student = ({ watch, setValue, errors, setError, handleNext }) => {
   };
 
   const handleDownloadTemplate = async () => {
-    await downloadTemplate("students");
+    try {
+      await downloadTemplate("students");
+    } catch (error) {
+      schoolSessionDispatch(alertError(error));
+    }
   };
 
   return (

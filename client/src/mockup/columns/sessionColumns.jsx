@@ -1,3 +1,4 @@
+import { sanitizeHtml } from "@/lib/safeHtml";
 import React from "react";
 import {
   CircleRounded,
@@ -961,7 +962,7 @@ export const MESSAGE_COLUMNS = [
               py: 1,
             }}
             dangerouslySetInnerHTML={{
-              __html: body.message,
+              __html: sanitizeHtml(body.message),
             }}
           />
         </>
@@ -1473,7 +1474,7 @@ export const NOTIFICATIONS = (
                   height: "50px",
                   overflow: "hidden",
                 }}
-                dangerouslySetInnerHTML={{ __html: data?.description }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(data?.description) }}
               ></div>
             </Stack>
             {/* <ArrowForwardIosRounded /> */}

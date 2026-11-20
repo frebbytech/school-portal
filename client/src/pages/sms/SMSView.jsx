@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import Swal from "sweetalert2";
 import dayjs from "@/lib/dates";
+import { sanitizeHtml } from "@/lib/safeHtml";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
@@ -191,7 +192,7 @@ function SMSView() {
               },
             }}
           />
-          <div dangerouslySetInnerHTML={{ __html: data?.body?.message }}></div>
+          <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(data?.body?.message) }}></div>
         </Stack>
       </DialogContent>
       {isPending && <LoadingSpinner value="Resending Message..." />}

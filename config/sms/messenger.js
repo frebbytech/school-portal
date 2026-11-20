@@ -2,11 +2,18 @@ const axios = require("axios");
 const { logger } = require("../../common/logger");
 const { getInitials, SUBJECT_OPTIONS } = require("../helper");
 
+// The text of one SMS: the title, then the message on the next line. A message with no
+// title has no "undefined" in front of it, and there are no stray indentation spaces.
+const smsText = (body) =>
+  [body?.title, body?.message]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean)
+    .join("\n");
+
 const sendSMS = async (body, telephoneNumber) => {
   try {
     // SEND SMS
-    const message = `${body?.title}
-    ${body?.message}`;
+    const message = smsText(body);
 
     const data = {
       sender: "FrebbyTech",
@@ -68,4 +75,4 @@ const sendReportSMS = async (generatedResult, school) => {
   }
 };
 
-module.exports = { sendSMS, sendReportSMS };
+module.exports = { sendSMS, sendReportSMS, smsText };

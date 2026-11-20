@@ -500,3 +500,7 @@ See row U5p in `ui-refactor-plan.md`. Server: `common/teacherWork.js` `releaseTe
 ## 5ac. Messages tell the truth about delivery (2026-11-20)
 
 See row U5q in `ui-refactor-plan.md`. Server: `common/messageDelivery.js`; `/messages/quick`, `/bulk`, `/resend` answer with what was sent (200), 502 on failure or partial delivery, 422 when nobody can be reached; the Teachers group reads staff users; deactivated people are skipped; SMS carries plain text. Client: Bulk and Quick Message on React Hook Form with a confirmation before a group send; Bulk Messages no longer uses the unsupported `useMutation(fn)` form.
+
+### 5ac addendum (2026-11-20)
+
+Rich text is sanitised on display (`lib/safeHtml.js`, both apps); `downloadTemplate` throws; SMS length counter; `config/sms/messenger.js` `smsText` (no stray spaces, no "undefined").

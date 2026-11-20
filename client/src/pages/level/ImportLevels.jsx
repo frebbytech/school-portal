@@ -249,7 +249,11 @@ const ImportLevels = ({ open, onClose }) => {
   };
 
   const handleDownloadTemplate = async () => {
-    await downloadTemplate("levels");
+    try {
+      await downloadTemplate("levels");
+    } catch (error) {
+      schoolSessionDispatch(alertError(error));
+    }
   };
 
   return (

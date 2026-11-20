@@ -13,6 +13,7 @@ import React from "react";
 import { EMPTY_IMAGES } from "../../config/images";
 import { getEvent } from "../../api/eventAPI";
 import dayjs from "@/lib/dates";
+import { sanitizeHtml } from "@/lib/safeHtml";
 import CustomTitle from "@/components/custom/CustomTitle";
 
 function ViewEvent() {
@@ -138,7 +139,7 @@ function ViewEvent() {
             mb: 2,
           },
         }}
-        dangerouslySetInnerHTML={{ __html: data?.description }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(data?.description) }}
       />
     </Container>
   );

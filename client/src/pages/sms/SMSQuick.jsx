@@ -23,7 +23,7 @@ import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
 import { thrownMessage } from "@/lib/formErrors";
 import TextEditor from "@/components/custom/TextEditor";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
-import { messageSchema } from "./messageRules";
+import { messageSchema, smsLength, smsLengthText } from "./messageRules";
 
 // A message to one person: a phone number, an email address, or both.
 const SMSQuick = () => {
@@ -44,7 +44,8 @@ const SMSQuick = () => {
       yupResolver(messageSchema(values.type, { individual: true }))(values, context, options),
     defaultValues: { type: "sms", phonenumber: "", email: "", title: "", message: "" },
   });
-  const type = watch("type");
+  const [type, title, message] = watch(["type", "title", "message"]);
+  const length = type !== "email" ? smsLengthText(smsLength(title, message)) : "";
 
   const { mutate, isPending } = useMutation({ mutationFn: postMessage });
 
@@ -152,6 +153,12 @@ const SMSQuick = () => {
             <TextEditor label="Message" value={field.value} setValue={field.onChange} touched={Boolean(errors.message)} errors={errors.message?.message} />
           )}
         />
+
+        {length && (
+          <Typography variant="caption" color="text.secondary" aria-live="polite" sx={{ mt: "-16px !important" }}>
+            {length}
+          </Typography>
+        )}
 
         <Button type="submit" variant="contained" disabled={isPending} endIcon={<SendRounded />} sx={{ alignSelf: "flex-end", py: 1.5 }}>
           Send Message

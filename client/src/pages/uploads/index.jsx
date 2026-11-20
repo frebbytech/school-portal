@@ -328,7 +328,11 @@ const Uploads = () => {
   };
 
   const handleDownloadTemplate = async () => {
-    await downloadTemplate(dataCategory);
+    try {
+      await downloadTemplate(dataCategory);
+    } catch (error) {
+      schoolSessionDispatch(alertError(error));
+    }
   };
 
   //CLOSE File Dialog

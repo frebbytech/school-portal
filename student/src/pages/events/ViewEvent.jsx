@@ -1,3 +1,4 @@
+import { sanitizeHtml } from "@/lib/safeHtml";
 import {
   Container,
   Box,
@@ -138,7 +139,7 @@ function ViewEvent() {
             mb: 2,
           },
         }}
-        dangerouslySetInnerHTML={{ __html: data?.description }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(data?.description) }}
       />
     </Container>
   );

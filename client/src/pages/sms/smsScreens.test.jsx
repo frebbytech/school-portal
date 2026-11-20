@@ -11,7 +11,7 @@ import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider"
 import SMSBulk from "./SMSBulk";
 import SMSQuick from "./SMSQuick";
 import SMSHome from "./SMSHome";
-import { plainText, messageSchema } from "./messageRules";
+import { plainText, messageSchema, smsLength, smsLengthText } from "./messageRules";
 import { recipientText } from "./SMSView";
 
 vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
@@ -68,6 +68,31 @@ describe("message rules", () => {
     expect(recipientText({ type: "students", phonenumber: ["1", "2"], email: ["a@b.c"] })).toBe("students (2 phone numbers, 1 email address)");
     expect(recipientText({ type: "parents" })).toBe("parents");
     expect(recipientText(undefined)).toBe("");
+  });
+});
+
+describe("SMS length", () => {
+  it("counts the title and the readable text, in the basic phone alphabet", () => {
+    expect(smsLength("Fees", "<p>Pay by Friday</p>")).toMatchObject({ units: 18, parts: 1, unicode: false });
+    expect(smsLength("", "x".repeat(160)).parts).toBe(1);
+    expect(smsLength("", "x".repeat(161)).parts).toBe(2);
+    expect(smsLength("", "x".repeat(307)).parts).toBe(3);
+  });
+  it("counts the extended characters twice, and drops to 70 per message for emoji and curly quotes", () => {
+    expect(smsLength("", "{ok}").units).toBe(6);
+    expect(smsLength("", "Well done \u{1F600}")).toMatchObject({ unicode: true, single: 70 });
+    expect(smsLength("", "\u201cquoted\u201d").unicode).toBe(true);
+  });
+  it("says nothing for an empty message, and warns that extra parts are billed", () => {
+    expect(smsLengthText(smsLength("", ""))).toBe("");
+    expect(smsLengthText(smsLength("", "x".repeat(161)))).toMatch(/2 messages\. Each part is billed/);
+  });
+  it("shows on the bulk form while typing, but not for an email", async () => {
+    render(wrap(<SMSBulk />));
+    await userEvent.type(screen.getByLabelText("Message"), "Hello");
+    expect(await screen.findByText("SMS: 5 characters, 1 message")).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText("Email"));
+    expect(screen.queryByText(/^SMS:/)).toBeNull();
   });
 });
 

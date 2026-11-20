@@ -145,7 +145,11 @@ function AddGrade({ open, setOpen }) {
   };
 
   const handleDownloadTemplate = async () => {
-    await downloadTemplate("grades");
+    try {
+      await downloadTemplate("grades");
+    } catch (error) {
+      schoolSessionDispatch(alertError(error));
+    }
   };
 
   return (
