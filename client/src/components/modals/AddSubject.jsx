@@ -65,7 +65,7 @@ const AddSubject = ({ open, setOpen }) => {
     });
   };
 
-  const { mutate } = useMutation(putCurrentSujectsByCurrentLevel);
+  const { mutate } = useMutation({ mutationFn: putCurrentSujectsByCurrentLevel });
 
   const handleSaveSubjects = () => {
     setMsg({ text: "" });

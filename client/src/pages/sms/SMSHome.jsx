@@ -9,12 +9,12 @@ import CustomTitle from "@/components/custom/CustomTitle";
 import sms_icon from "@/assets/images/header/sms_ico.svg";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import SMSView from "./SMSView";
+import QueryError from "@/components/QueryError";
 
 const SMSHome = () => {
   const messages = useQuery({
     queryKey: ["messages"],
     queryFn: () => getAllMessages(),
-    initialData: [],
   });
   const navigate = useNavigate();
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
@@ -39,10 +39,14 @@ const SMSHome = () => {
         backColor="#012e54"
       />
 
+      {messages.isError && !messages.data && (
+        <QueryError what="the messages" error={messages.error} onRetry={messages.refetch} />
+      )}
+
       <CustomizedMaterialTable
         title="Recent Messages"
         icon={sms_icon}
-        isPending={messages.isPending || messages.isLoading}
+        isPending={messages.isPending}
         columns={MESSAGE_COLUMNS}
         data={messages.data ?? []}
         search={true}
@@ -53,6 +57,7 @@ const SMSHome = () => {
         addButtonMessage="😑 Send your first SMS with just a button click !!!!"
         onAddButtonClicked={() => navigate("new")}
         onRowClick={handleView}
+        handleRefresh={messages.refetch}
       />
 
       <SMSView />

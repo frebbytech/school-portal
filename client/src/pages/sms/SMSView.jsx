@@ -19,6 +19,18 @@ import CustomDialogTitle from "@/components/dialog/CustomDialogTitle";
 import { DeleteForeverRounded, RefreshRounded } from "@mui/icons-material";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 
+// Who it went to: the person, or the group with how many phone numbers and emails it reached
+export const recipientText = (recipient) => {
+  if (!recipient) return "";
+  const phones = recipient.phonenumber?.length || 0;
+  const emails = recipient.email?.length || 0;
+  if (recipient.type === "Individual") return recipient.email?.[0] || recipient.phonenumber?.[0] || "";
+  const parts = [];
+  if (phones) parts.push(`${phones} phone number${phones === 1 ? "" : "s"}`);
+  if (emails) parts.push(`${emails} email address${emails === 1 ? "" : "es"}`);
+  return `${recipient.type || "Group"}${parts.length ? ` (${parts.join(", ")})` : ""}`;
+};
+
 function SMSView() {
   const queryClient = useQueryClient();
 
@@ -30,25 +42,34 @@ function SMSView() {
   } = useContext(SchoolSessionContext);
 
   const { mutate, isPending } = useMutation({ mutationFn: resendMessage });
+  const sendAgain = () => {
+    mutate(
+      { id: data?._id },
+      {
+        onSettled: () => {
+          queryClient.invalidateQueries({ queryKey: ["messages"] });
+        },
+        onSuccess: (message) => {
+          schoolSessionDispatch(alertSuccess(message));
+          handleClose();
+        },
+        onError: (error) => {
+          schoolSessionDispatch(alertError(error));
+        },
+      }
+    );
+  };
+  // A delivered message goes to everyone again (and costs again): ask first
   const onSend = () => {
-    const message = {
-      id: data?._id,
-      type: data?.type,
-      body: data?.body,
-      recipient: data?.recipient,
-    };
-
-    mutate(message, {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: ["messages"] });
-      },
-      onSuccess: (data) => {
-        schoolSessionDispatch(alertSuccess(data));
-        handleClose();
-      },
-      onError: (error) => {
-        schoolSessionDispatch(alertError(error));
-      },
+    if (!data?.active) return sendAgain();
+    Swal.fire({
+      title: "Send this message again?",
+      text: "It was already delivered. Sending it again delivers it to every recipient a second time.",
+      showCancelButton: true,
+      confirmButtonText: "Send again",
+      backdrop: false,
+    }).then(({ isConfirmed }) => {
+      if (isConfirmed) sendAgain();
     });
   };
 
@@ -58,7 +79,7 @@ function SMSView() {
   const handleDelete = () => {
     Swal.fire({
       title: "Removing Message",
-      text: "Do you want to delete message?",
+      text: "Do you want to delete this message? It is only removed from this list: anything already sent stays sent.",
       showCancelButton: true,
       backdrop: false,
     }).then(({ isConfirmed }) => {
@@ -107,7 +128,7 @@ function SMSView() {
           spacing={1}
           py={1}
         >
-          <Tooltip title="Resend Message">
+          <Tooltip title={data?.active ? "Send again" : "Resend Message"}>
             <IconButton onClick={onSend}>
               <RefreshRounded />
             </IconButton>
@@ -152,11 +173,7 @@ function SMSView() {
           />
           <ListItemText
             primary="Receipient"
-            secondary={
-              data?.recipient?.type === "Individual"
-                ? data?.recipient?.email[0] || data?.recipient?.phonenumber[0]
-                : data?.recipient?.type
-            }
+            secondary={recipientText(data?.recipient)}
             slotProps={{
               primary: {
                 color: "primary",
@@ -178,7 +195,7 @@ function SMSView() {
         </Stack>
       </DialogContent>
       {isPending && <LoadingSpinner value="Resending Message..." />}
-      {dLoading && <LoadingSpinner value="Resending Message..." />}
+      {dLoading && <LoadingSpinner value="Removing Message..." />}
     </Dialog>
   );
 }

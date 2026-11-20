@@ -57,7 +57,7 @@ export const resendMessage = async (messageInfo) => {
 
     return res.data;
   } catch (error) {
-    console.log(error.response.data);
+    throw normalizeApiError(error);
   }
 };
 

@@ -5,6 +5,8 @@ jest.mock("../config/sms/messenger", () => ({ sendSMS: jest.fn().mockResolvedVal
 jest.mock("../config/mail/mailer", () => jest.fn().mockResolvedValue(true));
 
 const { sendSMS } = require("../config/sms/messenger");
+const sendMail = require("../config/mail/mailer");
+const User = require("../models/userModel");
 const app = require("../app");
 const School = require("../models/schoolModel");
 const Student = require("../models/studentModel");
@@ -135,6 +137,87 @@ describe("schools, messages and fees authorization (finding C-6)", () => {
       expect(res.status).toBe(200);
       expect(sendSMS.mock.calls[0][0].message).toBe("stored text");
       expect(sendSMS.mock.calls[0][1]).toEqual(["0240000001"]);
+    });
+
+    describe("says truthfully what was delivered", () => {
+      const bulk = (body) => as(request(app).post(`${base}/messages/bulk`), adminTok).send({ title: "t", message: "m", ...body });
+      beforeEach(() => {
+        sendSMS.mockReset().mockResolvedValue(true);
+        sendMail.mockReset().mockResolvedValue(true);
+      });
+
+      it("a provider that refuses every SMS is an error, the message stays resendable, and resend then works", async () => {
+        sendSMS.mockResolvedValueOnce(undefined);
+        const res = await bulk({ type: "sms", group: "students" });
+        expect(res.status).toBe(502);
+        expect(res.body).toMatch(/couldn't send/i);
+        const stored = await Message.findOne({ school: schoolA._id, "body.title": "t" }).sort({ createdAt: -1 });
+        expect(stored.active).toBe(false);
+
+        const again = await as(request(app).post(`${base}/messages/resend`), adminTok).send({ id: String(stored._id) });
+        expect(again.status).toBe(200);
+        expect((await Message.findById(stored._id)).active).toBe(true);
+      });
+
+      it("says how many it was sent to", async () => {
+        const res = await bulk({ type: "sms", group: "students" });
+        expect(res.status).toBe(200);
+        expect(res.body).toMatch(/^Message sent to 1 phone number\./);
+      });
+
+      it("a group with nobody to send to is a 422 and nothing is sent or stored", async () => {
+        const before = await Message.countDocuments({ school: schoolA._id });
+        const res = await bulk({ type: "sms", group: "parents" });
+        expect(res.status).toBe(422);
+        expect(res.body).toMatch(/phone number/);
+        expect(sendSMS).not.toHaveBeenCalled();
+        expect(await Message.countDocuments({ school: schoolA._id })).toBe(before);
+      });
+
+      it("both: one channel failing is reported with what was sent", async () => {
+        sendMail.mockResolvedValueOnce(false);
+        const res = await bulk({ type: "both", group: "students" });
+        expect(res.status).toBe(502);
+        expect(res.body).toMatch(/sent to 1 phone number, but the email could not be sent/);
+      });
+
+      it("the teachers group reaches active teachers of this school (it used to reach nobody)", async () => {
+        await createUser(schoolA, "teacher", { phonenumber: "0241110001" });
+        await createUser(schoolA, "teacher", { phonenumber: "0241110002", active: false });
+        await createUser(schoolB, "teacher", { phonenumber: "0241110003" });
+        const res = await bulk({ type: "sms", group: "teachers" });
+        expect(res.status).toBe(200);
+        const numbers = sendSMS.mock.calls[0][1];
+        expect(numbers).toEqual(["0241110001"]);
+      });
+
+      it("a deactivated student is not messaged", async () => {
+        const gone = await make(Student, { indexnumber: `g${oid().toString().slice(-10)}`, school: schoolA._id, phonenumber: "0249990000", active: false });
+        const res = await bulk({ type: "sms", group: "students" });
+        expect(res.status).toBe(200);
+        expect(sendSMS.mock.calls[0][1]).not.toContain("0249990000");
+        await Student.deleteOne({ _id: gone._id });
+      });
+
+      it("an SMS carries readable text, not the editor's HTML tags", async () => {
+        const res = await bulk({ type: "sms", group: "students", message: "<p>School <strong>closes</strong> early</p><p>Thank you</p>" });
+        expect(res.status).toBe(200);
+        expect(sendSMS.mock.calls[0][0].message).toBe("School closes early\nThank you");
+      });
+
+      it("refuses a message the editor shows as empty", async () => {
+        const res = await bulk({ type: "sms", group: "students", message: "<p><br></p>" });
+        expect(res.status).toBe(400);
+        expect(res.body).toBe("Write a message before sending.");
+        expect(sendSMS).not.toHaveBeenCalled();
+      });
+
+      it("a quick message with no phone number is a 422, not a delivery", async () => {
+        const res = await as(request(app).post(`${base}/messages/quick`), adminTok).send({ type: "sms", message: "hi" });
+        expect(res.status).toBe(422);
+        expect(res.body).toMatch(/no phone number/i);
+        expect(sendSMS).not.toHaveBeenCalled();
+      });
     });
 
     it("does not resend or delete another school's message", async () => {

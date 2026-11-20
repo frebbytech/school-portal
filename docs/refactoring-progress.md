@@ -496,3 +496,7 @@ See row U5o in `ui-refactor-plan.md`. Server: `GET /teachers/:id` is 404 when th
 ## 5ab. Deactivating a teacher frees their work (2026-11-20, owner decision)
 
 See row U5p in `ui-refactor-plan.md`. Server: `common/teacherWork.js` `releaseTeacherWork` clears the teacher from `Level.teacher` and `Course.teacher` in terms that are not archived, whenever a teacher is deactivated or removed (teacher and user routes); `GET /teachers/courses` shows a teacher only their own courses.
+
+## 5ac. Messages tell the truth about delivery (2026-11-20)
+
+See row U5q in `ui-refactor-plan.md`. Server: `common/messageDelivery.js`; `/messages/quick`, `/bulk`, `/resend` answer with what was sent (200), 502 on failure or partial delivery, 422 when nobody can be reached; the Teachers group reads staff users; deactivated people are skipped; SMS carries plain text. Client: Bulk and Quick Message on React Hook Form with a confirmation before a group send; Bulk Messages no longer uses the unsupported `useMutation(fn)` form.

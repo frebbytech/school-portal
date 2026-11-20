@@ -140,6 +140,7 @@ describe("input validation, operator-injection guard and opt-in pagination (Stag
       ]) {
         expect((await as(request(app).post(`${base}/messages/bulk`).send(body), adminTok)).status).toBe(400);
       }
+      await new Student({ indexnumber: `v${Date.now()}`, school: admin.school, phonenumber: "0240000009" }).save({ validateBeforeSave: false });
       expect((await as(request(app).post(`${base}/messages/bulk`).send({ type: "sms", group: "students", message: "hi", rate: "bulk" }), adminTok)).status).toBe(200);
     });
 

@@ -1,172 +1,145 @@
-import React, { useContext, useState } from "react";
+import React, { useContext } from "react";
 import { SendRounded } from "@mui/icons-material";
-import Button from "@mui/material/Button";
 import {
+  Alert,
+  Box,
+  Button,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
+  MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
-  FormControlLabel,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  Radio,
-  MenuItem,
   Typography,
-  Box,
 } from "@mui/material";
-import { Formik } from "formik";
-import { useMutation } from "@tanstack/react-query";
-import { bulkMessageInitialValues } from "@/config/initialValues";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import Swal from "sweetalert2";
+import { useNavigate } from "react-router-dom";
 import { postMessage } from "@/api/messageAPI";
-import { bulksmsValidationSchema } from "@/config/validationSchema";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
+import { thrownMessage } from "@/lib/formErrors";
 import TextEditor from "@/components/custom/TextEditor";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
-import { useNavigate } from "react-router-dom";
+import { bulkWarning, messageSchema, TYPE_LABEL } from "./messageRules";
 
+const GROUPS = { students: "Students", parents: "Parents", teachers: "Teachers" };
+
+// A message to a whole group: it sends real SMS and email, so it asks first.
 const SMSBulk = () => {
   const navigate = useNavigate();
-
+  const queryClient = useQueryClient();
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
-  const [radioValue, setRadioValue] = useState("sms");
-  const [group, setGroup] = useState("students");
 
-  const { mutate, isPending } = useMutation(postMessage);
-  const onSubmit = (values, options) => {
-    values.rate = "bulk";
-    values.group = group;
-    values.type = radioValue;
+  const {
+    control,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm({
+    resolver: yupResolver(messageSchema(null)),
+    defaultValues: { type: "sms", group: "students", title: "", message: "" },
+  });
 
-    mutate(values, {
-      onSettled: () => {
-        options.setSubmitting(false);
-      },
-      onSuccess: (data) => {
-        schoolSessionDispatch(alertSuccess(data));
-        navigate("/messages");
-      },
-      onError: (error) => {
-        schoolSessionDispatch(alertError(error));
-      },
+  const { mutate, isPending } = useMutation({ mutationFn: postMessage });
+
+  const send = (values) => {
+    clearErrors("root.server");
+    mutate(
+      { ...values, rate: "bulk" },
+      {
+        onSettled: () => queryClient.invalidateQueries({ queryKey: ["messages"] }),
+        onSuccess: (data) => {
+          schoolSessionDispatch(alertSuccess(data));
+          navigate("/messages");
+        },
+        onError: (error) => {
+          setError("root.server", { type: "server", message: thrownMessage(error) });
+          schoolSessionDispatch(alertError(error));
+        },
+      }
+    );
+  };
+
+  const onSubmit = (values) => {
+    Swal.fire({
+      title: `Send to all ${GROUPS[values.group].toLowerCase()}?`,
+      text: bulkWarning(values.type, values.group),
+      showCancelButton: true,
+      confirmButtonText: "Send",
+      backdrop: false,
+    }).then(({ isConfirmed }) => {
+      if (isConfirmed) send(values);
     });
   };
 
   return (
-    <Box sx={{ bgcolor: "#fff", borderRadius: "12px", p: 2 }}>
-      <Formik
-        initialValues={bulkMessageInitialValues}
-        onSubmit={onSubmit}
-        validationSchema={bulksmsValidationSchema}
-        enableReinitialize={true}
-      >
-        {({
-          values,
-          errors,
-          touched,
-          isSubmitting,
-          handleChange,
-          handleSubmit,
-        }) => {
-          return (
-            <Stack
-              spacing={3}
-              justifyContent="center"
-              alignItems="flex-start"
-              paddingY={3}
-            >
-              <Typography
-                variant="h5"
-                color="primary.main"
-                bgcolor="lightgray"
-                p={1}
-                sx={{ fontWeight: "bold", width: "100%" }}
-                paragraph
-              >
-                Bulk Messages
-              </Typography>
-              <FormControl>
-                <FormLabel id="message-type">Select Type</FormLabel>
-                <RadioGroup
-                  row
-                  aria-labelledby="message-type"
-                  name="message-type"
-                  value={radioValue}
-                  onChange={(e, value) => setRadioValue(value)}
-                >
-                  <FormControlLabel
-                    value="sms"
-                    control={<Radio />}
-                    label="SMS"
-                  />
-                  <FormControlLabel
-                    value="email"
-                    control={<Radio />}
-                    label="Email"
-                  />
-                  <FormControlLabel
-                    value="both"
-                    control={<Radio />}
-                    label="Both"
-                  />
-                </RadioGroup>
-              </FormControl>
-              <TextField
-                label="Select Group"
-                select
-                fullWidth
-                value={group}
-                // size="small"
-                onChange={(e) => setGroup(e.target.value)}
-              >
-                <MenuItem value="students">Students</MenuItem>
-                <MenuItem value="parents">Parents</MenuItem>
-                <MenuItem value="teachers">Teachers</MenuItem>
-              </TextField>
+    <Box component="form" noValidate onSubmit={handleSubmit(onSubmit)} sx={{ bgcolor: "#fff", borderRadius: "12px", p: 2 }}>
+      <Stack spacing={3} justifyContent="center" alignItems="flex-start" paddingY={3}>
+        <Typography variant="h5" color="primary.main" bgcolor="lightgray" p={1} sx={{ fontWeight: "bold", width: "100%" }}>
+          Bulk Messages
+        </Typography>
 
-              <TextField
-                label="Message Title"
-                required
-                // size="small"
-                fullWidth
-                value={values.title || ""}
-                onChange={handleChange("title")}
-                error={Boolean(touched.title && errors.title)}
-                helperText={touched.title && errors.title}
-              />
-              <TextEditor
-                label="Message"
-                value={values.message}
-                setValue={handleChange("message")}
-                touched={touched?.message}
-                errors={errors?.message}
-              />
+        {errors.root?.server?.message && (
+          <Alert severity="error" role="alert" sx={{ width: "100%" }}>
+            {errors.root.server.message}
+          </Alert>
+        )}
 
-              {/* <TextField
-              sx={{ textAlign: "left" }}
-              label="Message"
-              required
-              multiline
-              rows={5}
-              // size="small"
-              fullWidth
-              value={values.message || ""}
-              onChange={handleChange("message")}
-              error={Boolean(touched.message && errors.message)}
-              helperText={touched.message && errors.message}
-            /> */}
-              <Button
-                loading={isSubmitting || isPending}
-                variant="contained"
-                onClick={handleSubmit}
-                endIcon={<SendRounded />}
-                sx={{ alignSelf: "flex-end", py: 1.5 }}
-              >
-                Send Message
-              </Button>
-            </Stack>
-          );
-        }}
-      </Formik>
+        <Controller
+          name="type"
+          control={control}
+          render={({ field }) => (
+            <FormControl>
+              <FormLabel id="message-type">Select Type</FormLabel>
+              <RadioGroup row aria-labelledby="message-type" {...field}>
+                {Object.entries({ sms: "SMS", email: "Email", both: "Both" }).map(([value, label]) => (
+                  <FormControlLabel key={value} value={value} control={<Radio />} label={label} />
+                ))}
+              </RadioGroup>
+            </FormControl>
+          )}
+        />
+
+        <Controller
+          name="group"
+          control={control}
+          render={({ field }) => (
+            <TextField {...field} label="Select Group" select fullWidth>
+              {Object.entries(GROUPS).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        />
+
+        <Controller
+          name="title"
+          control={control}
+          render={({ field }) => (
+            <TextField {...field} label="Message Title" required fullWidth error={Boolean(errors.title)} helperText={errors.title?.message} />
+          )}
+        />
+
+        <Controller
+          name="message"
+          control={control}
+          render={({ field }) => (
+            <TextEditor label="Message" value={field.value} setValue={field.onChange} touched={Boolean(errors.message)} errors={errors.message?.message} />
+          )}
+        />
+
+        <Button type="submit" variant="contained" disabled={isPending} endIcon={<SendRounded />} sx={{ alignSelf: "flex-end", py: 1.5 }}>
+          Send Message
+        </Button>
+      </Stack>
 
       {isPending && <LoadingSpinner value="Sending Message..." />}
     </Box>

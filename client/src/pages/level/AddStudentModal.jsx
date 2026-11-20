@@ -53,7 +53,7 @@ const AddStudentModal = () => {
     levelName: levelName,
     session: session,
   };
-  const { mutate } = useMutation(postStudent);
+  const { mutate } = useMutation({ mutationFn: postStudent });
   const onSubmit = (values, options) => {
     // //console.log(values);
     mutate(values, {

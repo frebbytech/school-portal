@@ -1,191 +1,163 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext } from "react";
 import { SendRounded } from "@mui/icons-material";
 import {
+  Alert,
+  Box,
+  Button,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
-  FormControlLabel,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  Radio,
   Typography,
-  Button,
-  Box,
 } from "@mui/material";
-import { Formik } from "formik";
-import { useMutation } from "@tanstack/react-query";
-import { quickMessageInitialValues } from "@/config/initialValues";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { postMessage } from "@/api/messageAPI";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
+import { thrownMessage } from "@/lib/formErrors";
 import TextEditor from "@/components/custom/TextEditor";
 import LoadingSpinner from "@/components/spinners/LoadingSpinner";
-import { useNavigate } from "react-router-dom";
+import { messageSchema } from "./messageRules";
 
+// A message to one person: a phone number, an email address, or both.
 const SMSQuick = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
 
-  const [radioValue, setRadioValue] = useState("sms");
-
-  const data = useMemo(
-    () => quickMessageInitialValues(radioValue),
-    [radioValue]
-  );
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm({
+    // the rules depend on the chosen type (SMS needs a phone number, email an address)
+    resolver: (values, context, options) =>
+      yupResolver(messageSchema(values.type, { individual: true }))(values, context, options),
+    defaultValues: { type: "sms", phonenumber: "", email: "", title: "", message: "" },
+  });
+  const type = watch("type");
 
   const { mutate, isPending } = useMutation({ mutationFn: postMessage });
-  const onSubmit = (values, options) => {
-    values.rate = "quick";
-    mutate(values, {
-      onSettled: () => {
-        options.setSubmitting(false);
-      },
+
+  const onSubmit = ({ type, phonenumber, email, title, message }) => {
+    clearErrors("root.server");
+    // only the recipient details the chosen type needs are sent
+    const payload = {
+      type,
+      title,
+      message,
+      rate: "quick",
+      ...(type !== "email" ? { phonenumber: phonenumber.trim() } : {}),
+      ...(type !== "sms" ? { email: email.trim() } : {}),
+    };
+    mutate(payload, {
+      onSettled: () => queryClient.invalidateQueries({ queryKey: ["messages"] }),
       onSuccess: (data) => {
         schoolSessionDispatch(alertSuccess(data));
         navigate("/messages");
       },
       onError: (error) => {
+        setError("root.server", { type: "server", message: thrownMessage(error) });
         schoolSessionDispatch(alertError(error));
       },
     });
   };
 
   return (
-    <Box sx={{ bgcolor: "#fff", borderRadius: "12px", p: 2 }}>
-      <Formik
-        initialValues={data.init}
-        onSubmit={onSubmit}
-        validationSchema={data.val}
-        enableReinitialize={true}
-      >
-        {({
-          values,
-          errors,
-          touched,
-          isSubmitting,
-          handleChange,
-          handleSubmit,
-        }) => {
-          return (
-            <Stack
-              spacing={3}
-              justifyContent="flex-start"
-              alignItems="flex-start"
-              py={3}
-            >
-              <Typography
-                variant="h5"
-                color="primary.main"
-                bgcolor="lightgray"
-                p={1}
-                sx={{ fontWeight: "bold", width: "100%" }}
-                paragraph
-              >
-                Quick Message
-              </Typography>
-              <FormControl>
-                <FormLabel id="message-type">Select Type</FormLabel>
-                <RadioGroup
-                  row
-                  aria-labelledby="message-type"
-                  name="message-type"
-                  value={radioValue}
-                  onChange={(e, value) => setRadioValue(value)}
-                >
-                  <FormControlLabel
-                    value="sms"
-                    control={<Radio />}
-                    label="SMS"
-                  />
-                  <FormControlLabel
-                    value="email"
-                    control={<Radio />}
-                    label="Email"
-                  />
-                  <FormControlLabel
-                    value="both"
-                    control={<Radio />}
-                    label="Both"
-                  />
-                </RadioGroup>
-              </FormControl>
-              {(radioValue === "sms" || radioValue === "both") && (
-                <TextField
-                  label="Recipient's Phone No"
-                  required
-                  inputMode="tel"
-                  // size="small"
-                  type="tel"
-                  fullWidth
-                  value={values.phonenumber || ""}
-                  onChange={handleChange("phonenumber")}
-                  hidden={radioValue === "email" ? true : false}
-                  error={Boolean(touched.phonenumber && errors.phonenumber)}
-                  helperText={touched.phonenumber && errors.phonenumber}
-                />
-              )}
+    <Box component="form" noValidate onSubmit={handleSubmit(onSubmit)} sx={{ bgcolor: "#fff", borderRadius: "12px", p: 2 }}>
+      <Stack spacing={3} justifyContent="flex-start" alignItems="flex-start" py={3}>
+        <Typography variant="h5" color="primary.main" bgcolor="lightgray" p={1} sx={{ fontWeight: "bold", width: "100%" }}>
+          Quick Message
+        </Typography>
 
-              {(radioValue === "email" || radioValue === "both") && (
-                <TextField
-                  label="Recipient's Email Address"
-                  inputMode="email"
-                  type="email"
-                  // size="small"
-                  required
-                  fullWidth
-                  hidden={radioValue === "sms" ? true : false}
-                  value={values.email || ""}
-                  onChange={handleChange("email")}
-                  error={Boolean(touched.email && errors.email)}
-                  helperText={touched.email && errors.email}
-                />
-              )}
+        {errors.root?.server?.message && (
+          <Alert severity="error" role="alert" sx={{ width: "100%" }}>
+            {errors.root.server.message}
+          </Alert>
+        )}
 
+        <Controller
+          name="type"
+          control={control}
+          render={({ field }) => (
+            <FormControl>
+              <FormLabel id="message-type">Select Type</FormLabel>
+              <RadioGroup row aria-labelledby="message-type" {...field}>
+                {Object.entries({ sms: "SMS", email: "Email", both: "Both" }).map(([value, label]) => (
+                  <FormControlLabel key={value} value={value} control={<Radio />} label={label} />
+                ))}
+              </RadioGroup>
+            </FormControl>
+          )}
+        />
+
+        {type !== "email" && (
+          <Controller
+            name="phonenumber"
+            control={control}
+            render={({ field }) => (
               <TextField
-                label="Message Title"
+                {...field}
+                label="Recipient's Phone No"
                 required
+                type="tel"
+                slotProps={{ htmlInput: { inputMode: "tel" } }}
                 fullWidth
-                // size="small"
-                value={values.title || ""}
-                onChange={handleChange("title")}
-                error={Boolean(touched.title && errors.title)}
-                helperText={touched.title && errors.title}
+                error={Boolean(errors.phonenumber)}
+                helperText={errors.phonenumber?.message}
               />
+            )}
+          />
+        )}
 
-              <TextEditor
-                label="Message"
-                value={values.message}
-                setValue={handleChange("message")}
-                touched={touched?.message}
-                errors={errors?.message}
+        {type !== "sms" && (
+          <Controller
+            name="email"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                label="Recipient's Email Address"
+                required
+                type="email"
+                fullWidth
+                error={Boolean(errors.email)}
+                helperText={errors.email?.message}
               />
-              {/* <TextField
-              // sx={{ textAlign: "left" }}
-              label="Message"
-              required
-              // size="small"
-              multiline
-              rows={5}
-              fullWidth
-              value={values.message || ""}
-              onChange={handleChange("message")}
-              error={Boolean(touched.message && errors.message)}
-              helperText={touched.message && errors.message}
-            /> */}
+            )}
+          />
+        )}
 
-              <Button
-                loading={isSubmitting || isPending}
-                variant="contained"
-                onClick={handleSubmit}
-                endIcon={<SendRounded />}
-                sx={{ alignSelf: "flex-end", py: 1.5 }}
-              >
-                Send Message
-              </Button>
-            </Stack>
-          );
-        }}
-      </Formik>
+        <Controller
+          name="title"
+          control={control}
+          render={({ field }) => (
+            <TextField {...field} label="Message Title" required fullWidth error={Boolean(errors.title)} helperText={errors.title?.message} />
+          )}
+        />
+
+        <Controller
+          name="message"
+          control={control}
+          render={({ field }) => (
+            <TextEditor label="Message" value={field.value} setValue={field.onChange} touched={Boolean(errors.message)} errors={errors.message?.message} />
+          )}
+        />
+
+        <Button type="submit" variant="contained" disabled={isPending} endIcon={<SendRounded />} sx={{ alignSelf: "flex-end", py: 1.5 }}>
+          Send Message
+        </Button>
+      </Stack>
+
       {isPending && <LoadingSpinner value="Sending Message..." />}
     </Box>
   );

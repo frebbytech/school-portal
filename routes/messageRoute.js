@@ -2,7 +2,7 @@ const router = require("express").Router();
 const asyncHandler = require("express-async-handler");
 const _ = require("lodash");
 const Student = require("../models/studentModel");
-const Teacher = require("../models/teacherModel");
+const User = require("../models/userModel");
 const Parent = require("../models/parentModel");
 const Message = require("../models/messageModel");
 const sendMail = require("../config/mail/mailer");
@@ -16,6 +16,7 @@ const {
 const { isValidObjectId } = require("mongoose");
 const { validate, text, oneOfValues, objectId, phone, email } = require("../common/validation");
 const { withPagination } = require("../common/pagination");
+const { deliverMessage, summarize, clean, plainText, TYPES } = require("../common/messageDelivery");
 
 const MESSAGE_TYPES = ["sms", "email", "both"];
 const MESSAGE_GROUPS = ["students", "teachers", "parents"];
@@ -44,6 +45,30 @@ router.get(
 );
 //POST message
 
+// An SMS carries the readable text of the editor's HTML (an email keeps the HTML)
+const send = {
+  sms: (body, numbers) => sendSMS({ ...body, message: plainText(body?.message) }, numbers),
+  mail: sendMail,
+};
+const NOTHING_WRITTEN = "Write a message before sending.";
+
+// Sends a stored message and answers truthfully (see common/messageDelivery.js). A message
+// that could not be fully delivered stays inactive so it can be sent again.
+const sendAndAnswer = async (res, message, { individual }) => {
+  const result = await deliverMessage({
+    type: message.type,
+    body: message.body,
+    numbers: message.recipient?.phonenumber,
+    emails: message.recipient?.email,
+    send,
+  });
+  if (result.status === "sent") {
+    await Message.findByIdAndUpdate(message._id, { $set: { active: true } });
+  }
+  const { http, message: text } = summarize(result, { type: message.type, individual });
+  return res.status(http).json(text);
+};
+
 router.post(
   "/quick",
   messageLimiter,
@@ -56,56 +81,26 @@ router.post(
   ),
   asyncHandler(async (req, res) => {
     const newMessage = req.body;
-    //console.log(newMessage);
+    if (!plainText(newMessage.message)) return res.status(400).json(NOTHING_WRITTEN);
+    const numbers = newMessage?.phonenumber ? [newMessage.phonenumber] : [];
+    const emails = newMessage?.email ? [newMessage.email] : [];
+
+    // nothing to send to: say so, and do not keep a message nobody received
+    const wanted = TYPES[newMessage.type] || [];
+    if (!(wanted.includes("sms") && numbers.length) && !(wanted.includes("email") && emails.length)) {
+      const { message: reason } = summarize({ status: "no-recipients" }, { type: newMessage.type, individual: true });
+      return res.status(422).json(reason);
+    }
+
     const message = await Message.create({
       school: req.user.school,
+      createdBy: req.user.id,
       type: newMessage?.type,
-      recipient: {
-        type: "Individual",
-        phonenumber:
-          newMessage?.phonenumber === undefined
-            ? []
-            : [newMessage?.phonenumber],
-        email: newMessage?.email === undefined ? [] : [newMessage?.email],
-      },
-      body: {
-        title: newMessage?.title,
-        message: newMessage?.message,
-      },
+      recipient: { type: "Individual", phonenumber: numbers, email: emails },
+      body: { title: newMessage?.title, message: newMessage?.message },
     });
 
-    if (_.isEmpty(message)) {
-      return res
-        .status(404)
-        .json("Couldnt send message.Please try again later...");
-    }
-
-    try {
-      // ONLY SMS
-      // if (process.env.NODE_ENV === 'production') {
-      if (message.type === "sms") {
-        await sendSMS(message?.body, message?.recipient?.phonenumber);
-      }
-      //ONLY EMAIL
-      if (message.type === "email") {
-        await sendMail(message?.body, message?.recipient?.email);
-      }
-      //BOTH EMAIL AND SMS
-      if (message.type === "both") {
-        await sendMail(message?.body, message?.recipient?.email);
-        await sendSMS(message?.body, message?.recipient?.phonenumber);
-      }
-      // }
-
-      await Message.findByIdAndUpdate(message?._id, {
-        $set: {
-          active: true,
-        },
-      });
-      return res.status(200).json("Message delivered successfully!!!");
-    } catch (error) {
-      return res.status(404).json("Couldnt send message.Try again later!!!");
-    }
+    return sendAndAnswer(res, message, { individual: true });
   })
 );
 
@@ -124,34 +119,23 @@ router.post(
     if (!stored) {
       return res.status(404).json("Couldnt send message.Try again later!!!");
     }
-    const { type, body, recipient } = stored;
 
-    try {
-      if (type === "sms") {
-        await sendSMS(body, recipient?.phonenumber);
-      }
-      if (type === "email") {
-        await sendMail(body, recipient?.email);
-      }
-      if (type === "both") {
-        await sendSMS(body, recipient?.phonenumber);
-        await sendMail(body, recipient?.email);
-      }
-
-      await Message.findByIdAndUpdate(stored._id, {
-        $set: {
-          active: true,
-        },
-      });
-
-      return res.status(200).json("Message delivered successfully!!!");
-    } catch (error) {
-      return res.status(404).json("Couldnt send message.Try again later!!!");
-    }
+    return sendAndAnswer(res, stored, { individual: stored.recipient?.type === "Individual" });
   })
 );
 
-//POST message
+// People of a group in the caller's own school (finding C-6d). Deactivated people are not
+// messaged. Teachers are staff accounts (users), not the unused Teacher collection.
+const contactsOf = (school, group) => {
+  switch (group) {
+    case "teachers":
+      return User.find({ school, role: "teacher", active: { $ne: false } }).select("email phonenumber");
+    case "parents":
+      return Parent.find({ school, active: { $ne: false } }).select("email phonenumber");
+    default:
+      return Student.find({ school, active: { $ne: false } }).select("email phonenumber");
+  }
+};
 
 router.post(
   "/bulk",
@@ -165,97 +149,29 @@ router.post(
   ),
   asyncHandler(async (req, res) => {
     const newMessage = req.body;
-    let emailAddresses = [];
-    let phoneNumbers = [];
-    let groups = [];
+    if (!plainText(newMessage.message)) return res.status(400).json(NOTHING_WRITTEN);
+    const group = newMessage.group || "students";
+    const contacts = await contactsOf(req.user.school, group);
 
-    // Recipients always come from the caller's own school (finding C-6d).
-    const school = req.user.school;
+    const wanted = TYPES[newMessage.type] || [];
+    const numbers = wanted.includes("sms") ? clean(contacts.map((c) => c.phonenumber)) : [];
+    const emails = wanted.includes("email") ? clean(contacts.map((c) => c.email)) : [];
 
-    switch (newMessage.group) {
-      case "students":
-        groups = await Student.find({ school }).select("email phonenumber");
-        break;
-
-      case "teachers":
-        groups = await Teacher.find({ school }).select("email phonenumber");
-        break;
-
-      case "parents":
-        groups = await Parent.find({ school }).select("email phonenumber");
-        break;
-
-      default:
-        groups = await Student.find({ school }).select("email phonenumber");
+    // nobody to send to: nothing is stored or sent
+    if (numbers.length === 0 && emails.length === 0) {
+      const { message: reason } = summarize({ status: "no-recipients" }, { type: newMessage.type });
+      return res.status(422).json(reason);
     }
-
-    ///Check message type
-    if (newMessage.type === "sms") {
-      phoneNumbers = groups.map(({ phonenumber }) => phonenumber);
-    }
-    if (newMessage.type === "email") {
-      emailAddresses = groups.map(({ email }) => email);
-    }
-    if (newMessage.type === "both") {
-      groups.map(({ phonenumber, email }) => {
-        phoneNumbers.push(phonenumber);
-        emailAddresses.push(email);
-      });
-    }
-
-    //Remove empty emails and phone numbers and select only uniq values
-    const emails = _.uniqWith(_.compact(emailAddresses), _.isEqual);
-    const numbers = _.uniqWith(_.compact(phoneNumbers), _.isEqual);
-
-    // emails
-    // numbers
 
     const message = await Message.create({
       school: req.user.school,
-      type: newMessage?.type,
-      recipient: {
-        type: newMessage.group,
-        phonenumber: numbers,
-        email: emails,
-      },
-      body: {
-        title: newMessage?.title,
-        message: newMessage?.message,
-      },
+      createdBy: req.user.id,
+      type: newMessage.type,
+      recipient: { type: group, phonenumber: numbers, email: emails },
+      body: { title: newMessage?.title, message: newMessage?.message },
     });
 
-    if (_.isEmpty(message)) {
-      return res
-        .status(404)
-        .json("Couldn't deliver message.Please try again later...");
-    }
-
-    try {
-      // ONLY SMS
-      // if (process.env.NODE_ENV === 'production') {
-      if (message.type === "sms") {
-        await sendSMS(message?.body, numbers);
-      }
-      //ONLY EMAIL
-      if (message.type === "email") {
-        await sendMail(message?.body, emails);
-      }
-      //BOTH EMAIL AND SMS
-      if (message.type === "both") {
-        await sendSMS(message?.body, numbers);
-        await sendMail(message?.body, emails);
-      }
-      // }
-
-      await Message.findByIdAndUpdate(message?._id, {
-        $set: {
-          active: true,
-        },
-      });
-      res.status(200).json("Message delivered successfully!!!");
-    } catch (error) {
-      return res.status(404).json("Couldnt send message.Try again later!!!");
-    }
+    return sendAndAnswer(res, message, { individual: false });
   })
 );
 //DELETE message
