@@ -6,6 +6,7 @@ const _ = require("lodash");
 const { createImageUpload } = require("../middlewares/upload");
 const User = require("../models/userModel");
 const Course = require("../models/courseModel");
+const { releaseTeacherWork } = require("../common/teacherWork");
 const { uploadFile, uploadMultipleImages } = require("../config/uploadFile");
 const {
   requireStaff,
@@ -66,9 +67,12 @@ router.get(
     const id = req.params.id;
 
     //Get course assigned to teacher
-    const courses = await Course.find({
-      school: req.user.school,
-    })
+    // a teacher sees only their own courses (owner decision 2026-11-20); administrators see all
+    const principal = getPrincipal(req);
+    const scope = { school: req.user.school };
+    if (principal.role === "teacher") scope.teacher = principal.id;
+
+    const courses = await Course.find(scope)
       .populate({
         path: "term",
         select: ["name", "term", "academicYear"],
@@ -287,6 +291,10 @@ router.put(
       return res.status(404).json("Couldnt update Teacher info.Try again.");
     }
 
+    if (updatedTeacher.active === false) {
+      await releaseTeacherWork(getPrincipal(req).schoolId, updatedTeacher._id);
+    }
+
     res.status(201).json("Changes Saved!!!");
   })
 );
@@ -366,6 +374,9 @@ router.delete(
     if (_.isEmpty(teacher)) {
       return res.status(400).json("Couldn't remove Teacher info.Try again.");
     }
+
+    // a deactivated teacher cannot teach: free their classes and courses
+    await releaseTeacherWork(getPrincipal(req).schoolId, teacher._id);
 
     res.status(200).json("Changes Saved!!!");
   })

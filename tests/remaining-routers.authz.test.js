@@ -257,6 +257,71 @@ describe("remaining routers: roles, school scope and allow-lists (Stage 4d)", ()
       expect(again.status).toBe(201);
     });
 
+    describe("deactivating a teacher frees their classes and courses", () => {
+      const setup = async () => {
+        const t = await createUser(schoolA, "teacher");
+        const archived = await make(Term, { school: schoolA._id, session: sessionA._id, term: "9", academicYear: "2025/2026", status: "archived" });
+        const lv = (term, name) => make(Level, { school: schoolA._id, session: sessionA._id, term: term._id, level: { name, type: "1" }, initials: name, teacher: t._id });
+        const cr = (term, level) => make(Course, { school: schoolA._id, session: sessionA._id, term: term._id, level: level._id, subject: subjectA._id, teacher: t._id, active: true });
+        const nowLevel = await lv(termA, "N");
+        const oldLevel = await lv(archived, "O");
+        const nowCourse = await cr(termA, nowLevel);
+        const oldCourse = await cr(archived, oldLevel);
+        const cleanup = async () => {
+          await Level.deleteMany({ _id: { $in: [nowLevel._id, oldLevel._id] } });
+          await Course.deleteMany({ _id: { $in: [nowCourse._id, oldCourse._id] } });
+          await Term.deleteOne({ _id: archived._id });
+        };
+        return { t, nowLevel, oldLevel, nowCourse, oldCourse, cleanup };
+      };
+      const expectReleased = async ({ nowLevel, oldLevel, nowCourse, oldCourse, t }) => {
+        expect((await Level.findById(nowLevel._id)).teacher).toBeFalsy();
+        expect((await Course.findById(nowCourse._id)).teacher).toBeFalsy();
+        // an archived term keeps its teacher: past history does not change
+        expect(String((await Level.findById(oldLevel._id)).teacher)).toBe(String(t._id));
+        expect(String((await Course.findById(oldCourse._id)).teacher)).toBe(String(t._id));
+      };
+
+      it("DELETE /teachers/:id releases current work and keeps archived terms", async () => {
+        const w = await setup();
+        expect((await as(request(app).delete(`${base}/teachers/${w.t._id}`), adminTok)).status).toBe(200);
+        await expectReleased(w);
+        // switching the account back on does not hand the work back
+        expect((await as(request(app).put(`${base}/teachers`).send({ _id: String(w.t._id), active: true }), adminTok)).status).toBe(201);
+        expect((await Level.findById(w.nowLevel._id)).teacher).toBeFalsy();
+        await w.cleanup();
+      });
+
+      it("PUT /teachers with active false does the same", async () => {
+        const w = await setup();
+        expect((await as(request(app).put(`${base}/teachers`).send({ _id: String(w.t._id), active: false }), adminTok)).status).toBe(201);
+        await expectReleased(w);
+        await w.cleanup();
+      });
+
+      it("disabling the account through /users/account does the same, and enabling does not", async () => {
+        const w = await setup();
+        expect((await as(request(app).put(`${base}/users/account`).send({ id: String(w.t._id), active: false }), adminTok)).status).toBe(200);
+        await expectReleased(w);
+        await w.cleanup();
+      });
+
+      it("a teacher's own course list shows only their courses; an administrator sees all", async () => {
+        const w = await setup();
+        const other = await make(Course, { school: schoolA._id, session: sessionA._id, term: termA._id, level: w.nowLevel._id, subject: subjectA._id, teacher: teacherA._id, active: true });
+        const mine = await as(request(app).get(`${base}/teachers/courses`), teacherTok);
+        expect(mine.status).toBe(200);
+        const mineIds = mine.body.map((c) => String(c._id));
+        expect(mineIds).toContain(String(other._id));
+        expect(mineIds).not.toContain(String(w.nowCourse._id));
+        expect(mine.body.every((c) => String(c.teacher?._id) === String(teacherA._id))).toBe(true);
+        const all = await as(request(app).get(`${base}/teachers/courses`), adminTok);
+        expect(all.body.map((c) => String(c._id))).toEqual(expect.arrayContaining([String(other._id), String(w.nowCourse._id)]));
+        await Course.deleteOne({ _id: other._id });
+        await w.cleanup();
+      });
+    });
+
     it("does not read another school's teacher by id", async () => {
       const res = await as(request(app).get(`${base}/teachers/${teacherB._id}`), adminTok);
       expect(res.status).toBe(404);

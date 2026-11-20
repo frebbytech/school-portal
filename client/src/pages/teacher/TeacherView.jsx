@@ -70,6 +70,10 @@ const TeacherView = () => {
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["teachers"] });
     queryClient.invalidateQueries({ queryKey: ["teacher", id] });
+    // deactivating also takes the teacher off their classes and courses
+    queryClient.invalidateQueries({ queryKey: ["levels"] });
+    queryClient.invalidateQueries({ queryKey: ["courses"] });
+    queryClient.invalidateQueries({ queryKey: ["teacher/courses"] });
   };
 
   const reactivate = useMutation({ mutationFn: putTeacher });
@@ -80,7 +84,7 @@ const TeacherView = () => {
     Swal.fire({
       title: isActive ? "Deactivate this teacher?" : "Reactivate this teacher?",
       text: isActive
-        ? "They will not be able to sign in. Their records, and the classes and courses they were given, are kept. You can reactivate the account later."
+        ? "They will not be able to sign in, and they are taken off the classes and courses they teach in the current and upcoming terms. Their records and past terms are kept. Reactivating the account does not give the classes and courses back."
         : "They will be able to sign in again.",
       showCancelButton: true,
       backdrop: false,

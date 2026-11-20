@@ -492,3 +492,7 @@ See row U5n in `ui-refactor-plan.md`. Server: teacher username edit checked glob
 ## 5aa. Teacher lists and the assign dialog (2026-11-19)
 
 See row U5o in `ui-refactor-plan.md`. Server: `GET /teachers/:id` is 404 when the teacher is not in this school (or is not a teacher). Client: Assign Teacher to Class offers only active teachers and classes without a class teacher and shows the server's reason; teacher list and assigned lists show *Try again* and no longer put the photo in the address.
+
+## 5ab. Deactivating a teacher frees their work (2026-11-20, owner decision)
+
+See row U5p in `ui-refactor-plan.md`. Server: `common/teacherWork.js` `releaseTeacherWork` clears the teacher from `Level.teacher` and `Course.teacher` in terms that are not archived, whenever a teacher is deactivated or removed (teacher and user routes); `GET /teachers/courses` shows a teacher only their own courses.

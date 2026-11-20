@@ -21,6 +21,7 @@ const User = require("../models/userModel");
 const Teacher = require("../models/teacherModel");
 const School = require("../models/schoolModel");
 const { isValidObjectId } = require("mongoose");
+const { releaseTeacherWork } = require("../common/teacherWork");
 const { refreshCookieOptions, clearCookieOptions } = require("../common/cookies");
 
 const USER_REFRESH_PATH = "/api/frebbys/v1/users/verify";
@@ -399,6 +400,10 @@ router.put(
       return res.status(404).json("Error updating user info.Try Again Later.");
     }
 
+    if (updatedUser.role === "teacher" && updatedUser.active === false) {
+      await releaseTeacherWork(updatedUser.school, updatedUser._id);
+    }
+
     if (isOnlyUpdate) {
       return res.status(201).json("Profile Updated!!!");
     }
@@ -643,6 +648,10 @@ router.patch(
       return res.status(404).json("Error updating user info");
     }
 
+    if (updatedUser.role === "teacher" && updatedUser.active === false) {
+      await releaseTeacherWork(updatedUser.school, updatedUser._id);
+    }
+
     res.status(200).json(true);
   })
 );
@@ -672,6 +681,10 @@ router.put(
 
     if (_.isEmpty(updatedUser)) {
       return res.status(404).json("Error updating user info");
+    }
+
+    if (updatedUser.role === "teacher" && updatedUser.active === false) {
+      await releaseTeacherWork(updatedUser.school, updatedUser._id);
     }
 
     res.json(
@@ -705,6 +718,7 @@ router.delete(
     if (refusal) return res.status(409).json(refusal);
 
     await User.findByIdAndDelete(id);
+    if (target.role === "teacher") await releaseTeacherWork(target.school, target._id);
 
     res.status(200).json("User has been removed successfully !!!");
   })
