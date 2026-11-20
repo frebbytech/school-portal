@@ -18,8 +18,8 @@ describe("change password form", () => {
     render(<ChangePasswordForm onSubmit={onSubmit} />);
     await submit(user);
     expect(await screen.findByText("Enter your current password")).toBeInTheDocument();
-    expect(screen.getByText("Enter a new password")).toBeInTheDocument();
-    expect(screen.getByText("Type the new password again")).toBeInTheDocument();
+    expect(await screen.findByText("Enter a new password")).toBeInTheDocument();
+    expect(await screen.findByText("Type the new password again")).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
