@@ -95,6 +95,7 @@ describe("edit announcement", () => {
 });
 
 describe("announcements list", () => {
+  vi.setConfig({ testTimeout: 20000 });
   it("lists announcements, and shows a banner (not an empty list) when loading fails", async () => {
     server.use(http.get(`${base}/announcements`, () => HttpResponse.json([saved])));
     const { unmount } = render(wrap(<MoreAnnouncements />, "/announcements"));
@@ -103,6 +104,7 @@ describe("announcements list", () => {
 
     server.use(http.get(`${base}/announcements`, () => HttpResponse.json("Server error", { status: 500 })));
     render(wrap(<MoreAnnouncements />, "/announcements"));
-    expect(await screen.findByText(/Could not load the announcements/)).toBeInTheDocument();
+    // the screen asks for two retries (with back-off) before it gives up
+    expect(await screen.findByText(/Could not load the announcements/, {}, { timeout: 10000 })).toBeInTheDocument();
   });
 });
