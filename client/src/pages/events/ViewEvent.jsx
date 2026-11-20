@@ -7,7 +7,7 @@ import {
   Stack,
   Chip,
 } from "@mui/material";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 import React from "react";
 import { EMPTY_IMAGES } from "../../config/images";
@@ -15,22 +15,38 @@ import { getEvent } from "../../api/eventAPI";
 import dayjs from "@/lib/dates";
 import { sanitizeHtml } from "@/lib/safeHtml";
 import CustomTitle from "@/components/custom/CustomTitle";
+import QueryError from "@/components/QueryError";
+import LoadingSpinner from "@/components/spinners/LoadingSpinner";
 
 function ViewEvent() {
-  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { id } = useParams();
 
   const event = useQuery({
     queryKey: ["event", id],
     queryFn: () => getEvent(id),
-    initialData: queryClient
-      .getQueryData(["events", id])
-      ?.find((event) => event?._id === id),
     enabled: !!id,
   });
 
   const data = event?.data;
+
+  if (event.isPending) return <LoadingSpinner />;
+  if (event.isError || !data) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 6 }}>
+        <CustomTitle
+          title="Event"
+          showBack={true}
+          to={searchParams.get("redirect_to") || "/"}
+        />
+        {event.isError ? (
+          <QueryError what="the event" error={event.error} onRetry={event.refetch} />
+        ) : (
+          <Typography>This event no longer exists.</Typography>
+        )}
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 6 }}>

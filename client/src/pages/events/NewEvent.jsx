@@ -11,6 +11,7 @@ import {
   Button,
   Checkbox,
   FormControlLabel,
+  Alert,
 } from "@mui/material";
 import { AddAPhoto } from "@mui/icons-material";
 import { useDropzone } from "react-dropzone";
@@ -29,6 +30,7 @@ import Back from "@/components/Back";
 import TextEditor from "@/components/custom/TextEditor";
 import { UserContext } from "@/context/providers/UserProvider";
 import CustomFormControl from "@/components/inputs/CustomFormControl";
+import { thrownMessage } from "@/lib/formErrors";
 
 function NewEvent() {
   const queryClient = useQueryClient();
@@ -42,6 +44,7 @@ function NewEvent() {
     control,
     handleSubmit,
     setValue,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: yupResolver(eventValidationSchema),
@@ -84,6 +87,7 @@ function NewEvent() {
       navigate("/events");
     },
     onError: (error) => {
+      setError("root.server", { type: "server", message: thrownMessage(error) });
       schoolSessionDispatch(alertError(error));
     },
   });
@@ -100,8 +104,8 @@ function NewEvent() {
     <Container>
       <Back to="/events" color="primary.main" />
       <CustomTitle
-        title="New Events"
-        subtitle="Send single and bulk SMS to students and parents"
+        title="New Event"
+        subtitle="Add an event to the school calendar. Staff are notified when it is created."
         color="text.main"
         backColor="#012e54"
       />
@@ -113,13 +117,19 @@ function NewEvent() {
         component="form"
         onSubmit={handleSubmit(onSubmit)}
       >
+        {errors.root?.server && (
+          <Alert severity="error">{errors.root.server.message}</Alert>
+        )}
         <Controller
           name="type"
           control={control}
           render={({ field }) => (
             <Autocomplete
               {...field}
-              onChange={(e, value) => setValue("type", value)}
+              onChange={(e, value) => setValue("type", value || "", { shouldValidate: true })}
+              onInputChange={(e, value, reason) => {
+                if (reason === "input") setValue("type", value, { shouldValidate: true });
+              }}
               freeSolo
               fullWidth
               size="small"
@@ -192,8 +202,8 @@ function NewEvent() {
                 fullWidth
                 size="small"
                 InputLabelProps={{ shrink: true }}
-                error={!!errors.startDate}
-                helperText={errors.startDate?.message}
+                error={!!errors.start}
+                helperText={errors.start?.message}
               />
             )}
           />
@@ -202,7 +212,10 @@ function NewEvent() {
               control={
                 <Checkbox
                   checked={showEndDate}
-                  onChange={(e) => setShowEndDate(e.target.checked)}
+                  onChange={(e) => {
+                    setShowEndDate(e.target.checked);
+                    if (!e.target.checked) setValue("end", "");
+                  }}
                 />
               }
               sx={{ whiteSpace: "no-wrap" }}
@@ -212,7 +225,6 @@ function NewEvent() {
               <Controller
                 name="end"
                 control={control}
-                rules={{ required: showEndDate }}
                 render={({ field }) => (
                   <TextField
                     {...field}
@@ -221,8 +233,8 @@ function NewEvent() {
                     fullWidth
                     size="small"
                     InputLabelProps={{ shrink: true }}
-                    error={!!errors.endDate}
-                    helperText={errors.endDate?.message}
+                    error={!!errors.end}
+                    helperText={errors.end?.message}
                   />
                 )}
               />

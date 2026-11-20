@@ -502,7 +502,7 @@ describe("remaining routers: roles, school scope and allow-lists (Stage 4d)", ()
     });
 
     it("an event notifies only the staff of its own school", async () => {
-      const res = await as(request(app).post(`${base}/events`).send({ title: "Fan-out", caption: "hello", session: sessionA._id, term: termA._id }), adminTok);
+      const res = await as(request(app).post(`${base}/events`).send({ title: "Fan-out", caption: "hello", description: "<p>Details</p>", session: sessionA._id, term: termA._id }), adminTok);
       expect(res.status).toBe(200);
       expect(await Notification.countDocuments({ user: teacherA._id, title: "Fan-out" })).toBe(1);
       expect(await Notification.countDocuments({ user: teacherB._id, title: "Fan-out" })).toBe(0);
@@ -522,6 +522,75 @@ describe("remaining routers: roles, school scope and allow-lists (Stage 4d)", ()
       expect((await as(request(app).put(`${base}/announcements`).send({ _id: theirs._id, title: "hacked" }), adminTok)).status).toBe(404);
       await as(request(app).delete(`${base}/announcements/${theirs._id}`), adminTok);
       expect((await Announcement.findById(theirs._id)).title).toBe("Theirs");
+    });
+
+    describe("announcement and event rules", () => {
+      const post = (path, payload, tok = adminTok) => as(request(app).post(`${base}/${path}`).send(payload), tok);
+      const put = (path, payload, tok = adminTok) => as(request(app).put(`${base}/${path}`).send(payload), tok);
+
+      it("an announcement needs a title and a description, and a known priority", async () => {
+        expect((await post("announcements", { description: "d" })).status).toBe(400);
+        expect((await post("announcements", { title: "T" })).status).toBe(400);
+        expect((await post("announcements", { title: "T", description: "d", priority: "urgent" })).status).toBe(400);
+        expect((await post("announcements", { title: ["a"], description: "d" })).status).toBe(400);
+        expect(await Announcement.countDocuments({ school: schoolA._id, title: "T" })).toBe(0);
+      });
+
+      it("the background colour comes from the priority, not from the client", async () => {
+        const res = await post("announcements", { title: "Colour", description: "d", priority: "high", bgColor: "url(javascript:alert(1))" });
+        expect(res.status).toBe(200);
+        const saved = await Announcement.findOne({ school: schoolA._id, title: "Colour" });
+        expect(saved.bgColor).toBe("#ffcccb");
+
+        const edit = await put("announcements", { _id: saved._id, priority: "low", bgColor: "red" });
+        expect(edit.status).toBe(200);
+        expect((await Announcement.findById(saved._id)).bgColor).toBe("#d4edda");
+      });
+
+      it("students do not see announcements or events that are switched off", async () => {
+        const off = await make(Announcement, { school: schoolA._id, title: "Hidden notice", active: false });
+        const offEvent = await make(Event, { school: schoolA._id, title: "Hidden event", active: false });
+        const studentList = await as(request(app).get(`${base}/announcements`), studentTokA);
+        expect(studentList.body.map((a) => String(a._id))).not.toContain(String(off._id));
+        expect((await as(request(app).get(`${base}/announcements/${off._id}`), studentTokA)).body).toBeNull();
+        const studentEvents = await as(request(app).get(`${base}/events`), studentTokA);
+        expect(studentEvents.body.map((e) => String(e._id))).not.toContain(String(offEvent._id));
+        expect((await as(request(app).get(`${base}/events/${offEvent._id}`), studentTokA)).body).toBeNull();
+
+        const staffList = await as(request(app).get(`${base}/announcements`), adminTok);
+        expect(staffList.body.map((a) => String(a._id))).toContain(String(off._id));
+      });
+
+      it("an event needs a title and description, and its end cannot be before its start", async () => {
+        expect((await post("events", { description: "d" })).status).toBe(400);
+        expect((await post("events", { title: "E" })).status).toBe(400);
+        expect((await post("events", { title: "E", description: "d", start: "not a date" })).status).toBe(400);
+        expect(
+          (await post("events", { title: "E", description: "d", start: "2026-12-10T10:00", end: "2026-12-09T10:00" })).status
+        ).toBe(400);
+        expect(await Event.countDocuments({ school: schoolA._id, title: "E" })).toBe(0);
+      });
+
+      it("an event with blank dates is saved with no dates, and a valid range is kept", async () => {
+        expect((await post("events", { title: "Open", description: "d", start: "", end: "" })).status).toBe(200);
+        const open = await Event.findOne({ school: schoolA._id, title: "Open" });
+        expect(open.start).toBeNull();
+        expect(open.end).toBeNull();
+
+        expect(
+          (await post("events", { title: "Range", description: "d", start: "2026-12-10T10:00", end: "2026-12-10T12:00" })).status
+        ).toBe(200);
+        const range = await Event.findOne({ school: schoolA._id, title: "Range" });
+        expect(range.end.getTime()).toBeGreaterThan(range.start.getTime());
+      });
+
+      it("an announcement is still saved when its notifications cannot be created", async () => {
+        const spy = jest.spyOn(Notification, "insertMany").mockRejectedValueOnce(new Error("db down"));
+        const res = await post("announcements", { title: "Resilient", description: "d", group: "all" });
+        spy.mockRestore();
+        expect(res.status).toBe(200);
+        expect(await Announcement.countDocuments({ school: schoolA._id, title: "Resilient" })).toBe(1);
+      });
     });
 
     it("holidays: members read their school, only administrators write", async () => {

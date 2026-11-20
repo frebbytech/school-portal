@@ -14,6 +14,7 @@ import CustomizedMaterialTable from "@/components/tables/CustomizedMaterialTable
 import { EVENTS } from "@/mockup/columns/sessionColumns";
 import { useAuth } from "@/hooks/useAuth";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
+import QueryError from "@/components/QueryError";
 
 function EventHome() {
   const { user } = useAuth();
@@ -25,7 +26,6 @@ function EventHome() {
   const events = useQuery({
     queryKey: ["events", user?._id],
     queryFn: getAllEvents,
-    initialData: [],
     enabled: !!user?._id,
   });
 
@@ -93,10 +93,14 @@ function EventHome() {
         backColor="#012e54"
       />
 
+      {events.isError && (
+        <QueryError what="the events" error={events.error} onRetry={events.refetch} />
+      )}
+
       <CustomizedMaterialTable
         isPending={events.isPending || isPending}
         columns={EVENTS(handleViewEvent, handleEditEvent, handleDeleteEvent)}
-        data={events.data}
+        data={events.data ?? []}
         handleRefresh={events.refetch}
         actions={[]}
         showAddButton={true}

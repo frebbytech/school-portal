@@ -15,6 +15,7 @@ const {
 } = require("../middlewares/authorize");
 const { sessionInSchool, termInSchool } = require("../middlewares/tenant");
 const { withPagination } = require("../common/pagination");
+const { announcementRules, bgColorFor, notifySafely } = require("../common/communications");
 
 const adminOnly = requireRoleEnforced("administrator");
 const FORBIDDEN = "You do not have permission to perform this action.";
@@ -24,7 +25,6 @@ const ANNOUNCEMENT_FIELDS = [
   "title",
   "description",
   "priority",
-  "bgColor",
   "active",
 ];
 
@@ -32,12 +32,20 @@ const referencesOk = async (req, data) =>
   (data.session === undefined || (await sessionInSchool(req, data.session))) &&
   (data.term === undefined || (await termInSchool(req, data.term)));
 
+// Students only see announcements that are switched on; staff see all of them.
+const visibleTo = (req) => {
+  const principal = getPrincipal(req);
+  const filter = { school: principal.schoolId };
+  if (principal.kind === "student") filter.active = { $ne: false };
+  return filter;
+};
+
 //GET announcement (staff and students of the school)
 router.get(
   "/",
   requireMember,
   asyncHandler(async (req, res) => {
-    const filter = { school: getPrincipal(req).schoolId };
+    const filter = visibleTo(req);
     const announcements = await withPagination(
       req,
       res,
@@ -56,7 +64,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const announcement = isValidObjectId(id)
-      ? await Announcement.findOne({ _id: id, school: getPrincipal(req).schoolId })
+      ? await Announcement.findOne({ _id: id, ...visibleTo(req) })
       : null;
     res.status(200).json(announcement);
   })
@@ -66,6 +74,7 @@ router.get(
 router.post(
   "/",
   adminOnly,
+  announcementRules(),
   asyncHandler(async (req, res) => {
     // `group` only decides who is notified; it is not stored on the announcement
     const group = req.body?.group;
@@ -75,6 +84,7 @@ router.post(
     const principal = getPrincipal(req);
     const announcement = await Announcement.create({
       ...newAnnouncement,
+      bgColor: bgColorFor(newAnnouncement.priority),
       school: principal.schoolId,
       createdBy: principal.id,
     });
@@ -107,7 +117,7 @@ router.post(
       createdBy: principal.id,
     }));
 
-    await Notification.insertMany(notifications);
+    await notifySafely(Notification, notifications, "Announcement");
 
     res.status(200).json("Announcement Created!");
   })
@@ -117,9 +127,11 @@ router.post(
 router.put(
   "/",
   adminOnly,
+  announcementRules({ optional: true }),
   asyncHandler(async (req, res) => {
     const { _id } = req.body || {};
     const data = pickFields(req.body, ANNOUNCEMENT_FIELDS);
+    if (data.priority !== undefined) data.bgColor = bgColorFor(data.priority);
 
     if (!isValidObjectId(_id)) return res.status(404).json("Error occurred.Try again later...");
     if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);

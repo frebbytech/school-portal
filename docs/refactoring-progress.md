@@ -504,3 +504,7 @@ See row U5q in `ui-refactor-plan.md`. Server: `common/messageDelivery.js`; `/mes
 ### 5ac addendum (2026-11-20)
 
 Rich text is sanitised on display (`lib/safeHtml.js`, both apps); `downloadTemplate` throws; SMS length counter; `config/sms/messenger.js` `smsText` (no stray spaces, no "undefined").
+
+## 5ad. Announcements and events (2026-11-20)
+
+See row U5r in `ui-refactor-plan.md`. Server: `common/communications.js` (validation, priority colours, non-fatal notifications); the colour is derived from the priority; students see only active announcements and events; blank dates become null. Client: Edit Announcement on React Hook Form; announcement and event lists show *Try again* instead of an empty list; More Events loads (it used `user.id`); New/Edit Event show their date errors, keep a typed type, validate end against start; Edit Event edits the dates.

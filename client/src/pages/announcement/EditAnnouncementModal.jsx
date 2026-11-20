@@ -1,110 +1,96 @@
-// EditAnnouncementModal.tsx
-import React, { use } from "react";
+import React, { useContext, useEffect } from "react";
 import {
+  Alert,
   Box,
   Button,
   TextField,
   Typography,
   MenuItem,
-  Select,
   FormControl,
-  InputLabel,
   FormHelperText,
+  InputLabel,
   CircularProgress,
   Modal,
+  Select,
 } from "@mui/material";
-import { useFormik } from "formik";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import * as Yup from "yup";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAnnouncement, putAnnouncement } from "@/api/announcementAPI";
 import { SchoolSessionContext } from "@/context/providers/SchoolSessionProvider";
 import { alertError, alertSuccess } from "@/context/actions/globalAlertActions";
+import { thrownMessage } from "@/lib/formErrors";
+import QueryError from "@/components/QueryError";
 
-// Validation Schema
 const validationSchema = Yup.object().shape({
-  title: Yup.string().required("Title is required").min(3),
-  description: Yup.string().required("Description is required").min(10),
+  title: Yup.string().trim().required("Title is required").min(3, "At least 3 characters"),
+  description: Yup.string()
+    .trim()
+    .required("Description is required")
+    .min(10, "At least 10 characters"),
   priority: Yup.string()
     .oneOf(["high", "medium", "low", "default"])
     .required("Priority is required"),
 });
 
 const EditAnnouncementModal = ({ onClose }) => {
-  const { schoolSessionDispatch } = use(SchoolSessionContext);
+  const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const [searchParams] = useSearchParams();
   const announcementId = searchParams.get("_id");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Fetching announcement by ID using React Query
-  const {
-    data: announcement,
-    isPending,
-    isError,
-  } = useQuery({
+  const announcement = useQuery({
     queryKey: ["announcement", announcementId],
     queryFn: () => getAnnouncement(announcementId),
-    enabled: !!announcementId, // Fetch only if id exists
-    initialData: queryClient.getQueryData(
-      ["announcements"].find((ann) => ann._id === announcementId)
-    ),
+    enabled: !!announcementId,
   });
 
-  // Mutation for updating the announcement
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors },
+  } = useForm({
+    resolver: yupResolver(validationSchema),
+    defaultValues: { title: "", description: "", priority: "medium" },
+  });
+
+  useEffect(() => {
+    if (!announcement.data) return;
+    reset({
+      title: announcement.data.title || "",
+      description: announcement.data.description || "",
+      priority: announcement.data.priority || "medium",
+    });
+  }, [announcement.data, reset]);
+
   const mutation = useMutation({
     mutationFn: putAnnouncement,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["announcement", announcementId] });
+    },
     onSuccess: () => {
       onClose();
-      queryClient.invalidateQueries({ queryKey: ["announcements"] });
       schoolSessionDispatch(alertSuccess("Announcement Updated!"));
     },
-
-    onSettled: () => {
-      queryClient.invalidateQueries(["announcements"]);
-    },
-
     onError: (error) => {
+      setError("root.server", { type: "server", message: thrownMessage(error) });
       schoolSessionDispatch(alertError(error));
     },
   });
 
-  // Formik Hook
-  const formik = useFormik({
-    initialValues: {
-      title: announcement?.title || "",
-      description: announcement?.description || "",
-      priority: announcement?.priority || "medium",
-    },
-    enableReinitialize: true, // Important for setting data after fetch
-    validationSchema,
-    onSubmit: (values) => {
-      mutation.mutate({
-        ...values,
-        bgColor: getPriorityColor(values.priority),
-        _id: announcementId,
-      });
-    },
-  });
+  // The server derives the background colour from the priority.
+  const onSubmit = (values) => mutation.mutate({ ...values, _id: announcementId });
 
-  // Map priority to background colors
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "high":
-        return "#ffcccb"; // Red shade
-      case "medium":
-        return "#fff3cd"; // Yellow shade
-      case "low":
-        return "#d4edda"; // Green shade
-      case "default":
-        return "#ffffff"; // Green shade
-      default:
-        return "#ffffff"; // Default white
-    }
-  };
+  const missing = announcement.isSuccess && !announcement.data;
 
   return (
-    <Modal open={Boolean(searchParams.get("_id"))} onClose={onClose}>
+    <Modal open={Boolean(announcementId)} onClose={onClose}>
       <Box
         sx={{
           position: "absolute",
@@ -118,77 +104,86 @@ const EditAnnouncementModal = ({ onClose }) => {
           width: { xs: 300, md: 500 },
         }}
       >
-        {isPending ? (
+        {announcement.isPending ? (
           <Box display="flex" justifyContent="center" alignItems="center">
             <CircularProgress />
           </Box>
-        ) : isError ? (
-          <Typography color="error">Failed to fetch announcement</Typography>
+        ) : announcement.isError ? (
+          <QueryError
+            what="the announcement"
+            error={announcement.error}
+            onRetry={announcement.refetch}
+          />
+        ) : missing ? (
+          <Alert severity="warning">This announcement no longer exists.</Alert>
         ) : (
           <>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
               Edit Announcement
             </Typography>
 
-            {/* Form */}
-            <form onSubmit={formik.handleSubmit}>
-              {/* Title Field */}
-              <TextField
-                fullWidth
-                margin="normal"
-                label="Title"
+            <form onSubmit={handleSubmit(onSubmit)} noValidate>
+              {errors.root?.server && (
+                <Alert severity="error" sx={{ mb: 1 }}>
+                  {errors.root.server.message}
+                </Alert>
+              )}
+
+              <Controller
                 name="title"
-                value={formik.values.title}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={formik.touched.title && Boolean(formik.errors.title)}
-                helperText={formik.touched.title && formik.errors.title}
-              />
-
-              {/* Description Field */}
-              <TextField
-                fullWidth
-                margin="normal"
-                label="Description"
-                multiline
-                rows={4}
-                name="description"
-                value={formik.values.description}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={
-                  formik.touched.description &&
-                  Boolean(formik.errors.description)
-                }
-                helperText={
-                  formik.touched.description && formik.errors.description
-                }
-              />
-
-              {/* Priority Select */}
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Priority</InputLabel>
-                <Select
-                  name="priority"
-                  value={formik.values.priority}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  error={
-                    formik.touched.priority && Boolean(formik.errors.priority)
-                  }
-                >
-                  <MenuItem value="high">High</MenuItem>
-                  <MenuItem value="medium">Medium</MenuItem>
-                  <MenuItem value="low">Low</MenuItem>
-                </Select>
-                {formik.touched.priority && formik.errors.priority && (
-                  <FormHelperText error>
-                    {formik.errors.priority}
-                  </FormHelperText>
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    margin="normal"
+                    label="Title"
+                    error={!!errors.title}
+                    helperText={errors.title?.message}
+                  />
                 )}
-              </FormControl>
+              />
 
-              {/* Submit Button */}
+              <Controller
+                name="description"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    margin="normal"
+                    label="Description"
+                    multiline
+                    rows={4}
+                    error={!!errors.description}
+                    helperText={errors.description?.message}
+                  />
+                )}
+              />
+
+              <Controller
+                name="priority"
+                control={control}
+                render={({ field }) => (
+                  <FormControl fullWidth margin="normal" error={!!errors.priority}>
+                    <InputLabel id="edit-announcement-priority">Priority</InputLabel>
+                    <Select
+                      {...field}
+                      labelId="edit-announcement-priority"
+                      label="Priority"
+                    >
+                      <MenuItem value="high">High</MenuItem>
+                      <MenuItem value="medium">Medium</MenuItem>
+                      <MenuItem value="low">Low</MenuItem>
+                      <MenuItem value="default">Default</MenuItem>
+                    </Select>
+                    {errors.priority && (
+                      <FormHelperText>{errors.priority.message}</FormHelperText>
+                    )}
+                  </FormControl>
+                )}
+              />
+
               <Box sx={{ textAlign: "right", mt: 2 }}>
                 <Button
                   color="secondary"
@@ -200,10 +195,10 @@ const EditAnnouncementModal = ({ onClose }) => {
                   Cancel
                 </Button>
                 <Button
-                  loading={mutation.isPending}
                   type="submit"
                   variant="contained"
                   color="primary"
+                  disabled={mutation.isPending}
                 >
                   {mutation.isPending ? "Updating..." : "Save Changes"}
                 </Button>

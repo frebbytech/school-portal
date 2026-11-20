@@ -25,6 +25,7 @@ import { RefreshRounded } from "@mui/icons-material";
 import { AnimatePresence, motion } from "framer-motion";
 import EventSkeleton from "@/components/skeleton/EventSkeleton";
 import { useAuth } from "@/hooks/useAuth";
+import QueryError from "@/components/QueryError";
 
 const pageSize = 10;
 const MoreEvents = () => {
@@ -35,15 +36,17 @@ const MoreEvents = () => {
   const navigate = useNavigate();
 
   const {
-    data: events,
+    data,
     refetch,
     isPending,
+    isError,
+    error,
   } = useQuery({
-    queryKey: ["events", user?.id],
+    queryKey: ["events", user?._id],
     queryFn: getAllEvents,
-    initialData: [],
-    enabled: !!user?.id,
+    enabled: !!user?._id,
   });
+  const events = Array.isArray(data) ? data : [];
 
   const handleViewEvent = (id) => {
     navigate(`/events/${id}?redirect_to=/events`, {
@@ -101,8 +104,8 @@ const MoreEvents = () => {
   // Apply both search and date filters
   const filteredEvents = filterEventsByDate().filter(
     (event) =>
-      event.title.toLowerCase().includes(searchTerm) ||
-      event.date.includes(searchTerm)
+      (event.title || "").toLowerCase().includes(searchTerm) ||
+      dayjs(event.start || event.createdAt).format("LLL").toLowerCase().includes(searchTerm)
   );
 
   // Pagination Logic
@@ -120,11 +123,15 @@ const MoreEvents = () => {
         img={exams_icon}
         color="primary.main"
         right={
-          <IconButton onClick={refetch}>
+          <IconButton onClick={() => refetch()} aria-label="Refresh events">
             <RefreshRounded />
           </IconButton>
         }
       />
+
+      {isError && (
+        <QueryError what="the events" error={error} onRetry={refetch} />
+      )}
 
       {/* MUI Select for Filtering */}
       <Box
@@ -195,7 +202,7 @@ const MoreEvents = () => {
                       </Typography>
 
                       <Typography variant="body2" className="truncate-lines">
-                        {event?.caption?.substring(0, 50) + "..."}
+                        {event?.caption ? `${event.caption.substring(0, 50)}${event.caption.length > 50 ? "..." : ""}` : ""}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -213,7 +220,9 @@ const MoreEvents = () => {
                         color="textSecondary"
                         fontSize="12px"
                       >
-                        {dayjs(event?.createdAt)?.format("LLL")}
+                        {event?.start
+                          ? `Starts ${dayjs(event.start).format("LLL")}`
+                          : dayjs(event?.createdAt)?.format("LLL")}
                       </Typography>
                     </CardContent>
                   </Card>

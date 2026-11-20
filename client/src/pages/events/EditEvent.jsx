@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useContext, useState } from "react";
 import {
   Container,
   Stack,
@@ -8,6 +8,9 @@ import {
   Avatar,
   FormLabel,
   FormHelperText,
+  Alert,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import Button from "@mui/material/Button";
 import { AddAPhoto } from "@mui/icons-material";
@@ -25,18 +28,27 @@ import Back from "@/components/Back";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import TextEditor from "@/components/custom/TextEditor";
+import CustomFormControl from "@/components/inputs/CustomFormControl";
+import QueryError from "@/components/QueryError";
+import LoadingSpinner from "@/components/spinners/LoadingSpinner";
+import { thrownMessage } from "@/lib/formErrors";
+import dayjs from "@/lib/dates";
+
+const toInput = (value) => (value ? dayjs(value).format("YYYY-MM-DDTHH:mm") : "");
 
 function EditEvent() {
   const queryClient = useQueryClient();
   const { id } = useParams();
   const { schoolSessionDispatch } = useContext(SchoolSessionContext);
   const navigate = useNavigate();
+  const [showEndDate, setShowEndDate] = useState(false);
 
   const {
     handleSubmit,
     control,
     reset,
     setValue,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: yupResolver(eventValidationSchema),
@@ -47,19 +59,20 @@ function EditEvent() {
       caption: "",
       description: "",
       album: "",
+      start: "",
+      end: "",
     },
   });
 
   const event = useQuery({
     queryKey: ["event", id],
     queryFn: () => getEvent(id),
-    initialData: queryClient
-      .getQueryData(["events", id])
-      ?.find((event) => event?._id === id),
     enabled: !!id,
   });
 
   useEffect(() => {
+    if (!event.data) return;
+    setShowEndDate(!!event.data.end);
     reset({
       _id: id,
       type: event?.data?.type || "",
@@ -67,8 +80,10 @@ function EditEvent() {
       caption: event?.data?.caption || "",
       description: event?.data?.description || "",
       album: event?.data?.album || "",
+      start: toInput(event?.data?.start),
+      end: toInput(event?.data?.end),
     });
-  }, [event.data]);
+  }, [event.data, id, reset]);
 
   const { getRootProps, getInputProps, open } = useDropzone({
     noClick: true,
@@ -102,6 +117,7 @@ function EditEvent() {
         navigate("/events");
       },
       onError: (error) => {
+        setError("root.server", { type: "server", message: thrownMessage(error) });
         schoolSessionDispatch(alertError(error));
       },
     });
@@ -112,13 +128,24 @@ function EditEvent() {
       <Back to="/events" color="primary.main" />
       <CustomTitle
         title="Edit Event"
-        subtitle="Send single and bulk SMS to students and parents"
+        subtitle="Change the details, dates or photo of this event."
         color="text.main"
         backColor="#012e54"
       />
 
+      {event.isPending && <LoadingSpinner />}
+      {event.isError && (
+        <QueryError what="the event" error={event.error} onRetry={event.refetch} />
+      )}
+      {event.isSuccess && !event.data && (
+        <Alert severity="warning">This event no longer exists.</Alert>
+      )}
+      {event.data && (
       <form onSubmit={handleSubmit(onSubmit)}>
         <Stack px={2} py={4} spacing={4} bgcolor="#fff">
+          {errors.root?.server && (
+            <Alert severity="error">{errors.root.server.message}</Alert>
+          )}
           <Controller
             name="type"
             control={control}
@@ -130,7 +157,10 @@ function EditEvent() {
                 options={EVENT_TYPE}
                 getOptionLabel={(option) => option || ""}
                 value={field.value || ""}
-                onChange={(e, value) => field.onChange(value)}
+                onChange={(e, value) => field.onChange(value || "")}
+                onInputChange={(e, value, reason) => {
+                  if (reason === "input") field.onChange(value);
+                }}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -187,7 +217,56 @@ function EditEvent() {
             )}
           />
 
-    
+          <CustomFormControl>
+            <Controller
+              name="start"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  label="Start Date / Time"
+                  type="datetime-local"
+                  fullWidth
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                  error={!!errors.start}
+                  helperText={errors.start?.message}
+                />
+              )}
+            />
+            <Stack width="100%" direction="row">
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showEndDate}
+                    onChange={(e) => {
+                      setShowEndDate(e.target.checked);
+                      if (!e.target.checked) setValue("end", "");
+                    }}
+                  />
+                }
+                label="End Date"
+              />
+              {showEndDate && (
+                <Controller
+                  name="end"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="End Date / Time"
+                      type="datetime-local"
+                      fullWidth
+                      size="small"
+                      InputLabelProps={{ shrink: true }}
+                      error={!!errors.end}
+                      helperText={errors.end?.message}
+                    />
+                  )}
+                />
+              )}
+            </Stack>
+          </CustomFormControl>
 
           <div>
             <FormLabel
@@ -256,6 +335,7 @@ function EditEvent() {
           </Stack>
         </Stack>
       </form>
+      )}
     </Container>
   );
 }

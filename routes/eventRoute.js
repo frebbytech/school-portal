@@ -14,6 +14,7 @@ const {
 } = require('../middlewares/authorize');
 const { sessionInSchool, termInSchool } = require('../middlewares/tenant');
 const { withPagination } = require('../common/pagination');
+const { eventRules, blankDatesToNull, notifySafely } = require('../common/communications');
 
 const adminOnly = requireRoleEnforced('administrator');
 const FORBIDDEN = 'You do not have permission to perform this action.';
@@ -34,12 +35,20 @@ const referencesOk = async (req, data) =>
   (data.session === undefined || (await sessionInSchool(req, data.session))) &&
   (data.term === undefined || (await termInSchool(req, data.term)));
 
+// Students only see events that are switched on; staff see all of them.
+const visibleTo = (req) => {
+  const principal = getPrincipal(req);
+  const filter = { school: principal.schoolId };
+  if (principal.kind === 'student') filter.active = { $ne: false };
+  return filter;
+};
+
 //GET event (staff and students of the school)
 router.get(
   '/',
   requireMember,
   asyncHandler(async (req, res) => {
-    const filter = { school: getPrincipal(req).schoolId };
+    const filter = visibleTo(req);
     const events = await withPagination(
       req,
       res,
@@ -60,7 +69,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const event = isValidObjectId(id)
-      ? await Event.findOne({ _id: id, school: getPrincipal(req).schoolId }).populate(
+      ? await Event.findOne({ _id: id, ...visibleTo(req) }).populate(
           'createdBy',
           ['firstname', 'lastname', 'profile']
         )
@@ -73,8 +82,9 @@ router.get(
 router.post(
   '/',
   adminOnly,
+  eventRules(),
   asyncHandler(async (req, res) => {
-    const newEvent = pickFields(req.body, EVENT_FIELDS);
+    const newEvent = blankDatesToNull(pickFields(req.body, EVENT_FIELDS));
     if (!(await referencesOk(req, newEvent))) return res.status(403).json(FORBIDDEN);
 
     const principal = getPrincipal(req);
@@ -106,7 +116,7 @@ router.post(
       createdBy: principal.id,
     }));
 
-    await Notification.insertMany(notifications);
+    await notifySafely(Notification, notifications, 'Event');
 
     res.status(200).json('Event Created!');
   })
@@ -116,9 +126,10 @@ router.post(
 router.put(
   '/',
   adminOnly,
+  eventRules({ optional: true }),
   asyncHandler(async (req, res) => {
     const { _id } = req.body || {};
-    const data = pickFields(req.body, EVENT_FIELDS);
+    const data = blankDatesToNull(pickFields(req.body, EVENT_FIELDS));
 
     if (!isValidObjectId(_id)) return res.status(404).json('Error occurred.Try again later...');
     if (!(await referencesOk(req, data))) return res.status(403).json(FORBIDDEN);

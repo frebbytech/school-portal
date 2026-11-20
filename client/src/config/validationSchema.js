@@ -426,7 +426,21 @@ export const gradesValidationSchema = object().shape({
 export const eventValidationSchema = object().shape({
   type: string().trim().required("Required*"),
   title: string().trim().required("Required*"),
-  description: string().trim().required("Required*"),
+  description: string()
+    .trim()
+    .test("not-empty-editor", "Required*", (value) => {
+      // the rich-text editor leaves markup behind when it is "empty"
+      const text = (value || "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+      return text.length > 0 || /<img\b/i.test(value || "");
+    }),
+  // blank = no date; the server stores it as "no date"
+  start: string().nullable(),
+  end: string()
+    .nullable()
+    .test("end-after-start", "The end must not be before the start", function (value) {
+      const { start } = this.parent;
+      return !start || !value || dayjs(value).valueOf() >= dayjs(start).valueOf();
+    }),
 });
 
 export const newSessionSchemas = [

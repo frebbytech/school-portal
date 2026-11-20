@@ -44,8 +44,10 @@ import useLocalStorage from "@/hooks/useLocalStorage";
 import { useAuth } from "@/hooks/useAuth";
 import TableSkeleton from "@/components/skeleton/TableSkeleton";
 import EventSkeleton from "@/components/skeleton/EventSkeleton";
+import QueryError from "@/components/QueryError";
 
 const pageSize = 10;
+const NONE = [];
 const MoreAnnouncements = () => {
   const [selectedColor, setSelectedColor] = useLocalStorage(
     "announcement-text",
@@ -66,13 +68,14 @@ const MoreAnnouncements = () => {
   const [selectedAnnouncements, setSelectedAnnouncements] = useState([]);
 
   const {
-    data: announcements,
+    data: announcementData,
     isPending: isAnnouncementLoading,
+    isError: isAnnouncementError,
+    error: announcementError,
     refetch,
   } = useQuery({
     queryKey: ["announcements", user?._id],
     queryFn: getAllAnnouncements,
-    initialData: () => [],
     // refetchOnMount: false,
     retry: 2,
     enabled: !!user?._id,
@@ -173,9 +176,7 @@ const MoreAnnouncements = () => {
     });
   };
 
-  if (isAnnouncementLoading) {
-    return  <EventSkeleton />;
-  }
+  const announcements = announcementData ?? NONE;
 
   const sortedAnnouncement = useMemo(() => {
     const filterAnnouncementsByDate = () => {
@@ -213,8 +214,8 @@ const MoreAnnouncements = () => {
     // Apply both search and date filters
     const filteredAnnouncements = filterAnnouncementsByDate().filter(
       (announcement) =>
-        announcement.title.toLowerCase().includes(searchTerm) ||
-        announcement.createdAt.includes(searchTerm)
+        (announcement.title || "").toLowerCase().includes(searchTerm) ||
+        dayjs(announcement.createdAt).format("LLL").toLowerCase().includes(searchTerm)
     );
 
     // Pagination Logic
@@ -232,6 +233,10 @@ const MoreAnnouncements = () => {
     };
   }, [announcements, searchTerm, searchParams, filter, page]);
   // Filter announcements based on date
+
+  if (isAnnouncementLoading) {
+    return <EventSkeleton />;
+  }
 
   return (
     <Container maxWidth="lg">
@@ -254,6 +259,14 @@ const MoreAnnouncements = () => {
           </>
         }
       />
+
+      {isAnnouncementError && (
+        <QueryError
+          what="the announcements"
+          error={announcementError}
+          onRetry={refetch}
+        />
+      )}
 
       {/* MUI Select for Filtering */}
       <Box
@@ -302,7 +315,7 @@ const MoreAnnouncements = () => {
         p={2}
         spacing={2}
       >
-        <IconButton onClick={refetch} size="large">
+        <IconButton onClick={() => refetch()} size="large">
           <RefreshRounded sx={{ width: 32, height: 32 }} />
         </IconButton>
 
@@ -495,7 +508,7 @@ const MoreAnnouncements = () => {
                 {selectedAnnouncement.title}
               </Typography>
               <Typography variant="caption" color="textSecondary">
-                {selectedAnnouncement.date}
+                {dayjs(selectedAnnouncement.createdAt).format("LLL")}
               </Typography>
               <Typography variant="body1" mt={2}>
                 {selectedAnnouncement.description}
